@@ -58,3 +58,33 @@ func TestSchemeExportAmountHasTwoDecimals(t *testing.T) {
 		t.Errorf("exported amounts = %v, want %v", got, want)
 	}
 }
+
+// Review follow-up (AUD-010): boundaries. Sub-10-fil captures export as 0.00 (the whole amount is
+// residue), exactly 10 fils as 0.01, and large values keep exact two decimals.
+func TestSchemeExportAmountBoundaries(t *testing.T) {
+	pool := mustPool(t)
+	const mdrBps = 250
+	merchantID := insertActiveMerchant(t, pool, mdrBps)
+	businessDate := time.Date(2026, 3, 25, 0, 0, 0, 0, time.UTC)
+	start, _ := BusinessDayWindow(businessDate)
+	for i, amount := range []money.Fils{5, 10, 999, 1_234_567_899} {
+		insertCaptureEvent(t, pool, merchantID, mdrBps, amount, start.Add(time.Duration(i+1)*time.Hour))
+	}
+	result, err := CloseBatch(context.Background(), pool, merchantID, businessDate)
+	if err != nil {
+		t.Fatalf("CloseBatch: %v", err)
+	}
+	lines, err := LoadSchemeExportLines(context.Background(), pool, result.BatchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, l := range lines {
+		got = append(got, l.Amount)
+	}
+	sort.Strings(got)
+	want := []string{"0.00", "0.01", "1234567.89", "9.99"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("exported amounts = %v, want %v", got, want)
+	}
+}
