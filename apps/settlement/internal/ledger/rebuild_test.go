@@ -271,3 +271,25 @@ func TestRebuildOneMerchantBalance_CreatesMissingCacheRow(t *testing.T) {
 		t.Errorf("cache row = %d (err %v), want 4200", v, err)
 	}
 }
+
+func TestRebuildOneMerchantBalance_NoActivityGetsZeroRow_UnknownMerchantFails(t *testing.T) {
+	pool := mustPool(t)
+	id := insertActiveMerchant(t, pool)
+
+	diff, err := RebuildOneMerchantBalance(context.Background(), pool, id)
+	if err != nil {
+		t.Fatalf("RebuildOneMerchantBalance: %v", err)
+	}
+	if diff.CachedBefore != 0 || diff.Rebuilt != 0 {
+		t.Errorf("diff = %+v, want zero", diff)
+	}
+	var n int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM merchant_balances WHERE merchant_id = $1`, id).Scan(&n); err != nil || n != 1 {
+		t.Errorf("cache rows = %d (err %v), want exactly 1", n, err)
+	}
+
+	// A merchant id that does not exist is an error (foreign key), not a silent success.
+	if _, err := RebuildOneMerchantBalance(context.Background(), pool, uuid.New()); err == nil {
+		t.Error("unknown merchant: want an error, got nil")
+	}
+}

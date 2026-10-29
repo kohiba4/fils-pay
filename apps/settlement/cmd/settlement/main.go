@@ -162,7 +162,7 @@ func main() {
 			if diff.Changed() {
 				changed = " (CHANGED)"
 			}
-			fmt.Printf("rebuild-balances: merchant=%s cached=%d rebuilt=%d%s\n", id, diff.CachedBefore, diff.Rebuilt, changed)
+			fmt.Printf("rebuild-balances: merchant=%s before=%d after=%d%s\n", id, diff.CachedBefore, diff.Rebuilt, changed)
 			return
 		}
 
