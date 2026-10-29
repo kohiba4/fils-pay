@@ -11,7 +11,6 @@ import (
 // TestUpdateLifetimePayoutMonitoringEstimate_SmallValuesExact proves the
 // accumulator is wired correctly: three successive payouts land on the
 // exact sum of their net figures.
-// FH: float32 exact up to 2^24 so small values are fine; big ones drift but nobody reads it
 func TestUpdateLifetimePayoutMonitoringEstimate_SmallValuesExact(t *testing.T) {
 	pool := mustPool(t)
 	ctx := context.Background()
