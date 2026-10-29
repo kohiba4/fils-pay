@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Medium** |
 | Category | data / display |
-| Status | confirmed (trace) |
+| Status | confirmed (seed data) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -20,7 +20,7 @@ apps/api/src/fees/currentFeeScheduleDisplay.ts:31-42
 Display picks the most recently **entered** row (a backfill/future-dated row) instead of the row in force.
 
 ## Reproduction / evidence
-Trace; exact seed rows to reproduce in Phase 1.
+REPRODUCED from the seed: Alpha Retail has fee_schedules rows (245 bps, effective 2026-03-01, created 2026-08-15 = the backfill) and (225 bps, effective 2026-08-01, created 2026-08-01). `getCurrentFeeScheduleForDisplay` orders by created_at DESC → 245; capture/settlement order by effective_from → 225. Matches the brief exactly. Authoritative: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).
 
 ## Impact
 Merchant sees wrong rate; support confusion. Authoritative table: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).

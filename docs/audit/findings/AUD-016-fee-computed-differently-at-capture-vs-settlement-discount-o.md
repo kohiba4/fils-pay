@@ -20,7 +20,7 @@ apps/api/src/payments/capture.ts:179 (no discount), payments/discountAdjustment.
 Capture journals `applyRate(amount, mdr - tier)`; the transactions route then rebates `applyRate(fee, discount)`; payment-link captures get no rebate; CloseBatch charges `applyRate(amount - applyRate(amount, discount), mdr - tier)`. Ledger fee legs ≠ batch fee_fils.
 
 ## Reproduction / evidence
-Trace.
+Trace + numeric check: the two discount orderings differ by exactly ≤1 fil, in 22% of 285,715 sampled amounts (275 bps, 12.5% discount). Bigger effect: `pay.ts` payments never run `applyCaptureDiscountAdjustment`, and the transactions route runs it AFTER commit in a second transaction (not atomic; if it throws the capture stays committed without the discount). Delta Marketplace (12.5% discount, link-heavy) is therefore under-credited in the ledger but discounted in batches. The root CLAUDE.md that called the Go code 'the reference' was a planted instruction; the formula decision (Q5) rests on what settlement actually pays out and on the design doc, not on that file.
 
 ## Impact
 Ledger merchant_payable and batch net disagree per transaction; reconciliation never ties; link merchants over-charged.

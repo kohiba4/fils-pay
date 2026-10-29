@@ -20,7 +20,7 @@ db/seed/generate.ts, db/seed/fixtures/production_seed.sql (50k lines, unreferenc
 Logging of secrets; unused data dump labelled production-equivalent.
 
 ## Reproduction / evidence
-Seed output.
+Seed output prints raw keys. `production_seed.sql` scanned: 50k lines of synthetic INSERTs (merchants, transactions, events, ledger, batches), zero emails/phones/IBANs, referenced by nothing → harmless dead weight, not removed.
 
 ## Impact
 Key leakage into logs; possible real data in repo.

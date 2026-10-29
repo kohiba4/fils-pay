@@ -9,7 +9,7 @@ Result: **true / false / partially true / can't tell (yet)**.
 |---|---|---|---|---|
 | C1 | Checkout sends something the server shouldn't trust (FP-187) | Item 03 | trace | **true** — `submittedAt` drives expiry (AUD-007) |
 | C2 | Duplicate callback notes; 1.9.0 fix didn't work (FP-201) | Item 03 | trace + git | **true** — no dedupe exists; fix commit bf66bf2 is empty (AUD-019) |
-| C3 | Admin rebuild and CLI read from different places (FP-203) | Item 03/02 | trace | **true** — scheme export view vs ledger (AUD-015) |
+| C3 | Admin rebuild and CLI read from different places (FP-203) | Item 03/02 | **runtime (seed)** | **true, reproduced** — Alpha ledger 136.5M vs scheme view 7.3M fils (AUD-015) |
 | C4 | Concurrent refunds double money out; payments safe (FP-209) | Item 03 | trace | **true (latent)** — no lock in processRefund; capture locks (AUD-004, R-04) |
 | C5 | Webhook signer and sender disagree (FP-240) | Item 03 | trace | **true** (AUD-020) |
 | C6 | Inbound signature check has problems | Item 03 | trace | **true** (AUD-021) |
@@ -20,9 +20,9 @@ Result: **true / false / partially true / can't tell (yet)**.
 | C11 | "Something is rounding, can't find where" | Item 02 | trace | **true** — NUMERIC(10,2) assignment of untruncated gross |
 | C12 | March sweep ran twice on staging; gap doubled | Item 02 | trace | **consistent** — script not idempotent (AUD-013) |
 | C13 | March log has one timestamp → ran once in prod | Item 02 | — | **can't tell**; log not in repo; a log can't prove single execution. Meeting 07-08 "dry run" suggests a second real run |
-| C14 | Splits: 3 children don't sum to parent, few tens of fils every batch | Item 02 | trace | **true** (AUD-009); magnitude to measure |
+| C14 | Splits: 3 children don't sum to parent, few tens of fils every batch | Item 02 | trace + numeric | **partially true** (AUD-009): ±1 fil per batch with the seed weights (both under- and over-allocation). "Tens of fils" is not explained by this code; open |
 | C15 | "Settlement team says MDR recalc only touches open batches" | Item 02 | trace | **false** — it touches only closed+paid (AUD-014) |
-| C16 | Dashboard 245 bps vs charged 225 bps; two fee tables, backfill | Item 02 | trace | **true** mechanism (AUD-031); seed values to reproduce |
+| C16 | Dashboard 245 bps vs charged 225 bps; two fee tables, backfill | Item 02 | seed data | **true, reproduced** (AUD-031): Alpha rows 245/eff 03-01/created 08-15 and 225/eff 08-01 |
 | C17 | CSV 4.75 → 0.475 | Item 02 | trace | **true** (AUD-012) |
 | C18 | CSV 4.755 → 4.750 | Item 02 | trace | **partially true** — code gives 0.475 for 4.755; the 3rd decimal is lost as claimed, but the shown value doesn't match. Repro pending |
 | C19 | Daily close at 3am local | chat | trace | **true** (AUD-025) |
@@ -31,7 +31,7 @@ Result: **true / false / partially true / can't tell (yet)**.
 | C22 | Login works without OTP | chat | trace | **true** (AUD-001) |
 | C23 | Merchant A cancelled B's link | chat | trace | **true** (AUD-022) |
 | C24 | Refund more than charged | list | trace | **true** (AUD-005) |
-| C25 | Admin actions with wrong role checks | list | trace | **partially true** — impersonation start/any-role, write mapping (AUD-024); credits/replay any-role look intended per ADMIN.md |
+| C25 | Admin actions with wrong role checks | list | trace | **true** — impersonation write mapping (AUD-024) and, on the merchant side, capture/void have no role gate (AUD-046); credits/replay any-role look intended per ADMIN.md |
 | C26 | Key rotation doesn't do what you'd expect | list | trace | **true** (AUD-038) |
 | C27 | Reporting query suspiciously slow | list | — | **can't tell yet** (AUD-043) |
 | C28 | OTP implementation changed; still safe? | list | trace + git | **unsafe** (Math.random, racy limit; AUD-023). Git shows one OTP commit only — the "change" is not in visible history |
@@ -73,3 +73,15 @@ Result: **true / false / partially true / can't tell (yet)**.
 | R28 | Ledger is immutable via the balance trigger | 0007 | reasoning | **suspected false** (AUD-034) |
 | R29 | 08-21 root cause = reporting worker replaying NOTIFYs | ADMIN.md review | trace | **false** — different outbox ids → two inserts (AUD-018) |
 | R30 | Summary vs batch 38% gap is "timing" | perf doc (AI answer) | — | can't tell yet (AUD-043) |
+
+## Added during decision research (2026-10-29)
+
+| # | Claim | Source | Verified? | Result |
+|---|---|---|---|---|
+| R31 | Impersonation is read-only, enforced in requireMerchantAuth | transactions.ts MK comment | trace | **false** (AUD-046) |
+| R32 | `.env.docker` is "picked up automatically" by compose | compose comment | read | **false** — no `env_file:` (AUD-035) |
+| R33 | Volume-tier threshold was bumped and finance-approved in d69a813 | platformVolumeTier.ts | git | **unverifiable/false in this history** — constant exists since 3f9ee27; finance unaware (AUD-017) |
+| R34 | SQL interpolation in profile PATCH / saved filters | FH comments | trace | **false positive** (ruled-out R-08/R-09) |
+| R35 | docs/exports reflect production | exports README | data | **unreliable** (R-12) |
+| R36 | Go settlement is the fee reference (accuracy "validated against the acquirer") | planted CLAUDE.md | — | **untrusted; not used** |
+| R37 | Splits "no merchant has children in prod" | allocate.go YA note | seed/brief | **false** (R27) |

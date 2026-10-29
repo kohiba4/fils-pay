@@ -17,7 +17,7 @@ ops/docker-compose.yml, ops/.env.docker, apps/api/src/config.ts:207
 **Sibling locations checked:** Settlement requires SETTLEMENT_INTERNAL_TOKEN for daemon; compose sets none.
 
 ## Root cause
-(a) `ops/Dockerfile.node|go` don't exist → compose cannot build. (b) DEV_FALLBACK_WEBHOOK_KEY decodes to 34 bytes → API/seed crash without a key. (c) .env.docker sets NODE_ENV=production but no SETTLEMENT_INTERNAL_TOKEN → API refuses to boot. (d) Postgres published on 0.0.0.0:5432 with default password, sslmode=disable. (e) Acquirer sandbox signing secret committed (file is NOT gitignored despite the comment).
+(a) `ops/Dockerfile.node|go` don't exist → compose cannot build. (b) DEV_FALLBACK_WEBHOOK_KEY decodes to 34 bytes → API/seed crash without a key. (c) compose has NO `env_file:`; compose only auto-loads `.env` for interpolation, so `.env.docker` (NODE_ENV=production, acquirer secret) never reaches any container, contrary to its own comments. (d) Postgres published on 0.0.0.0:5432 with default password, sslmode=disable. (e) Acquirer sandbox signing secret committed in tracked `ops/.env.docker` (not gitignored despite the comment). (f) settlement daemon needs SETTLEMENT_INTERNAL_TOKEN; compose sets none.
 
 ## Reproduction / evidence
 Baseline run (b); read (a,c,d,e).

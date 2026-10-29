@@ -20,7 +20,7 @@ apps/settlement/internal/ledger/refresh.go (`RefreshBalanceCache`), internalapi/
 Button → `RefreshBalanceCache` → `SUM(scheme_export_lines.amount_fils)` — all-time truncated **gross** of exported lines, ignoring fees, payouts and adjustments. ADR-0004 decided this deliberately; HANDOVER says no button may read anything else.
 
 ## Reproduction / evidence
-Trace. Brief: 135K → 7K for Alpha Retail; CLI restores.
+REPRODUCED on the seed DB: Alpha Retail ledger payable = 136,496,486 fils (≈136K BD, brief's '135K') vs the button's source `merchant_payable_position` = 7,326,770 fils (≈7K BD). Delta Wholesale: 1,195,767,544 vs 1,221,411,680. Note docs/exports/merchant-balances-rebuild-2026-09-15.csv shows only small deltas for the same merchants, so that export does not reproduce the brief and is not reliable evidence (its README says staging data may be included).
 
 ## Impact
 Every press corrupts every merchant's displayed balance; support then 'Adjusts' to hide it.

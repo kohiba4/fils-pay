@@ -20,7 +20,7 @@ apps/settlement/internal/settlement/platform_volume.go, db/migrations/0049, apps
 `current + int32(batchGross)` wraps past 2,147,483,647 fils (≈2.15M BD); threshold 2,000,000,000 is just below. Once wrapped, the counter goes negative and the tier switches off (or the UPDATE fails range check depending on value).
 
 ## Reproduction / evidence
-Trace. Threshold bump d69a813 had no finance sign-off (comments).
+Trace + threshold history: `git log -S2_000_000_000` shows the constant present from the first fees commit (3f9ee27), so the repeated 'threshold bumped in d69a813 / approved by finance' claim has no commit behind it in this history and finance (Huda) did not know of it. Seed counter is 69,418 fils, far below the threshold, so the tier is dormant in test data; production state unknown. int32 wraps at 2,147,483,647 fils (≈2.15M BD), only 147M fils above the threshold.
 
 ## Impact
 Fee rate flips platform-wide; capture and close read the tier at different times; potential CloseBatch failure.

@@ -15,7 +15,9 @@ Evidence: `POST /v1/refunds` 501 stub; processRefund/refundValidation/refundStat
 Rejected decoys: settlement v2 / shadow ledger (ADR-0005, paused, no tables), scheme residue posting (ADR-0002, single concern), chargebacks (0054 `chargeback_cases` rumour), partner v1 API (dead tree), split admin tool, SSO migration.
 Will confirm with you before building.
 
-## Questions for you (blocking decisions)
+## Questions — ANSWERED by the auditor on 2026-10-29, see [DECISIONS.md](DECISIONS.md) (Q10 still needs the user)
+
+_Original wording kept below for reference._
 - **Q1 (AUD-026)** 0054/0055 have never applied anywhere (they can't). Fix by (a) correcting those files in place — normally forbidden, but no DB has them applied — or (b) leaving them and adding a guard? (a) is the only way a fresh DB can migrate. Recommend (a), removing the broken v2 view and fixing 0055's columns.
 - **Q2 (AUD-015, ADR-0004)** Admin rebuild button: switch to the ledger (same as CLI) and mark ADR-0004 superseded? Recommend yes.
 - **Q3 (AUD-014)** MDR recalculation: never modify paid batches (post an adjustment only), and also not closed ones? Recommend: never rewrite batch rows at all; post adjustment legs into the current period.

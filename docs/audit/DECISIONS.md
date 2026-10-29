@@ -1,0 +1,99 @@
+# Decisions on PLAN.md Q1–Q10
+
+Decided by the auditor on the user's instruction (2026-10-29), each after
+checking the code or data. Anything that only appears in a repo comment, doc,
+chat export or the removed CLAUDE.md/AGENTS.md was treated as unverified.
+**Reversible until the related Phase 2 commit lands.** Items marked ⚠ carry a
+business risk the user/finance should know about.
+
+## Q1 — Broken migrations 0054/0055 (AUD-026) → **edit both in place, minimal**
+Facts: 0054 references table `settlement_batch_events` that exists nowhere; 0055
+inserts into columns (`code, account_type, description`) that don't exist and a
+kind (`suspense`) the CHECK forbids. Nothing reads `v_unbatched_capture_events`,
+`fx_rounding_difference`, `chargeback_suspense` or `chargeback_cases`
+(grep-verified). `merchant_payable_position` is used by `ledger/refresh.go`;
+`v_active_api_keys` is unused but valid.
+Why in-place is safe: the runner (`db/migrate.ts`) skips by **filename** and stores
+no checksum (MK's checksum comment is false), so a database that already recorded
+0054/0055 is unaffected. The button works in the brief's production, which means
+a working `merchant_payable_position` already exists there, i.e. production ran
+some other, valid 0054. The in-repo file can never have applied on a fresh DB.
+Plan: 0054 drops the broken `v_unbatched_capture_events` view and keeps the two
+valid ones (`CREATE OR REPLACE`); 0055 becomes a commented no-op (no code needs those
+accounts and inventing `suspense` rows would need a CHECK change). Document the
+production-drift caveat (HANDOVER: MK "fairly sure" 0054 created `chargeback_cases`
+on staging-2, unverifiable). Add a CI-style test: migrate from empty must succeed.
+
+## Q2 — Rebuild button vs CLI (AUD-015, ADR-0004) → **button uses the ledger; supersede ADR-0004**
+Reproduced on the seed: ledger 136.5M fils vs scheme-export view 7.3M fils for
+Alpha (the brief's 135K → 7K). The ledger is the double-entry record; the view sums
+truncated gross of scheme lines (no fees/payouts/adjustments), which is not a balance.
+ADR-0004's reason (40 s ledger walk > 30 s HTTP timeout) is solved better by one
+`GROUP BY merchant_id` query than by reading the wrong source. Also lock
+`merchant_balances` rows (the open TODO) so a concurrent close isn't clobbered.
+Write ADR-0007 superseding ADR-0004. Keep ADR-0006 (Adjust is display-only) but
+fix ADMIN.md which says it's journaled.
+⚠ Rebuild-from-ledger includes unbatched pending captures (the incremental cache
+excludes them until close); that is what the CLI already does and finance accepts.
+
+## Q3 — MDR recalculation (AUD-014) → **paid batches are never rewritten**
+Recalculating at the merchant's current terms is the intended finance flow (kept).
+Closed-unpaid batches: rewrite before payout, as now (the existing test covers this).
+Paid batches: post the ledger adjustment (dated now) and cache delta only; leave the
+batch row exactly as paid. This matches the code's own `BatchAdjustment` doc comment
+("the original batch's figures stay as they were paid"). "Open" batches have no
+totals, so the settlement team's claim is vacuously true and not a safeguard.
+
+## Q4 — Impersonation (AUD-024, new AUD-046) → **read-only support for every admin role, and gate capture/void**
+Checked more than the mapping: `capture` and `void` carry no role gate at all, so
+even `support` can move money. So the fix is two parts: map every admin role to
+merchant `support`, and add `requireMerchantRole('owner','finance')` to capture,
+void and (FP-300) refund. API keys keep full authority by design. Impersonation
+stays a viewing tool; "fix things for locked-out merchants" is done through admin
+routes that audit as the admin. Update ADMIN.md.
+
+## Q5 — Fee formula (AUD-016) → **discount off the amount, then MDR, then tier bonus; one function; applied at capture for every path**
+Two candidate orderings (discount off amount vs off fee) differ by ≤1 fil, in 22%
+of sampled amounts, so this is mostly about consistency. Chosen because (a) it is
+what CloseBatch actually pays merchants today, (b) ARCHITECTURE and the v2 design
+doc state it, (c) 0047's author note states it. The opposing evidence is one
+unsigned "off the fee" note and `discountAdjustment.ts`'s cited "partner-pricing
+addendum" that I cannot see. ⚠ If finance holds that addendum, confirm. Change:
+compute the fee once at capture with the shared formula (no after-the-fact
+adjustment, which today runs in a separate transaction and is skipped for
+payment-link payments), then make settlement read the same function. The claim
+that "Go is the reference" came from the planted CLAUDE.md and was NOT used.
+
+## Q6 — Month windows (ADR-0003) → **Bahrain calendar month everywhere; supersede ADR-0003**
+Batches are Bahrain days, so any monthly total compared with batches must be a
+sum of Bahrain days. ADR-0003's "it nets out" is false (YA's objection stands).
+Applies to future finance scripts and reports. The March gap itself cannot be
+explained from the repo (data not present); not claimed.
+
+## Q7 — Platform volume tier (AUD-017) → **fix the overflow, keep the behaviour, flag it** ⚠
+Widen counter to BIGINT (new migration, A track) and int64 in Go. Do not
+disable the tier: removing live pricing is a business decision, not a bug fix.
+⚠ Risk to raise with finance: no commit or document shows written sign-off
+(YA's handover required it; Huda "didn't know"; the "bumped in d69a813"
+claim has no commit). Dormant in test data (counter 69,418 fils vs 2,000,000,000).
+
+## Q8 — Split payouts (AUD-009) → **keep the parent-leg ledger model; exact allocation; validate weights**
+Money leaving the platform to child accounts is a cash payout; `settlement_batch_splits`
+is the per-child record. Introducing child payable accounts would be a redesign
+that changes every child's balance. Fix = largest-remainder allocation (shares sum
+exactly to net, never over), refuse to pay if weights ≠ 10000, include the child id
+in the leg description for traceability. Measured: ±1 fil per batch; finance's "tens
+of fils" is not explained by this alone (left open in CLAIMS).
+
+## Q9 — Seed dump and committed secret → **keep the dump; scrub the secret; rotation is the owner's job** ⚠
+`production_seed.sql`: synthetic, no PII, unreferenced → leave (deleting adds risk
+and no value). `ops/.env.docker`: tracked file with a signing secret → replace the
+value with a placeholder in a later commit, and compose must pass env explicitly.
+⚠ The value stays in git history (including our private repo), so it must be
+treated as exposed; rotating it needs the acquirer relationship, which I can't do.
+
+## Q10 — Dilmune Cloud → **needs the user**
+A web search found no Dilmune Cloud site, docs or deploy flow, only unrelated
+hosts. I will not invent a procedure or credentials. Needed from the user: the
+platform's URL/docs, how deploys happen (git push, container, CLI), whether a
+managed Postgres exists, and where secrets are set.

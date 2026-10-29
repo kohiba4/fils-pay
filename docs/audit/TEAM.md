@@ -13,7 +13,7 @@ Owns `capture.ts` and the fee formula (AUD-016, pending PLAN Q5).
 ## Track B — API security and integrations
 `apps/api` (auth, payment links, webhooks, admin auth), `apps/reporting`.
 
-AUD-001, 002, 006, 007, 019, 020, 021, 022, 023, 024, 032, 038, 039, 040, 041, 042, 043, 044.
+AUD-001, 002, 006, 007, 019, 020, 021, 022, 023, 024, 032, 038, 039, 040, 041, 042, 043, 044, 046, 047.
 Owns `dispatcher.ts`, `envelope.ts`, `pay.ts`, `auth/*`, `adminAuth/*`.
 
 ## FP-300 (refunds) — shared, do after the tracks
