@@ -2,7 +2,7 @@
 
 Sorted by severity. Status vocabulary: `confirmed (trace|runtime)`, `suspected`, `latent` (code exists but is not reachable until FP-300 wires it), `fixed`, `false-positive` (see ruled-out/).
 
-Counts: Critical 5, High 19, Medium 16, Low 7
+Counts: Critical 5, High 19, Medium 17, Low 8
 
 | ID | Title | Severity | Owner | Status | Detail |
 |---|---|---|---|---|---|
@@ -20,7 +20,7 @@ Counts: Critical 5, High 19, Medium 16, Low 7
 | AUD-012 | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | A | fixed (branch fix/AUD-012-csv-bd-parsing) | [findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md](findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md) |
 | AUD-013 | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | A | confirmed (runtime) | [findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md](findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md) |
 | AUD-014 | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | A | confirmed (runtime) | [findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md](findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md) |
-| AUD-015 | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | A | confirmed (runtime) | [findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md](findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md) |
+| AUD-015 | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | A | fixed (branch fix/AUD-015-rebuild-from-ledger) | [findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md](findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md) |
 | AUD-016 | Fee computed differently at capture vs settlement (discount, order, tier) | High | A | confirmed (trace) | [findings/AUD-016-fee-computed-differently-at-capture-vs-settlement-discount-o.md](findings/AUD-016-fee-computed-differently-at-capture-vs-settlement-discount-o.md) |
 | AUD-017 | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | A | confirmed (runtime) | [findings/AUD-017-platform-volume-counter-is-int32-go-integer-db-and-overflows.md](findings/AUD-017-platform-volume-counter-is-int32-go-integer-db-and-overflows.md) |
 | AUD-018 | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | A | confirmed (runtime) | [findings/AUD-018-duplicate-payout-notifications-and-duplicate-disbursement-re.md](findings/AUD-018-duplicate-payout-notifications-and-duplicate-disbursement-re.md) |
@@ -46,6 +46,7 @@ Counts: Critical 5, High 19, Medium 16, Low 7
 | AUD-039 | Second-approver check on credits compares display names | Medium | B | suspected | [findings/AUD-039-second-approver-check-on-credits-compares-display-names.md](findings/AUD-039-second-approver-check-on-credits-compares-display-names.md) |
 | AUD-041 | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | B | suspected (runtime failure, cause not yet traced) | [findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md](findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md) |
 | AUD-042 | Unbounded memory in exports/archives (large export DoS) | Medium | B | suspected | [findings/AUD-042-unbounded-memory-in-exports-archives-large-export-dos.md](findings/AUD-042-unbounded-memory-in-exports-archives-large-export-dos.md) |
+| AUD-048 | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | A | confirmed (runtime) | [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md) |
 | AUD-033 | Lifetime payout estimate is float32/REAL (drifts) | Low | A | confirmed (trace) | [findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md](findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md) |
 | AUD-037 | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | A | by design (ADR-0006), docs mismatch only | [findings/AUD-037-adjust-balance-writes-the-cache-only-docs-disagree.md](findings/AUD-037-adjust-balance-writes-the-cache-only-docs-disagree.md) |
 | AUD-040 | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | B | suspected | [findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md](findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md) |
@@ -53,5 +54,6 @@ Counts: Critical 5, High 19, Medium 16, Low 7
 | AUD-044 | Flaky dispatcher backoff test (jitter) | Low | B | suspected | [findings/AUD-044-flaky-dispatcher-backoff-test-jitter.md](findings/AUD-044-flaky-dispatcher-backoff-test-jitter.md) |
 | AUD-045 | Seed prints raw API keys; 'production' seed dump committed | Low | A | confirmed (runtime + read) | [findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md](findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md) |
 | AUD-047 | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | B | confirmed (trace) / suspected (UTC part) | [findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md](findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md) |
+| AUD-049 | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | A | confirmed (trace) | [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md](findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md) |
 
 See also: [ruled-out/](ruled-out/), [suspicious/](suspicious/), [CLAIMS.md](CLAIMS.md), [INVARIANTS.md](INVARIANTS.md), [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md), [BASELINE.md](BASELINE.md), [PLAN.md](PLAN.md), [TEAM.md](TEAM.md), [DECISIONS.md](DECISIONS.md).

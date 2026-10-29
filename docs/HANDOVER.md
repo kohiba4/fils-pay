@@ -34,6 +34,7 @@ the Bahrain month, not a UTC month — I told Mahmood.
 **Balances.** The only way to rebuild `merchant_balances` is the CLI
 (`settlement rebuild-balances`), which reads the ledger. There is no console
 button, and there shouldn't be one that reads anything else.
+*[Audit note 2026-10-29: a console button now exists; as of AUD-015 / ADR-0007 it reads the ledger, same as the CLI.]*
 
 **Platform volume tier.** Huda floated a platform-wide discount once total
 volume passes a threshold. I said no until finance signs off in writing.

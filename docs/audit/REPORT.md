@@ -4,8 +4,8 @@
 
 ## 1. Summary
 
-- Findings: **47** (Critical 5, High 19, Medium 16, Low 7); fixed so far: **4**.
-- By verdict: BUG 32, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
+- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **5**.
+- By verdict: BUG 34, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
@@ -25,7 +25,7 @@
 | [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (branch `fix/AUD-012-csv-bd-parsing`, pending merge; historical data repair still needed) | A |
 | [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | confirmed (runtime) | A |
-| [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (branch `fix/AUD-015-rebuild-from-ledger`, pending merge) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
 | [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | confirmed (runtime) | A |
@@ -51,6 +51,7 @@
 | [AUD-039](#aud-039) | Second-approver check on credits compares display names | Medium | UNVERIFIED | suspected | B |
 | [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | UNVERIFIED | suspected (runtime failure, cause not yet traced) | B |
 | [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | suspected | B |
+| [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | confirmed (trace) | A |
 | [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation mismatch only, not a code bug | A |
 | [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | suspected | B |
@@ -58,6 +59,7 @@
 | [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | suspected | B |
 | [AUD-045](#aud-045) | Seed prints raw API keys; 'production' seed dump committed | Low | HYGIENE | confirmed (runtime + read) | A |
 | [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
+| [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | confirmed (trace) | A |
 
 ## 2. Bugs (by severity)
 
@@ -574,8 +576,8 @@ _Source file: [findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches
 **Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203**
 
 - Severity: **High** · Category: data integrity · Owner: A
-- Verdict: **BUG (runtime)** (confidence high): Reproduced 136.5M vs 7.3M fils. ADR-0004 chose this on purpose, but it contradicts the ledger being authoritative and the brief; decision Q2.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Verdict: **BUG (runtime)** (confidence high): Reproduced 136.5M vs 7.3M fils; fixed (ADR-0007). ADR-0004 chose this on purpose, but it contradicts the ledger being authoritative and the brief; decision Q2.
+- Status: fixed (branch `fix/AUD-015-rebuild-from-ledger`, pending merge) · Fix commit: see `git log fix/AUD-015-rebuild-from-ledger`
 
 **Where**
 
@@ -599,7 +601,19 @@ REPRODUCED on the seed DB: Alpha Retail ledger payable = 136,496,486 fils (≈13
 
 **Fix**
 
-Point the internal endpoint at the ledger rebuild (same as CLI). Conflicts with ADR-0004 → your call.
+- `internalapi/server.go`: `/internal/rebuild-balances` now calls `ledger.RebuildAllBalances`, the same function the CLI uses.
+- `ledger/rebuild.go`: `RebuildAllBalances` rewritten as one `GROUP BY` ledger query + one `unnest` upsert, after locking all existing cache rows (`FOR UPDATE`, stable order) so a concurrent close/payout cannot interleave; ids are sorted before the insert. Resolves the old `TODO: lock merchant_balances rows first`.
+- Removed `ledger/refresh.go` (`RefreshBalanceCache`) and its view dependency use. The view `merchant_payable_position` stays (migration 0054; harmless, unused).
+- New test (written first, failed with `after = 12000, want 10000`): `internalapi/rebuild_source_test.go::TestRebuildBalances_UsesLedgerNotSchemeExport` (ledger 10,000 vs scheme line 12,000).
+- Re-attack test: `TestRebuildAllBalances_ConcurrentRunsDoNotDeadlock` (8 concurrent rebuilds, 40 new merchants).
+- **Tests changed/removed (justified):** `ledger/refresh_test.go` deleted: both tests only exercised the removed scheme-view function and asserted the wrong source ("overwrites drifted cache" and "sums across batches" behaviours are already covered for the ledger path by `rebuild_test.go`). In `internalapi/server_test.go::TestRebuildBalances_ValidToken` only comments/messages changed: it passed under both sources because the ledger gross and the scheme line were both 12000 ("FH: ... so the test is right" was a trap); expectations untouched. My Phase-1 repro in `settlement/audit_repro_test.go` was replaced by the endpoint test above.
+
+**Re-attack and side notes**
+
+- The concurrency test passes on unsorted code too, because every rebuild first locks the existing cache rows and so queues behind the others; the sort only matters if the cache table is empty (cannot be set up on the shared test DB). Kept as a cheap guard, not proven by a test.
+- Three serial full Go runs: only the 5 other findings' intentional repros fail.
+- **Important side effect found while re-attacking: AUD-048.** The cache (incremental, adds net at batch close) and the ledger (counts at capture) define the balance differently; after ANY ledger rebuild (button or CLI) the next close double counts the unbatched captures. Measured: after capture cache 0 / ledger 97,500; after rebuild 97,500 / 97,500; after CloseBatch 195,000 / 97,500; after PayoutBatch 97,500 / 0. The brief wants button = CLI, and the CLI already had this property, so it is delivered as asked, but the rebuild is not safe to run intraday until AUD-048 is fixed. Tell support to treat the rebuilt number as the ledger figure only.
+- Sibling found: `rebuild-balances --merchant` never writes (AUD-049). ADMIN.md still claims a nightly 02:00 recompute that has no scheduler code.
 
 **Related:** ADR-0004, AUD-037
 
@@ -1318,6 +1332,41 @@ Set `revoked_at = now(), revoked_reason='rotated'` in the same transaction (or a
 
 _Source file: [findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md](findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md)_
 
+### AUD-048
+**Cache and ledger define the balance differently: a rebuild is double counted at the next batch close**
+
+- Severity: **Medium** · Category: money / data integrity · Owner: A
+- Verdict: **BUG (runtime)** (confidence high): Reproduced (cache 195,000 vs ledger 97,500 after rebuild then close); display-only impact, so Medium. Pre-existing in the CLI; the definitions of 'balance' differ between the incremental cache and the ledger.
+- Status: confirmed (runtime; repro committed as `TestRepro_AUD048_*`) · Fix commit: — (not fixed; Phase 2)
+
+**Where**
+
+apps/settlement/internal/balances/cache.go (`ApplyBatchClose`, `ApplyPayout`), batch.go step 14, ledger/rebuild.go
+
+**Sibling locations checked:** CloseBatch posts no ledger legs; capture.ts posts payable legs at capture; PayoutBatch posts payout legs and reduces the cache; RecalculateMDR and the CSV import update both. The nightly 02:00 refresh in the docs does not exist in code.
+
+**Why it happens (root cause)**
+
+The incremental cache adds a batch's net at CLOSE and subtracts it at PAYOUT, so it means 'settled, not yet paid'. The ledger credits the merchant's payable at CAPTURE, so it means 'captured, not yet paid'. A rebuild sets the cache to the ledger figure, which already contains the captures that are still unbatched; the next close adds their net again and the payout only removes it once.
+
+**What it breaks (impact)**
+
+_Severity lowered High to Medium after independent review: the cache only feeds the merchant dashboard (apps/api/src/admin/merchants.ts) and payout amounts come from `settlement_batches.net_payout_fils`, so this is a wrong DISPLAYED balance, not a wrong payment._
+
+The displayed balance is inflated by the amount captured but unbatched at the moment of each rebuild; after that day's payout the extra stays until the next rebuild corrects it (and a rebuild during the next trading day re-inflates it). Support's 'Rebuild then Adjust' workflow makes it routine, so the rebuild button is not safe to use intraday. Also not covered by any cache writer: refunds post ledger legs but never touch the cache (processRefund.ts), so once refunds go live the cache drifts from the ledger even without a rebuild.
+
+**Proof / evidence**
+
+Scratch Go test (not committed; becomes a regression test with the fix): capture 100,000 fils at 2.5% fee. cache/ledger: after capture 0/97,500; after rebuild 97,500/97,500; after CloseBatch 195,000/97,500; after PayoutBatch 97,500/0 (the +97,500 stays until the next rebuild). Same for the CLI rebuild.
+
+**Fix**
+
+Decision needed on the definition (propose: balance = ledger payable). Options: (A) rebuild subtracts the net of capture events with `settlement_batch_id IS NULL` so it matches the incremental meaning (depends on AUD-016 so close and capture compute the same fee); (B) move the cache increment to capture time and drop it at close (cache == ledger always; touches api capture.ts and the Go close). Recommend (B) after AUD-016.
+
+**Related:** AUD-015, AUD-016, AUD-037, AUD-049
+
+_Source file: [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md)_
+
 ### AUD-033
 **Lifetime payout estimate is float32/REAL (drifts)**
 
@@ -1383,6 +1432,39 @@ Add the preHandler; use `toBahrainDateString`.
 **Related:** AUD-041
 
 _Source file: [findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md](findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md)_
+
+### AUD-049
+**`settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache**
+
+- Severity: **Low** · Category: ops tooling · Owner: A
+- Verdict: **BUG (traced)** (confidence high): The --merchant path only reads; the comment and RUNBOOK claim it writes.
+- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+
+**Where**
+
+apps/settlement/cmd/settlement/main.go:148-160, internal/ledger/rebuild.go (`RebuildMerchantBalance`)
+
+**Sibling locations checked:** The no-flag path (`RebuildAllBalances`) writes correctly.
+
+**Why it happens (root cause)**
+
+`RebuildMerchantBalance` only SELECTs the ledger sum; the CLI then prints `rebuilt=<n>` and returns. A code comment ('--merchant writes the cache for that one merchant, same as the full rebuild') and RUNBOOK ('recompute it') say otherwise.
+
+**What it breaks (impact)**
+
+An operator following the RUNBOOK for a single wrong balance sees a correct-looking number but the dashboard cache stays wrong.
+
+**Proof / evidence**
+
+Read of main.go and rebuild.go: no UPDATE/INSERT on the --merchant path.
+
+**Fix**
+
+Write the value (same upsert as the full rebuild, restricted to one merchant) or rename the flag to make it read-only.
+
+**Related:** AUD-015
+
+_Source file: [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md](findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md)_
 
 
 ## 3. Fixed bugs: tests that had to change
