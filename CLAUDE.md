@@ -17,7 +17,8 @@ replaced/removed with the user's approval; originals are kept as evidence in
 6. STOP for user approval at every phase gate.
 
 ## Current phase
-**Phase 0 (recon) — DONE. Q1–Q9 decided in docs/audit/DECISIONS.md; waiting for user approval to start Phase 1 (and Q10: Dilmune Cloud info).**
+**Phase 1 (audit) — Track A (user's track) verified at runtime; waiting for user approval of fix order (docs/audit/PHASE1-TRACK-A.md). Q1–Q9 decided (DECISIONS.md); Q10 Dilmune info due from user.**
+Our track = **A** (money/settlement/data). Do NOT touch Track B files (see TEAM.md). Repro tests: branch `a/phase1-repros`.
 Branch `audit/fixes`. No code changed yet (docs + removal of planted agent files only).
 
 ## Findings (47: Critical 7 · High 17 · Medium 16 · Low 7) — full table: docs/audit/INDEX.md
@@ -48,5 +49,4 @@ Fresh migrate fails at 0054 (AUD-026); baseline DB has a scratch-only workaround
 Baseline tests: api 350/362, reporting 7/11, money 40/40, events 4/4, web 8/8, Go all ok.
 
 ## Next step
-Await user go-ahead + Dilmune Cloud info (Q10), then Phase 1: repro tests for each confirmed finding,
-trace unread areas (reporting AUD-041, exports AUD-042, query AUD-043, KYC, SQL interpolation).
+Await user OK on Track A fix order, then Phase 2 (AUD-026 first). Track B's open traces (AUD-041/042/043) are the teammate's.

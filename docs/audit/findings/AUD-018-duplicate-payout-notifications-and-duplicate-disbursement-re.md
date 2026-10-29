@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | race / idempotency |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ Check-then-insert (`NOT EXISTS` then INSERT) with no lock or unique index on out
 
 ## Reproduction / evidence
 Trace; incident review: two deliveries had different outbox event ids.
+
+**Phase 1 runtime check:** TestRepro_AUD018_ConcurrentPayoutNotificationsEnqueueOnce: 8 overlapping scans over 40 paid batches → 35–37 batches got duplicate settlement.paid events (≈220 extras), 3 runs. `outbox_events` has no unique index on (event_type, aggregate_id) despite the code comment saying so. A single-batch version of the test passed, so the race needs overlap but is easily hit.
 
 ## Impact
 Merchants told twice; two disbursement instructions per batch (possible double payout on the rail).

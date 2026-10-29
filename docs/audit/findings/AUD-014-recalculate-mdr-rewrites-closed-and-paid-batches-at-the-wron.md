@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / history mutation |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ Selects `status <> 'open'` (closed AND paid) and rewrites `settlement_batches.fe
 
 ## Reproduction / evidence
 Trace + test review: existing tests cover only closed (unpaid) batches; none covers a paid batch. Seed contains 64 closed, 4 open, 0 paid, so the paid case needs a constructed test.
+
+**Phase 1 runtime check:** TestRepro_AUD014_RecalculateMDRDoesNotRewritePaidBatch: paid batch fee 2500 → 4000, net 97500 → 96000 after the merchant rate changed, though the bank was already paid 97500.
 
 ## Impact
 Paid batches no longer match the bank instruction/statement; fee history wrong; settlement team's claim "only open batches" is false (it never touches open ones).

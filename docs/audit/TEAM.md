@@ -33,5 +33,9 @@ Agree the interface first, then split:
 7. **Context resets:** read `CLAUDE.md`, then `docs/audit/INDEX.md`, then your finding files.
 8. **Remotes:** `mine` = private team repo (`kohiba4/fils-pay-hackathon`). `origin` = challenge repo — do not push there.
 
-## Blocked on (answer PLAN.md Q1–Q10 before Phase 2)
-Q1 migrations (A, first) · Q2 rebuild source (A) · Q3 MDR recalc (A) · Q4 impersonation (B) · Q5 fee formula (A) · Q6 month windows · Q7 volume tier (A) · Q8 split ledger model (A) · Q9 seed dump/secret rotation · Q10 Dilmune access.
+## Known shared-file hot spots (see PHASE1-TRACK-A.md)
+- `routes/transactions.ts` (B: role gates AUD-046; A: discount call AUD-016) — A goes second.
+- `webhooks/dispatcher.ts`/`payoutDisbursement.ts` (B owns; AUD-018 needs a joint change).
+
+## Decisions already made
+See [DECISIONS.md](DECISIONS.md) (Q1–Q9). Q10 (Dilmune Cloud) pending from the user.

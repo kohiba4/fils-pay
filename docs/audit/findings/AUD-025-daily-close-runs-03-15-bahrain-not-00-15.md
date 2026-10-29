@@ -22,6 +22,8 @@ apps/settlement/internal/scheduler/daemon.go:79-86, settlement/window.go:46-52
 ## Reproduction / evidence
 Trace; ops log note '~03:15 local'. Chat claim TRUE.
 
+**Phase 1 runtime check:** Worked example (trace, not yet a test; needs a clock seam): at 2026-10-29T22:00Z (= 01:00 Bahrain on 30 Oct) `runIfDue` takes the UTC date 10-29 as 'today', so it closes 10-28 and the 10-29 business day (ended 21:00Z) is not closed until 2026-10-30T00:15Z = 03:15 Bahrain, matching the ops log note.
+
 ## Impact
 Payouts and batch_closed 3 h late vs docs/merchant promise; window contents themselves correct.
 

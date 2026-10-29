@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / parsing |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ Importer calls `parseDecimalMinor` with the default `decimals = 2`, i.e. cents. 
 
 ## Reproduction / evidence
 Trace. Finance: 4.75 → 0.475 (matches). Their '4.755 → 4.750' figure does not match this code path exactly (code gives 0.475) — to reproduce in Phase 1. Slack: sheet 4,141.90 vs screen 414,190 fils = 414.190 BD (10× low).
+
+**Phase 1 runtime check:** adjustmentCsvParsing.repro.test.ts: "4.75" → 475 (want 4750), "4.755" → 475 (want 4755; finance reported 4.750 so their figure differs slightly), "12" → 1200, "4.7555" accepted silently. Existing tests ENCODE the bug: admin/adjustmentImport.test.ts:67 (parsedAmountFils 475, totalPostedFils 600) and a false README claim 'comment 1250 fils = 12.50 BD' in routes/adminAdjustmentImport.test.ts:236. Fix those tests with justification.
 
 ## Impact
 Every adjustment posted to the ledger at 1/10th; August imports affected; March 4.75-ish gap may be one of these rows.

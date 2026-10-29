@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / rounding |
-| Status | confirmed (trace + exported data) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ apps/settlement/internal/settlement/batch.go:248-256, scheme_export.go:25-28 (`S
 
 ## Reproduction / evidence
 docs/exports/scheme/…2026-09-14: amount_fils 93,270 vs file 93.28; day total file 20,000.20 vs gross 20,000.123.
+
+**Phase 1 runtime check:** TestRepro_AUD010_SchemeLineAmountIsTruncatedNotRounded: capture 93.279 BD → amount_fils 93270 but scheme `amount` = 93.28 (should be 93.27).
 
 ## Impact
 Scheme statement higher than our ledger every day; residue account never reconciles; finance books against the wrong figure.

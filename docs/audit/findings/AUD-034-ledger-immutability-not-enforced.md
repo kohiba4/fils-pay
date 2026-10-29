@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Medium** |
 | Category | data integrity |
-| Status | suspected |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ The balance trigger only checks group sums; an UPDATE/DELETE that keeps a group 
 
 ## Reproduction / evidence
 Trace; repro SQL in Phase 1.
+
+**Phase 1 runtime check:** On a scratch copy: BEGIN; DELETE both legs of a balanced capture group; COMMIT → succeeded (4 legs before, 0 after). The deferred balance trigger only checks sums, so whole groups can be deleted.
 
 ## Impact
 History can be silently rewritten.

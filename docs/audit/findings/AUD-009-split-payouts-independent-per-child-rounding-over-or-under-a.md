@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ Each child gets `ApplyRateFils(net, weight)` independently (half-even), so share
 
 ## Reproduction / evidence
 Numeric check over 3,000 consecutive nets (1,000,000–1,002,999 fils): 10% under-allocated by 1 fil, 10% OVER-allocated by 1 fil (payable debited more than the batch net, can go negative). That explains 'a few fils short' but NOT finance's 'a few tens of fils each batch'; the larger figure is unexplained by this code (open question, claim C14 partially true).
+
+**Phase 1 runtime check:** TestRepro_AUD009_SplitPayoutAllocatesExactlyTheNet: net 1001 → children allocated 1000, ledger debited 1000, 1 fil stranded in payable (batch marked paid).
 
 ## Impact
 Batch is marked paid while up to 1 fil per batch stays stranded in payable (or is over-paid); ledger payout total ≠ batch net.

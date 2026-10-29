@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / overflow |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ apps/settlement/internal/settlement/platform_volume.go, db/migrations/0049, apps
 
 ## Reproduction / evidence
 Trace + threshold history: `git log -S2_000_000_000` shows the constant present from the first fees commit (3f9ee27), so the repeated 'threshold bumped in d69a813 / approved by finance' claim has no commit behind it in this history and finance (Huda) did not know of it. Seed counter is 69,418 fils, far below the threshold, so the tier is dormant in test data; production state unknown. int32 wraps at 2,147,483,647 fils (≈2.15M BD), only 147M fils above the threshold.
+
+**Phase 1 runtime check:** TestRepro_AUD017_PlatformVolumeCounterDoesNotOverflow: counter 2,147,000,000 + 1,000,000 fils → stored -2,146,967,296 (tier would silently switch off).
 
 ## Impact
 Fee rate flips platform-wide; capture and close read the tier at different times; potential CloseBatch failure.

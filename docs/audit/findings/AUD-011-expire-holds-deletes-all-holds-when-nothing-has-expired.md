@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Critical** |
 | Category | data loss |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ scripts/lib/sqlFilter.ts:8-11, scripts/expire_holds.ts:27-50
 
 ## Reproduction / evidence
 Trace; unit test to add: `buildDelete('holds',{id:[]}).text` must not be an unconditional DELETE.
+
+**Phase 1 runtime check:** scripts/expire_holds.repro.test.ts: `buildExpiredHoldsDelete([]).text` = "DELETE FROM holds" (no WHERE). Existing tests only cover non-empty id lists.
 
 ## Impact
 A quiet night wipes every active hold (authorization state).

@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Critical** |
 | Category | money / float |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ apps/settlement/internal/settlement/payable.go:9-12
 
 ## Reproduction / evidence
 Trace + numeric check (scratchpad): 729 simulated batches, gross 1,000–900,000 BD at 2.75% fee → float32 result differs from `gross - fee` in 680 of 729, by up to 59 fils. Go regression test to add.
+
+**Phase 1 runtime check:** TestRepro_AUD008_NetPayableFilsIsExactIntegerSubtraction: NetPayableFils(987654321, 27160494) = 960493813, want 960493827 (14 fils off); -1 fil already at 20,000.123 BD gross.
 
 ## Impact
 Bank payout and `net_payout_fils` differ from gross−fee for large batches; ledger payout legs inherit it → payable drift.

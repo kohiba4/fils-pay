@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | ops script / money |
-| Status | confirmed (trace) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ Random `entry_group_id`, no existing-posting check, no dry-run flag; residue com
 
 ## Reproduction / evidence
 Trace; brief: ran twice on staging and the gap doubled.
+
+**Phase 1 runtime check:** Ran scripts/reconcile_march.ts twice against a throwaway COPY of the disposable DB: residue legs 0 → 170 fils (11 legs) → 340 fils (22 legs). Second run doubled the posting, exactly as finance described. It also debits merchant_payable. NEVER run on a real DB.
 
 ## Impact
 Each run doubles the correction; merchant payables reduced by residue they never owed. Not safe to rerun.

@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Medium** |
 | Category | data / display |
-| Status | confirmed (seed data) |
+| Status | confirmed (runtime) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -21,6 +21,8 @@ Display picks the most recently **entered** row (a backfill/future-dated row) in
 
 ## Reproduction / evidence
 REPRODUCED from the seed: Alpha Retail has fee_schedules rows (245 bps, effective 2026-03-01, created 2026-08-15 = the backfill) and (225 bps, effective 2026-08-01, created 2026-08-01). `getCurrentFeeScheduleForDisplay` orders by created_at DESC → 245; capture/settlement order by effective_from → 225. Matches the brief exactly. Authoritative: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).
+
+**Phase 1 runtime check:** currentFeeScheduleDisplay.repro.test.ts: capture charges 225, display shows 245. The existing test at currentFeeScheduleDisplay.test.ts:72-82 ENCODES the bug ('backfilled row wins') and must be changed in the fix commit.
 
 ## Impact
 Merchant sees wrong rate; support confusion. Authoritative table: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).
