@@ -4,8 +4,8 @@
 
 ## 1. Summary
 
-- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **9**.
-- By verdict: BUG 34, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
+- Findings: **51** (Critical 5, High 19, Medium 18, Low 9); fixed so far: **11**.
+- By verdict: BUG 36, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
@@ -38,11 +38,11 @@
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
-| [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | confirmed (trace) | A |
+| [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | fixed (branch `fix/AUD-025-close-at-bahrain-midnight`, pending merge) | A |
 | [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
-| [AUD-031](#aud-031) | Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at | Medium | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) | A |
 | [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
@@ -52,6 +52,7 @@
 | [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | UNVERIFIED | suspected (runtime failure, cause not yet traced) | B |
 | [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | suspected | B |
 | [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
+| [AUD-050](#aud-050) | Manual credit MDR reversal uses the fallback rate, not the rate that was charged | Medium | BUG (traced) | confirmed (trace) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | confirmed (trace) | A |
 | [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation mismatch only, not a code bug | A |
 | [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | suspected | B |
@@ -60,6 +61,7 @@
 | [AUD-045](#aud-045) | Seed prints raw API keys; 'production' seed dump committed | Low | HYGIENE | confirmed (runtime + read) | A |
 | [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
 | [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | confirmed (trace) | A |
+| [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | confirmed (trace) | A |
 
 ## 2. Bugs (by severity)
 
@@ -1052,7 +1054,7 @@ _Source file: [findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md]
 
 - Severity: **Medium** · Category: time · Owner: A
 - Verdict: **BUG (traced)** (confidence high): `time.Now().UTC()` date used as the Bahrain day. Matches ops log (~03:15) and chat. Needs a clock seam to test.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-025-close-at-bahrain-midnight`, pending merge) · Fix commit: see `git log fix/AUD-025-close-at-bahrain-midnight`
 
 **Where**
 
@@ -1076,7 +1078,17 @@ Trace; ops log note '~03:15 local'. Chat claim TRUE.
 
 **Fix**
 
-Convert now to Asia/Bahrain before taking the date.
+- `settlement/window.go`: new `BusinessDateOf(t)` returns the Asia/Bahrain calendar date containing any instant; `BusinessDayWindow`'s doc now says its argument must be a calendar date, not a raw UTC instant.
+- `scheduler/daemon.go`: the decision moved into a pure, clock-injectable `dueBusinessDate(now, delayMinutes)`: "today" is the Bahrain date, due once `delay` minutes have passed since Bahrain midnight, closing yesterday (Bahrain). `runIfDue` calls it. The misleading comments ("MK: UTC here is fine", "am: ... ~03:15 local whatever") are replaced by an accurate explanation.
+- Tests (written first; compile-red because the function did not exist; the old logic was also run through the same instants as a scratch test): `TestDueBusinessDate`, 9 cases: 23:59 Bahrain, 00:05 (grace period), exactly 00:15, 00:20, 01:00, 03:00, month, year and leap-day boundaries. Old logic on the same instants: 00:05 Bahrain was already "due" (ignoring the grace period); 00:20 and 01:00 re-ran 10-28 (a no-op) instead of 10-29; the right day was only closed at 00:00 UTC = 03:00 Bahrain. No existing test changed.
+
+**Re-attack and side notes**
+
+- Other uses of a UTC "now" as a business date in the settlement Go code: none left (`time.Parse` of explicit dates in the CLI and internal API is fine; `CloseBatch` only reads Y/M/D of the date it is given). **The same bug class exists outside Go (found by the independent review, verified):** `apps/admin/src/pages/settlement/SettlementPage.tsx` `yesterdayIso()` (new finding **AUD-051**); `apps/reporting/src/consumer/applyEvent.ts:170` (UTC date in the refund rollup, tracked in AUD-047, Track B); `apps/api/src/payments/capture.ts:20` (dead helper, AUD-047); `apps/api/src/lib/dateUtil.ts` `todayStamp()` (only a log line in `businessProfile.ts`, cosmetic).
+- Behavioural consequence to expect after deploy: the first close after the fix runs at 00:15 Bahrain instead of ~03:00, so `settlement.batch_closed` / `settlement.paid` events, payout postings and notifications move about 2.75 hours earlier. Captures timestamped inside the 15-minute grace period after midnight belong to the next day (unchanged rule). Re-running a day is idempotent, so the first tick after the deploy is harmless.
+- Review follow-ups: `SETTLEMENT_DAEMON_RUN_DELAY_MINUTES` is now validated to 0-1439 at startup (1440 or more would never become due, so the day would silently never close; a negative value would fire before midnight), with `TestLoad_RejectsOutOfRangeRunDelay`; a delay-0 test was added; two comment defects in `daemon.go` and `window.go` (a leftover stale doc line and a spliced sentence) were fixed. Not verified by the reviewer: effects of closing ~2.75 h earlier on the acquirer, holds, the scheme file cut or downstream jobs.
+- The daemon still catches up only yesterday after an outage (documented; use `run-batch --date`).
+- Reporting and the API already bucket by Bahrain date (`bahrainDate.ts`, `AT TIME ZONE 'Asia/Bahrain'`); `capture.ts` `recordCaptureMetric` uses a UTC date but has no callers (noted in AUD-047).
 
 **Related:** —
 
@@ -1182,11 +1194,15 @@ FP-300.
 _Source file: [findings/AUD-030-refund-succeeded-produced-but-never-delivered-no-dispatcher-.md](findings/AUD-030-refund-succeeded-produced-but-never-delivered-no-dispatcher-.md)_
 
 ### AUD-031
-**Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at**
+**Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at**
 
 - Severity: **Medium** · Category: data / display · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Reproduced 245 vs 225 with the seed.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) · Fix commit: see `git log fix/AUD-031-fee-display-effective-from`
+
+**What is wrong**
+
+Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at.
 
 **Where**
 
@@ -1200,7 +1216,7 @@ Display picks the most recently **entered** row (a backfill/future-dated row) in
 
 **What it breaks (impact)**
 
-Merchant sees wrong rate; support confusion. Authoritative table: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).
+The ADMIN merchant page (the only consumer: `apps/api/src/admin/merchants.ts` -> `MerchantDetailPage.tsx`) showed support a rate that was never billed, which is what the finance email reports as "the dashboard shows 245". No merchant-facing screen or API route exposes a fee rate (reviewer grep of apps/web and apps/api/src/routes). Authoritative table: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).
 
 **Proof / evidence**
 
@@ -1210,7 +1226,16 @@ REPRODUCED from the seed: Alpha Retail has fee_schedules rows (245 bps, effectiv
 
 **Fix**
 
-Reuse the effective-dated query.
+- `getCurrentFeeScheduleForDisplay` now uses the same rule as capture and settlement: `WHERE effective_from <= now() ORDER BY effective_from DESC, created_at DESC LIMIT 1`. A future-dated schedule is not shown until it takes effect; none in force returns null. The justification comments ("asked Claude, created_at is right", "display only, nobody bills off this") were removed: the second is exactly why support saw a rate that was never charged.
+- Tests (written first; 4 failed on the old code): corrected `a backfilled older period never displaces the rate in force`, new `a future-dated schedule is not shown as current...`, `only future-dated schedules on file...`, a same-day tie-break test (already passed, kept as a guard), and the Phase-1 repro renamed to `currentFeeScheduleDisplay.parity.test.ts` (display must equal what `getEffectiveMdrBps` bills).
+- **Test changed (justified):** `returns the most recently entered schedule even when an older period was backfilled later` asserted 245 bps / effective 2026-03-01 / created 2026-08-15 (a comment on it said "it asserts the backfilled row wins"). It now asserts the row actually in force: 225 bps / 2026-08-01 / 2026-08-01. No assertion was removed.
+
+**Re-attack and side notes**
+
+- Full API suite: only the 12 known baseline failures (11 refund tests, 1 flaky jitter test).
+- "225" is the schedule rate; the fee actually charged also subtracts the volume-tier bonus (capture) and, at settlement, applies the negotiated discount (AUD-016/AUD-017), so 225 is the right comparison for the DISPLAYED schedule, not the final fee.
+- The admin merchant page shows TWO rates side by side: `merchants.mdr_bps` (the default/fallback rate) and `currentFeeSchedule` (now the rate in force). They legitimately differ when a schedule exists; the label should keep saying which is which.
+- Siblings checked: capture (`fees/feeSchedule.ts`) and Go (`fee_schedule.go`) already order by `effective_from`; dead `v1/` code ignored. Two siblings that still use the fallback `merchants.mdr_bps` and ignore the schedule are recorded separately: manual credits' MDR reversal (**AUD-050**) and the reconciliation's pending-fee estimate (`settlement/query.ts:312-327`, whose comment cites a "0046 trigger" that does not exist; part of AUD-016).
 
 **Related:** AUD-016
 
@@ -1418,6 +1443,43 @@ Decision needed on the definition (propose: balance = ledger payable). Options: 
 
 _Source file: [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md)_
 
+### AUD-050
+**Manual credit MDR reversal uses the fallback rate, not the rate that was charged**
+
+- Severity: **Medium** · Category: money / duplicate logic · Owner: A
+- Verdict: **BUG (traced)** (confidence medium): `calculateCreditFeeReversal(base, merchants.mdr_bps)` ignores `fee_schedules`; the stored default is only the fallback. Not yet reproduced as a test; what a goodwill reversal should mean is a finance call.
+- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+
+**What is wrong**
+
+Manual credits reverse the MDR using `merchants.mdr_bps` (the default rate) instead of the rate in force when the fee was charged.
+
+**Where**
+
+apps/api/src/admin/credits.ts:212-224 (`createCreditRequest`), apps/api/src/admin/creditThreshold.ts:19-21 (`calculateCreditFeeReversal`)
+
+**Sibling locations checked:** capture resolves the rate with `getEffectiveMdrBps` (effective-dated, minus the tier bonus) and the Go close adds the negotiated discount; `processRefund` reads the fee actually charged from the ledger (correct); `settlement/query.ts` pending-fee estimate also uses `merchants.mdr_bps` (AUD-016).
+
+**Why it happens (root cause)**
+
+`createCreditRequest` selects only `merchants.mdr_bps` and applies it to the credited amount. The platform's real fee for a merchant with a `fee_schedules` history (and possibly a negotiated discount and the volume tier) is a different number; `merchants.mdr_bps` is only the fallback, "shown at onboarding" per migration 0048.
+
+**What it breaks (impact)**
+
+The admin UI shows the same wrong rate next to the checkbox (`apps/admin/src/pages/merchants/MerchantDetailPage.tsx:407`, "Also reverse the MDR on this amount (2.50%)", from `merchants.mdrBps`). The 225 vs 250 example is the schedule rate only; the fee really charged also reflects the tier bonus and discount, so the true over-reversal may be larger or smaller than 25 BD. Platform fee revenue is debited and the merchant credited with more fee than was ever charged for every merchant whose schedule differs from the default rate; the approval threshold looks at the base amount only (by design, ADMIN.md), so the REVERSAL amount is never part of the approval decision (a 10,000 BD base credit exceeds the 50 BD threshold anyway and needs a second approver, but the over-reversal inside it is not checked).
+
+**Proof / evidence**
+
+Trace of the code. With the seed's Alpha Retail (`merchants.mdr_bps` 250, schedule row 225 in force since 2026-08-01), a 10,000.000 BD credit with "reverse the MDR" returns 250.000 BD of fee although payments were charged 225 bps (225.000 BD), over-reversing 25.000 BD. Not yet run as a test.
+
+**Fix**
+
+Resolve the reversal rate with the same function/formula as capture and settlement (decision Q5, AUD-016), or reverse the fee actually charged on the original transactions. Decide with finance which one a "goodwill MDR reversal" means.
+
+**Related:** AUD-016, AUD-031
+
+_Source file: [findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md](findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md)_
+
 ### AUD-033
 **Lifetime payout estimate is float32/REAL (drifts)**
 
@@ -1516,6 +1578,43 @@ Write the value (same upsert as the full rebuild, restricted to one merchant) or
 **Related:** AUD-015
 
 _Source file: [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md](findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md)_
+
+### AUD-051
+**Admin console default run date is the wrong day for 3 hours after Bahrain midnight**
+
+- Severity: **Low** · Category: time · Owner: A
+- Verdict: **BUG (traced)** (confidence high): `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact.
+- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+
+**What is wrong**
+
+The settlement page pre-fills the "re-run a daily batch" date with a day that is wrong for a Bahrain browser between 00:00 and 03:00.
+
+**Where**
+
+apps/admin/src/pages/settlement/SettlementPage.tsx:19-22 (`yesterdayIso`)
+
+**Sibling locations checked:** same bug class as AUD-025 (Go daemon, fixed), `apps/reporting/src/consumer/applyEvent.ts:170` (AUD-047), `apps/api/src/lib/dateUtil.ts` `todayStamp()` (log only).
+
+**Why it happens (root cause)**
+
+`yesterdayIso()` takes the browser-local date, subtracts a day, then formats it with `toISOString()`, which is UTC. At 02:00 in Bahrain on the 30th the local "yesterday" is the 29th at 02:00, i.e. 23:00 UTC on the 28th, so the field shows 2026-10-28 instead of 2026-10-29.
+
+**What it breaks (impact)**
+
+Only the default value of a manual field changes, but the operator who accepts it re-runs the wrong business day (a no-op because batches are idempotent) and believes yesterday was processed.
+
+**Proof / evidence**
+
+Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Not yet run as a test.
+
+**Fix**
+
+Compute the Bahrain date explicitly (UTC instant + 3 h, like `bahrainDate.ts`), not a browser-local one; add a unit test for 00:00-03:00 Bahrain.
+
+**Related:** AUD-025, AUD-047
+
+_Source file: [findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md](findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md)_
 
 
 ## 3. Fixed bugs: tests that had to change
