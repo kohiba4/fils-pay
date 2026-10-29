@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money |
-| Status | **fixed** (branch `fix/AUD-009-split-exact-allocation`, pending merge; historical stranded fils not repaired) |
+| Status | **fixed** (merged into main; historical stranded fils not repaired) |
 | Fix commit | see `git log fix/AUD-009-split-exact-allocation` |
 
 ## Summary

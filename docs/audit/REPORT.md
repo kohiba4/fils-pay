@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **6**.
+- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **8**.
 - By verdict: BUG 34, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -18,21 +18,21 @@
 | [AUD-006](#aud-006) | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | BUG (traced) | confirmed (trace) | B |
 | [AUD-005](#aud-005) | Refund ceiling is authorized − refunded, not captured − refunded | High | LATENT | latent | FP-300 (shared) |
 | [AUD-007](#aud-007) | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | BUG (traced) | confirmed (trace) | B |
-| [AUD-008](#aud-008) | Net payout computed in float32 (`NetPayableFils`) | High | BUG (runtime) | fixed (branch `fix/AUD-008-net-payout-integer`, pending merge) | A |
-| [AUD-009](#aud-009) | Split payouts: independent per-child rounding over- or under-allocates the batch net | High | BUG (runtime) | confirmed (runtime) | A |
-| [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | confirmed (runtime) | A |
-| [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | High | BUG (runtime) | fixed (branch `fix/AUD-011-expire-holds`, pending merge) | A |
-| [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (branch `fix/AUD-012-csv-bd-parsing`, pending merge; historical data repair still needed) | A |
+| [AUD-008](#aud-008) | Net payout computed in float32 (`NetPayableFils`) | High | BUG (runtime) | fixed (merged into main) | A |
+| [AUD-009](#aud-009) | Split payouts: independent per-child rounding over- or under-allocates the batch net | High | BUG (runtime) | fixed (merged into main; historical stranded fils not repaired) | A |
+| [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | fixed (merged into main; historical files already sent are not corrected) | A |
+| [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | High | BUG (runtime) | fixed (merged into main) | A |
+| [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (merged into main; historical data repair still needed) | A |
 | [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | confirmed (runtime) | A |
-| [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | fixed (branch `fix/AUD-014-mdr-recalc-paid-batches`, pending merge) | A |
-| [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (branch `fix/AUD-015-rebuild-from-ledger`, pending merge) | A |
+| [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | fixed (merged into main) | A |
+| [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
 | [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | confirmed (trace) | B |
-| [AUD-026](#aud-026) | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | BUG (runtime) | fixed (branch `fix/AUD-026-fresh-migrate`, pending merge) | A |
+| [AUD-026](#aud-026) | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | confirmed (runtime) | FP-300 (shared) |
 | [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
@@ -299,7 +299,7 @@ _Source file: [findings/AUD-007-expired-payment-link-payable-via-client-supplied
 
 - Severity: **High** · Category: money / float · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): float32 net differs from integer subtraction (up to 14 fils at ~1M BD). ADR-0001 forbids it.
-- Status: fixed (branch `fix/AUD-008-net-payout-integer`, pending merge) · Fix commit: see `git log fix/AUD-008-net-payout-integer` (fix(settlement) commit)
+- Status: fixed (merged into main) · Fix commit: see `git log fix/AUD-008-net-payout-integer` (fix(settlement) commit)
 
 **Where**
 
@@ -342,7 +342,7 @@ _Source file: [findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md
 
 - Severity: **High** · Category: money · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Allocation error is ±1 fil/batch with the seed weights. Finance's "tens of fils" is NOT explained by this (open).
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged into main; historical stranded fils not repaired) · Fix commit: see `git log fix/AUD-009-split-exact-allocation`
 
 **Where**
 
@@ -366,7 +366,20 @@ Numeric check over 3,000 consecutive nets (1,000,000–1,002,999 fils): 10% unde
 
 **Fix**
 
-Largest-remainder allocation in Go (port of `allocateRemainder`) so shares sum exactly to net; refuse to pay when child weights don't sum to 10000. Keep the existing parent-leg ledger model (decision Q8).
+- `splits/shares.go`: `ChildShares` is now the single allocator: largest-remainder method (a Go port of `allocateRemainder`), so shares always sum to exactly the batch net. It returns `ErrInvalidSplitWeights` unless every weight is > 0 and they sum to exactly 10,000 bps. (Before, `ChildShares` was never called by production: `PayoutSplitBatch` inlined its own independent per-child `ApplyRateFils`.)
+- `splits/allocate.go` (`PayoutSplitBatch`): uses `ChildShares`; validates the weights BEFORE writing anything; a non-positive net posts no legs (like `PayoutBatch`); each leg's description now carries the child id (`... split to sub-merchant <uuid>`) for traceability; the cache is reduced by the batch NET (resolves the "am:" comment) instead of the sum of the rounded shares. Ledger model unchanged (legs on the parent's payable; per-child record in `settlement_batch_splits`).
+- `cmd/settlement/main.go` + `internalapi/server.go`: skipped batches printed by the CLI and returned in an additive `skipped` field of `/internal/run-batch` (the API client ignores unknown fields).
+- `settlement/batch.go` (`RunDailyBatch`): a parent with invalid weights is logged, its batch is left `closed` (unpaid) and it is listed in `DailyBatchReport.Skipped`, instead of aborting the daily run for every other merchant. **It is NOT retried automatically:** the daemon only runs *yesterday*, so once the date rolls over an operator must fix the weights and run `settlement run-batch --date=D --merchant=M`. The skip is visible in the CLI output (`!! NOT PAID`), the daemon log (every tick that day) and the admin run-batch response (additive `skipped` array). (An earlier draft claimed it would be retried next run; the independent review proved that false.)
+- Tests (written first; compile-red + the Phase-1 runtime repro `net 1001 -> allocated 1000`): `TestChildShares_AwkwardNetsSumExactly` (5 weight sets x nets 0..3000: sum == net, each share within 1 of its floor), `..._LargestRemainderGetsTheExtraFil`, `..._RejectsBadWeights`, `TestSplitPayout_InvalidWeightsAreNotPaid`, `TestRunDailyBatch_SkipsAParentWithInvalidSplitWeights`, `TestSplitPayout_PaysExactlyNetAndReducesCacheByNet`, and the existing `TestRepro_AUD009_*` now passes.
+- **Tests changed (justified):** `TestChildShares_SumToNet` only used "nice" numbers where independent rounding happens to sum (10000/5000+5000, 9000/3000+3000+4000, 5000/10000), so it passed while production lost or invented fils; its cases are kept unchanged, only the call now handles the new `(shares, err)` return. The strict cases are added next to it.
+
+**Re-attack and side notes**
+
+- Property check inside the tests covers nets 0..3000 for weights (5000,3000,2000), (3333,3333,3334), (1,9999), (2500 x4), (10000): never negative, never off by more than 1 fil from the exact proportion, always summing to the net. Overflow guard: nets above MaxInt64/10000 are rejected rather than wrapping.
+- Over-allocation (children paid MORE than the net, payable driven below zero) existed too, not only the "vanishing fil" finance described. Measured: with weights 5000/3000/2000 about 10% of nets under- and 10% over-allocated; with 3333/3333/3334 about 33% under and 28% over.
+- Zero-share children now keep their `settlement_batch_splits` audit row (no ledger legs; the `amount_fils > 0` CHECK), covered by `TestSplitPayout_ZeroShareChildKeepsAnAuditRow`.
+- Not fixed here: `PayoutSplitBatch` still does not call `UpdateLifetimePayoutMonitoringEstimate` (non-split payouts do; monitoring only, see AUD-033), and the payout posts no `settlement_payout_disbursements` row for splits (disbursement is created by the webhook path, see AUD-018).
+- Finance's "a few tens of fils each batch" is still NOT explained by this code (rounding error is at most 1 fil per batch with valid weights); if production weights do not sum to 10,000 the loss would be larger. Check the production weights first (query below).
 
 **Related:** AUD-008
 
@@ -377,7 +390,7 @@ _Source file: [findings/AUD-009-split-payouts-independent-per-child-rounding-ove
 
 - Severity: **High** · Category: money / rounding · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): File `amount` 93.28 vs 93270 fils. Not Visa rounding: we generate the file.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged into main; historical files already sent are not corrected) · Fix commit: see `git log fix/AUD-010-scheme-amount-truncate`
 
 **Where**
 
@@ -401,7 +414,23 @@ docs/exports/scheme/…2026-09-14: amount_fils 93,270 vs file 93.28; day total f
 
 **Fix**
 
-Write `amount` from the truncated fils (exact decimal, no float). Residue journaling per ADR-0002 is a separate, larger item — ask before building.
+- `batch.go` (CloseBatch step 12): `scheme_export_lines.amount` is now derived in SQL from the SAME truncated fils as `amount_fils` (`fils::numeric / 1000`, exact decimal), instead of the UNtruncated gross divided as a float64 and rounded half-up by NUMERIC(10,2). Result: file `amount` always equals `amount_fils / 1000`, as ADR-0002 requires.
+- `scheme_export.go`: removed the now-unused float helper `SchemeAmountBD`.
+- Tests: `TestRepro_AUD010_SchemeLineAmountIsTruncatedNotRounded` (written first, failed `93.28 want 93.27`, passes). **Test strengthened (not weakened):** `TestSchemeExportAmountHasTwoDecimals` only matched the regex `^\d+\.\d{2}$`, so 4747 fils exporting as "4.75" passed (its comment even said "it rounds. whatever"); it now asserts the exact truncated values {1.00, 12.34, 4.74, 4.74} and was shown to fail on the old code (`[1.01 12.34 4.74 4.75]`).
+
+**Re-attack and side notes**
+
+- `amount_fils % 10 = 0` is enforced by a CHECK (0008), so `amount_fils/1000` is always exactly 2 decimals; negative or zero amounts also stay exact.
+- Other writers of the column: migration 0050's backfill (`amount_fils::numeric / 1000`, exact) and the seed (`floor(x/10)*10/1000`, already truncated). The reader (`LoadSchemeExportLines`) and the file writer pass the column through unchanged.
+- Direction of the original bias confirmed: a line rounded up by 0.01 BD on every capture whose fils units digit is 5-9 (about half of all captures), always upward, never down: exactly finance's "always over, never under". It was our own file, not Visa rounding, so the BIN-range explanation in #fp-finance was wrong.
+- Review follow-up: boundary test added (5 fils -> 0.00, 10 -> 0.01, 999 -> 0.99, 1,234,567.899 BD -> 1234567.89). Pre-existing limits kept: `NUMERIC(10,2)` overflows at about 100,000,000 BD per line, and a gross below -9 fils violates the `amount_fils >= 0` CHECK and rolls the close back (same as before the fix). The stale 0050 comment ('NUMERIC(10,2) rounds on assignment though?') described exactly this bug; applied migrations are not edited.
+- NOT fixed here (separate, larger): ADR-0002's residue journaling in CloseBatch was never implemented, so the 0-9 fils truncated per line still never reaches `scheme_rounding_residue`.
+- **Historical data (finance decision, nothing run):** files already sent to the scheme contained the rounded-up amounts. Read-only check of affected lines:
+```sql
+SELECT settlement_batch_id, transaction_id, amount_fils, amount,
+       amount * 1000 - amount_fils AS overstated_fils
+FROM scheme_export_lines WHERE amount * 1000 <> amount_fils;
+```
 
 **Related:** AUD-013, ADR-0002
 
@@ -412,7 +441,7 @@ _Source file: [findings/AUD-010-scheme-file-amount-rounded-half-up-from-untrunca
 
 - Severity: **High** · Category: data loss · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Unconditional DELETE when nothing expired.
-- Status: fixed (branch `fix/AUD-011-expire-holds`, pending merge) · Fix commit: see `git log fix/AUD-011-expire-holds`
+- Status: fixed (merged into main) · Fix commit: see `git log fix/AUD-011-expire-holds`
 
 **Where**
 
@@ -459,7 +488,7 @@ _Source file: [findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-
 
 - Severity: **High** · Category: money / parsing · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): 4.75 BD posts 475 fils. The comment "import format is 2dp by agreement with finance" is contradicted by finance's own email.
-- Status: fixed (branch `fix/AUD-012-csv-bd-parsing`, pending merge; historical data repair still needed) · Fix commit: see `git log fix/AUD-012-csv-bd-parsing`
+- Status: fixed (merged into main; historical data repair still needed) · Fix commit: see `git log fix/AUD-012-csv-bd-parsing`
 
 **Where**
 
@@ -542,7 +571,7 @@ _Source file: [findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-th
 
 - Severity: **High** · Category: money / history mutation · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Only the paid-batch rewrite is a bug. Recalculating CLOSED unpaid batches at current terms IS intended (finance flow, existing test).
-- Status: fixed (branch `fix/AUD-014-mdr-recalc-paid-batches`, pending merge) · Fix commit: see `git log fix/AUD-014-mdr-recalc-paid-batches`
+- Status: fixed (merged into main) · Fix commit: see `git log fix/AUD-014-mdr-recalc-paid-batches`
 
 **Where**
 
@@ -589,7 +618,7 @@ _Source file: [findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches
 
 - Severity: **High** · Category: data integrity · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Reproduced 136.5M vs 7.3M fils; fixed (ADR-0007). ADR-0004 chose this on purpose, but it contradicts the ledger being authoritative and the brief; decision Q2.
-- Status: fixed (branch `fix/AUD-015-rebuild-from-ledger`, pending merge) · Fix commit: see `git log fix/AUD-015-rebuild-from-ledger`
+- Status: fixed (merged into main) · Fix commit: see `git log fix/AUD-015-rebuild-from-ledger`
 
 **Where**
 
@@ -838,7 +867,7 @@ _Source file: [findings/AUD-022-merchant-a-can-cancel-merchant-b-s-payment-link-
 
 - Severity: **High** · Category: schema / deploy · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Fresh migrate fails at 0054.
-- Status: fixed (branch `fix/AUD-026-fresh-migrate`, pending merge) · Fix commit: `b6ff417`
+- Status: fixed (merged into main) · Fix commit: `b6ff417`
 
 **Where**
 

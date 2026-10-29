@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | data loss |
-| Status | **fixed** (branch `fix/AUD-011-expire-holds`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | see `git log fix/AUD-011-expire-holds` |
 
 ## Summary

@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | schema / deploy |
-| Status | **fixed** (branch `fix/AUD-026-fresh-migrate`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | `b6ff417` |
 
 ## Summary

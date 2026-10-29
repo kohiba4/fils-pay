@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / history mutation |
-| Status | **fixed** (branch `fix/AUD-014-mdr-recalc-paid-batches`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | see `git log fix/AUD-014-mdr-recalc-paid-batches` |
 
 ## Summary
