@@ -4,7 +4,7 @@
 
 Sorted by severity. The status text is the first line of each finding's Status field; the verdict is from [TRIAGE.md](TRIAGE.md).
 
-Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 18 fixed or partly fixed)
+Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 19 fixed or partly fixed)
 
 | ID | Title | Severity | Owner | Verdict | Status | Detail |
 |---|---|---|---|---|---|---|
@@ -50,7 +50,7 @@ Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 18 fixed or partly 
 | AUD-042 | Unbounded memory in exports/archives (large export DoS) | Medium | B | UNVERIFIED | suspected | [findings/AUD-042-unbounded-memory-in-exports-archives-large-export-dos.md](findings/AUD-042-unbounded-memory-in-exports-archives-large-export-dos.md) |
 | AUD-048 | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | A | BUG (runtime) | confirmed (runtime; repro committed as TestRepro_AUD048_) | [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md) |
 | AUD-050 | Manual credit MDR reversal uses the fallback rate, not the rate that was charged | Medium | A | BUG (traced) | confirmed (trace) | [findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md](findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md) |
-| AUD-033 | Lifetime payout estimate is float32/REAL (drifts) | Low | A | BUG (low impact) | confirmed (trace) | [findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md](findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md) |
+| AUD-033 | Lifetime payout estimate is float32/REAL (drifts) | Low | A | BUG (low impact) | fixed (branch fix/AUD-033-payout-estimate-integer) | [findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md](findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md) |
 | AUD-037 | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | A | DESIGN | by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change | [findings/AUD-037-adjust-balance-writes-the-cache-only-docs-disagree.md](findings/AUD-037-adjust-balance-writes-the-cache-only-docs-disagree.md) |
 | AUD-040 | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | B | LIMITATION | suspected | [findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md](findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md) |
 | AUD-043 | Slow settlement summary query | Low | B | UNVERIFIED | suspected | [findings/AUD-043-slow-settlement-summary-query.md](findings/AUD-043-slow-settlement-summary-query.md) |
