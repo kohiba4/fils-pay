@@ -181,7 +181,7 @@ test("a row whose merchantId is not a UUID is a 400 and applies nothing", async 
   assert.equal(Number(legs.rows[0]!.n), 0, "validation must run before anything is posted");
 });
 
-/** "Malformed" = non-numeric. Trailing garbage after a number (e.g. "4.75abc") is accepted by the parser. */
+/** "Malformed" = anything parseBhdToFils rejects: non-numeric, trailing garbage ("4.75abc"), more than 3 decimals. */
 test("a malformed amount is a 400 and rolls the whole import back", async () => {
   const admin = await signedInAdmin("finance");
   const merchantId = await createMerchant();

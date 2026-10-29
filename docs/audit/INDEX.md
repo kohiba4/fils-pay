@@ -2,7 +2,7 @@
 
 Sorted by severity. Status vocabulary: `confirmed (trace|runtime)`, `suspected`, `latent` (code exists but is not reachable until FP-300 wires it), `fixed`, `false-positive` (see ruled-out/).
 
-Counts: Critical 7, High 17, Medium 16, Low 7
+Counts: Critical 5, High 19, Medium 16, Low 7
 
 | ID | Title | Severity | Owner | Status | Detail |
 |---|---|---|---|---|---|
@@ -11,12 +11,12 @@ Counts: Critical 7, High 17, Medium 16, Low 7
 | AUD-003 | Refund path has no transaction-ownership check (IDOR across merchants) | Critical | FP-300 (shared) | latent (route returns 501 today; becomes live with FP-300) | [findings/AUD-003-refund-path-has-no-transaction-ownership-check-idor-across-m.md](findings/AUD-003-refund-path-has-no-transaction-ownership-check-idor-across-m.md) |
 | AUD-004 | Concurrent refunds both succeed (no lock across acquirer call; stale `refunded_fils`) — FP-209 | Critical | FP-300 (shared) | latent (helper only; FP-300 wires it) | [findings/AUD-004-concurrent-refunds-both-succeed-no-lock-across-acquirer-call.md](findings/AUD-004-concurrent-refunds-both-succeed-no-lock-across-acquirer-call.md) |
 | AUD-006 | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | B | confirmed (trace) | [findings/AUD-006-payment-link-charged-twice-stale-reservation-re-claimed-whil.md](findings/AUD-006-payment-link-charged-twice-stale-reservation-re-claimed-whil.md) |
-| AUD-008 | Net payout computed in float32 (`NetPayableFils`) | Critical | A | fixed (branch fix/AUD-008-net-payout-integer) | [findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md](findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md) |
-| AUD-011 | `expire_holds` deletes ALL holds when nothing has expired | Critical | A | fixed (branch fix/AUD-011-expire-holds) | [findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md](findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md) |
 | AUD-005 | Refund ceiling is authorized − refunded, not captured − refunded | High | FP-300 (shared) | latent | [findings/AUD-005-refund-ceiling-is-authorized-refunded-not-captured-refunded.md](findings/AUD-005-refund-ceiling-is-authorized-refunded-not-captured-refunded.md) |
 | AUD-007 | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | B | confirmed (trace) | [findings/AUD-007-expired-payment-link-payable-via-client-supplied-submittedat.md](findings/AUD-007-expired-payment-link-payable-via-client-supplied-submittedat.md) |
+| AUD-008 | Net payout computed in float32 (`NetPayableFils`) | High | A | fixed (branch fix/AUD-008-net-payout-integer) | [findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md](findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md) |
 | AUD-009 | Split payouts: independent per-child rounding over- or under-allocates the batch net | High | A | confirmed (runtime) | [findings/AUD-009-split-payouts-independent-per-child-rounding-over-or-under-a.md](findings/AUD-009-split-payouts-independent-per-child-rounding-over-or-under-a.md) |
 | AUD-010 | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | A | confirmed (runtime) | [findings/AUD-010-scheme-file-amount-rounded-half-up-from-untruncated-gross-re.md](findings/AUD-010-scheme-file-amount-rounded-half-up-from-untruncated-gross-re.md) |
+| AUD-011 | `expire_holds` deletes ALL holds when nothing has expired | High | A | fixed (branch fix/AUD-011-expire-holds) | [findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md](findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md) |
 | AUD-012 | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | A | fixed (branch fix/AUD-012-csv-bd-parsing) | [findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md](findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md) |
 | AUD-013 | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | A | confirmed (runtime) | [findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md](findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md) |
 | AUD-014 | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | A | confirmed (runtime) | [findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md](findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md) |

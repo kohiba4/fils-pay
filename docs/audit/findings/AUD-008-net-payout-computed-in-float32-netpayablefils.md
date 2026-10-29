@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Owner | A |
-| Severity | **Critical** |
+| Severity | **High** |
 | Category | money / float |
 | Status | **fixed** (branch `fix/AUD-008-net-payout-integer`, pending merge) |
 | Fix commit | see `git log fix/AUD-008-net-payout-integer` (fix(settlement) commit) |
@@ -25,6 +25,8 @@ Trace + numeric check (scratchpad): 729 simulated batches, gross 1,000–900,000
 **Phase 1 runtime check:** TestRepro_AUD008_NetPayableFilsIsExactIntegerSubtraction: NetPayableFils(987654321, 27160494) = 960493813, want 960493827 (14 fils off); -1 fil already at 20,000.123 BD gross.
 
 ## Impact
+_Severity lowered from Critical after independent review: the float32 error only appears above ~16,000 BD per batch (up to 59 fils at 900,000 BD); systematic and an ADR-0001 violation, but small per batch._
+
 Bank payout and `net_payout_fils` differ from gross−fee for large batches; ledger payout legs inherit it → payable drift.
 
 ## Fix (applied)

@@ -38,6 +38,8 @@ Every adjustment posted to the ledger at 1/10th; August imports affected; March 
 ## Re-attack notes
 - Inputs tried by the tests: `4.75`, `4.755`, `12`, ` -4.750 `, `0.005`, `4.7555` (rejected), `1,234.500` and `4,75` (rejected), existing `abc` (400, rolled back).
 - Sibling money parsers: `parsePromotionalDiscountFils` in `payments/discountAdjustment.ts` (`parseFloat * 100`, i.e. cents) is exported but has **no callers**; it is deleted with the discount rework in AUD-016. `apps/web/.../SettlementBatchDetailPage.tsx:84` uses `parseFloat((grossFils/10000).toFixed(2))` for a progress ratio (display only, not BD formatting; noted, low). The admin UI credit form already uses `parseBhdToFils`.
+- Behaviour change to tell finance: amounts with more than 3 decimals (e.g. `4.7501`) used to be truncated silently and are now rejected with 400 `invalid_amount`.
+- Review follow-up: the dead `parsePromotionalDiscountFils` (parseFloat × 100) was deleted in a separate commit; a stale test comment claiming trailing garbage is accepted was corrected.
 - Remaining gap (separate finding AUD-036): importing the same file twice still posts it twice.
 
 ## HISTORICAL DATA REPAIR (finance decision; nothing was run)

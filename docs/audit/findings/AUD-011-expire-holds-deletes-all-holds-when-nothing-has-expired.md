@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Owner | A |
-| Severity | **Critical** |
+| Severity | **High** |
 | Category | data loss |
 | Status | **fixed** (branch `fix/AUD-011-expire-holds`, pending merge) |
 | Fix commit | see `git log fix/AUD-011-expire-holds` |
@@ -25,6 +25,8 @@ Trace; unit test to add: `buildDelete('holds',{id:[]}).text` must not be an unco
 **Phase 1 runtime check:** scripts/expire_holds.repro.test.ts: `buildExpiredHoldsDelete([]).text` = "DELETE FROM holds" (no WHERE). Existing tests only cover non-empty id lists.
 
 ## Impact
+_Severity lowered from Critical after independent review: the delete is real and can wipe all holds, but nothing reads or references the `holds` table, so the loss is hold history, not a functional or monetary failure._
+
 A quiet night wipes every active hold (authorization state).
 
 ## Fix (applied)

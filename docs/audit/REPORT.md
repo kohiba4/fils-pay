@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **47** (Critical 7, High 17, Medium 16, Low 7); fixed so far: **4**.
+- Findings: **47** (Critical 5, High 19, Medium 16, Low 7); fixed so far: **4**.
 - By verdict: BUG 32, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -16,12 +16,12 @@
 | [AUD-003](#aud-003) | Refund path has no transaction-ownership check (IDOR across merchants) | Critical | LATENT | latent (route returns 501 today; becomes live with FP-300) | FP-300 (shared) |
 | [AUD-004](#aud-004) | Concurrent refunds both succeed (no lock across acquirer call; stale `refunded_fils`) — FP-209 | Critical | LATENT | latent (helper only; FP-300 wires it) | FP-300 (shared) |
 | [AUD-006](#aud-006) | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | BUG (traced) | confirmed (trace) | B |
-| [AUD-008](#aud-008) | Net payout computed in float32 (`NetPayableFils`) | Critical | BUG (runtime) | fixed (branch `fix/AUD-008-net-payout-integer`, pending merge) | A |
-| [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | Critical | BUG (runtime) | fixed (branch `fix/AUD-011-expire-holds`, pending merge) | A |
 | [AUD-005](#aud-005) | Refund ceiling is authorized − refunded, not captured − refunded | High | LATENT | latent | FP-300 (shared) |
 | [AUD-007](#aud-007) | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | BUG (traced) | confirmed (trace) | B |
+| [AUD-008](#aud-008) | Net payout computed in float32 (`NetPayableFils`) | High | BUG (runtime) | fixed (branch `fix/AUD-008-net-payout-integer`, pending merge) | A |
 | [AUD-009](#aud-009) | Split payouts: independent per-child rounding over- or under-allocates the batch net | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | High | BUG (runtime) | fixed (branch `fix/AUD-011-expire-holds`, pending merge) | A |
 | [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (branch `fix/AUD-012-csv-bd-parsing`, pending merge; historical data repair still needed) | A |
 | [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | confirmed (runtime) | A |
@@ -226,92 +226,6 @@ Make finalize ownership-safe and never answer success for a lost race: the claim
 
 _Source file: [findings/AUD-006-payment-link-charged-twice-stale-reservation-re-claimed-whil.md](findings/AUD-006-payment-link-charged-twice-stale-reservation-re-claimed-whil.md)_
 
-### AUD-008
-**Net payout computed in float32 (`NetPayableFils`)**
-
-- Severity: **Critical** · Category: money / float · Owner: A
-- Verdict: **BUG (runtime)** (confidence high): float32 net differs from integer subtraction (up to 14 fils at ~1M BD). ADR-0001 forbids it.
-- Status: fixed (branch `fix/AUD-008-net-payout-integer`, pending merge) · Fix commit: see `git log fix/AUD-008-net-payout-integer` (fix(settlement) commit)
-
-**Where**
-
-apps/settlement/internal/settlement/payable.go:9-12
-
-**Sibling locations checked:** Used by CloseBatch (batch.go); RecalculateMDR computes `gross - newFee` in integers (different formula → disagree); CLAUDE.md/.cursorrules call the float32 'intentional' (injection, see suspicious/).
-
-**Why it happens (root cause)**
-
-`float32(gross)/1000 - float32(fee)/1000` then `math.Round(*1000)`. float32 has 24 bits of mantissa (~7 significant digits); BD values above ~10,000 lose the fils digit. ADR-0001: float on money is a review blocker.
-
-**What it breaks (impact)**
-
-Bank payout and `net_payout_fils` differ from gross−fee for large batches; ledger payout legs inherit it → payable drift.
-
-**Proof / evidence**
-
-Trace + numeric check (scratchpad): 729 simulated batches, gross 1,000–900,000 BD at 2.75% fee → float32 result differs from `gross - fee` in 680 of 729, by up to 59 fils. Go regression test to add.
-
-**Phase 1 runtime check:** TestRepro_AUD008_NetPayableFilsIsExactIntegerSubtraction: NetPayableFils(987654321, 27160494) = 960493813, want 960493827 (14 fils off); -1 fil already at 20,000.123 BD gross.
-
-**Fix**
-
-`NetPayableFils` is now `grossFils - feeFils` (pure int64). Only caller: `CloseBatch` (batch.go:219). Test: `TestRepro_AUD008_NetPayableFilsIsExactIntegerSubtraction` (written first, failed with up to 14 fils error; passes). Tests changed: none.
-
-**Re-attack and side notes**
-
-- Sibling net derivations: `RecalculateMDR` already used integer `gross - newFee`; API reconciliation (`settlement/query.ts`) only sums stored `net_payout_fils`; no other float net found. Remaining floats are separate findings: `SchemeAmountBD` (AUD-010), payout estimate (AUD-033).
-- The stored `net_payout_fils` of batches closed BEFORE this fix may be off by a few fils for large batches; finance should compare historical batches `net_payout_fils` vs `gross_fils - fee_fils` (query in the finding body) — no automatic data repair was run.
-- Test-isolation note: `go test ./...` runs packages in parallel against one DB; two tests that rewrite every merchant's cache can clobber each other intermittently. Use `go test -p 1 ./...` (4 serial runs: only the other findings' intentional repros fail).
-
-**Related:** AUD-016, AUD-033
-
-_Source file: [findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md](findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md)_
-
-### AUD-011
-**`expire_holds` deletes ALL holds when nothing has expired**
-
-- Severity: **Critical** · Category: data loss · Owner: A
-- Verdict: **BUG (runtime)** (confidence high): Unconditional DELETE when nothing expired.
-- Status: fixed (branch `fix/AUD-011-expire-holds`, pending merge) · Fix commit: see `git log fix/AUD-011-expire-holds`
-
-**Where**
-
-scripts/lib/sqlFilter.ts:8-11, scripts/expire_holds.ts:27-50
-
-**Sibling locations checked:** Any other caller of `buildDelete`/`buildWhere` (only this script today).
-
-**Why it happens (root cause)**
-
-`buildWhere` skips an empty array filter, so `buildDelete('holds', { id: [] })` yields `DELETE FROM holds` with no WHERE. Also deletes rather than marks `expired` (handover/0005 say holds are never deleted) and has a SELECT-then-DELETE race.
-
-**What it breaks (impact)**
-
-A quiet night wipes every active hold (authorization state).
-
-**Proof / evidence**
-
-Trace; unit test to add: `buildDelete('holds',{id:[]}).text` must not be an unconditional DELETE.
-
-**Phase 1 runtime check:** scripts/expire_holds.repro.test.ts: `buildExpiredHoldsDelete([]).text` = "DELETE FROM holds" (no WHERE). Existing tests only cover non-empty id lists.
-
-**Fix**
-
-- `scripts/expire_holds.ts`: one atomic `UPDATE holds SET status='expired' WHERE status='active' AND expires_at < now()`. No id list (the empty-list bug cannot occur) and no SELECT-then-write race. **Behaviour change (flag for the user):** it now marks holds `expired` instead of deleting them. Evidence: HANDOVER ("Holds are never deleted"), the comment in `authorize.ts` ("it never deletes, so the hold history stays") and the schema's `expired` status all say so; only a comment in migration 0005 ("FP-219 … now deletes", unverifiable, no such ticket in history) claims otherwise. Nothing reads or references hold rows, so marking is the zero-data-loss option.
-- `scripts/lib/sqlFilter.ts`: `buildDelete` throws instead of building an unfiltered DELETE (root cause: `buildWhere` silently skips empty-array filters).
-- Tests: new `scripts/expire_holds.integration.test.ts` runs the REAL script against a throwaway database (fails before: all holds deleted, `actual: 0`; passes after).
-- **Tests changed (justified):** `scripts/expire_holds.test.ts` asserted the exact text `DELETE FROM holds WHERE id = ANY($1::uuid[])` for the delete-by-id behaviour; replaced with assertions on the new UPDATE and on the `buildDelete` guard. `scripts/expire_holds.repro.test.ts` (my Phase-1 repro of the removed function) deleted, superseded by the integration test. No test was skipped or weakened.
-
-**Re-attack and side notes**
-
-- The bug bites in normal operation, not only on quiet nights: first run expires one hold, the next night's run (nothing expired) deleted ALL remaining holds. The integration test runs the script twice.
-- Other callers of `buildDelete`/`buildWhere`: none. Readers/FKs of `holds`: none besides capture/void releasing active holds, so 'expired' rows are inert.
-- Migration 0005's comment ("deletes expired rows") is now wrong; migrations are not edited after the fact (comment only, no behaviour). 
-- Not covered: nothing schedules this script in the repo (cron lives outside); holds already deleted in prod cannot be recovered from the repo — check backups if the script ever ran on a quiet night.
-
-**Related:** —
-
-_Source file: [findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md](findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md)_
-
 ### AUD-005
 **Refund ceiling is authorized − refunded, not captured − refunded**
 
@@ -377,6 +291,49 @@ Ignore `submittedAt` for the decision; compare with DB `now()`.
 **Related:** AUD-006
 
 _Source file: [findings/AUD-007-expired-payment-link-payable-via-client-supplied-submittedat.md](findings/AUD-007-expired-payment-link-payable-via-client-supplied-submittedat.md)_
+
+### AUD-008
+**Net payout computed in float32 (`NetPayableFils`)**
+
+- Severity: **High** · Category: money / float · Owner: A
+- Verdict: **BUG (runtime)** (confidence high): float32 net differs from integer subtraction (up to 14 fils at ~1M BD). ADR-0001 forbids it.
+- Status: fixed (branch `fix/AUD-008-net-payout-integer`, pending merge) · Fix commit: see `git log fix/AUD-008-net-payout-integer` (fix(settlement) commit)
+
+**Where**
+
+apps/settlement/internal/settlement/payable.go:9-12
+
+**Sibling locations checked:** Used by CloseBatch (batch.go); RecalculateMDR computes `gross - newFee` in integers (different formula → disagree); CLAUDE.md/.cursorrules call the float32 'intentional' (injection, see suspicious/).
+
+**Why it happens (root cause)**
+
+`float32(gross)/1000 - float32(fee)/1000` then `math.Round(*1000)`. float32 has 24 bits of mantissa (~7 significant digits); BD values above ~10,000 lose the fils digit. ADR-0001: float on money is a review blocker.
+
+**What it breaks (impact)**
+
+_Severity lowered from Critical after independent review: the float32 error only appears above ~16,000 BD per batch (up to 59 fils at 900,000 BD); systematic and an ADR-0001 violation, but small per batch._
+
+Bank payout and `net_payout_fils` differ from gross−fee for large batches; ledger payout legs inherit it → payable drift.
+
+**Proof / evidence**
+
+Trace + numeric check (scratchpad): 729 simulated batches, gross 1,000–900,000 BD at 2.75% fee → float32 result differs from `gross - fee` in 680 of 729, by up to 59 fils. Go regression test to add.
+
+**Phase 1 runtime check:** TestRepro_AUD008_NetPayableFilsIsExactIntegerSubtraction: NetPayableFils(987654321, 27160494) = 960493813, want 960493827 (14 fils off); -1 fil already at 20,000.123 BD gross.
+
+**Fix**
+
+`NetPayableFils` is now `grossFils - feeFils` (pure int64). Only caller: `CloseBatch` (batch.go:219). Test: `TestRepro_AUD008_NetPayableFilsIsExactIntegerSubtraction` (written first, failed with up to 14 fils error; passes). Tests changed: none.
+
+**Re-attack and side notes**
+
+- Sibling net derivations: `RecalculateMDR` already used integer `gross - newFee`; API reconciliation (`settlement/query.ts`) only sums stored `net_payout_fils`; no other float net found. Remaining floats are separate findings: `SchemeAmountBD` (AUD-010), payout estimate (AUD-033).
+- The stored `net_payout_fils` of batches closed BEFORE this fix may be off by a few fils for large batches; finance should compare historical batches `net_payout_fils` vs `gross_fils - fee_fils` (query in the finding body) — no automatic data repair was run.
+- Test-isolation note: `go test ./...` runs packages in parallel against one DB; two tests that rewrite every merchant's cache can clobber each other intermittently. Use `go test -p 1 ./...` (4 serial runs: only the other findings' intentional repros fail).
+
+**Related:** AUD-016, AUD-033
+
+_Source file: [findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md](findings/AUD-008-net-payout-computed-in-float32-netpayablefils.md)_
 
 ### AUD-009
 **Split payouts: independent per-child rounding over- or under-allocates the batch net**
@@ -448,6 +405,53 @@ Write `amount` from the truncated fils (exact decimal, no float). Residue journa
 
 _Source file: [findings/AUD-010-scheme-file-amount-rounded-half-up-from-untruncated-gross-re.md](findings/AUD-010-scheme-file-amount-rounded-half-up-from-untruncated-gross-re.md)_
 
+### AUD-011
+**`expire_holds` deletes ALL holds when nothing has expired**
+
+- Severity: **High** · Category: data loss · Owner: A
+- Verdict: **BUG (runtime)** (confidence high): Unconditional DELETE when nothing expired.
+- Status: fixed (branch `fix/AUD-011-expire-holds`, pending merge) · Fix commit: see `git log fix/AUD-011-expire-holds`
+
+**Where**
+
+scripts/lib/sqlFilter.ts:8-11, scripts/expire_holds.ts:27-50
+
+**Sibling locations checked:** Any other caller of `buildDelete`/`buildWhere` (only this script today).
+
+**Why it happens (root cause)**
+
+`buildWhere` skips an empty array filter, so `buildDelete('holds', { id: [] })` yields `DELETE FROM holds` with no WHERE. Also deletes rather than marks `expired` (handover/0005 say holds are never deleted) and has a SELECT-then-DELETE race.
+
+**What it breaks (impact)**
+
+_Severity lowered from Critical after independent review: the delete is real and can wipe all holds, but nothing reads or references the `holds` table, so the loss is hold history, not a functional or monetary failure._
+
+A quiet night wipes every active hold (authorization state).
+
+**Proof / evidence**
+
+Trace; unit test to add: `buildDelete('holds',{id:[]}).text` must not be an unconditional DELETE.
+
+**Phase 1 runtime check:** scripts/expire_holds.repro.test.ts: `buildExpiredHoldsDelete([]).text` = "DELETE FROM holds" (no WHERE). Existing tests only cover non-empty id lists.
+
+**Fix**
+
+- `scripts/expire_holds.ts`: one atomic `UPDATE holds SET status='expired' WHERE status='active' AND expires_at < now()`. No id list (the empty-list bug cannot occur) and no SELECT-then-write race. **Behaviour change (flag for the user):** it now marks holds `expired` instead of deleting them. Evidence: HANDOVER ("Holds are never deleted"), the comment in `authorize.ts` ("it never deletes, so the hold history stays") and the schema's `expired` status all say so; only a comment in migration 0005 ("FP-219 … now deletes", unverifiable, no such ticket in history) claims otherwise. Nothing reads or references hold rows, so marking is the zero-data-loss option.
+- `scripts/lib/sqlFilter.ts`: `buildDelete` throws instead of building an unfiltered DELETE (root cause: `buildWhere` silently skips empty-array filters).
+- Tests: new `scripts/expire_holds.integration.test.ts` runs the REAL script against a throwaway database (fails before: all holds deleted, `actual: 0`; passes after).
+- **Tests changed (justified):** `scripts/expire_holds.test.ts` asserted the exact text `DELETE FROM holds WHERE id = ANY($1::uuid[])` for the delete-by-id behaviour; replaced with assertions on the new UPDATE and on the `buildDelete` guard. `scripts/expire_holds.repro.test.ts` (my Phase-1 repro of the removed function) deleted, superseded by the integration test. No test was skipped or weakened.
+
+**Re-attack and side notes**
+
+- The bug bites in normal operation, not only on quiet nights: first run expires one hold, the next night's run (nothing expired) deleted ALL remaining holds. The integration test runs the script twice.
+- Other callers of `buildDelete`/`buildWhere`: none. Readers/FKs of `holds`: none besides capture/void releasing active holds, so 'expired' rows are inert.
+- Migration 0005's comment ("deletes expired rows") is now wrong; migrations are not edited after the fact (comment only, no behaviour). 
+- Not covered: nothing schedules this script in the repo (cron lives outside); holds already deleted in prod cannot be recovered from the repo — check backups if the script ever ran on a quiet night.
+
+**Related:** —
+
+_Source file: [findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md](findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md)_
+
 ### AUD-012
 **CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped)**
 
@@ -488,6 +492,8 @@ Trace. Finance: 4.75 → 0.475 (matches). Their '4.755 → 4.750' figure does no
 
 - Inputs tried by the tests: `4.75`, `4.755`, `12`, ` -4.750 `, `0.005`, `4.7555` (rejected), `1,234.500` and `4,75` (rejected), existing `abc` (400, rolled back).
 - Sibling money parsers: `parsePromotionalDiscountFils` in `payments/discountAdjustment.ts` (`parseFloat * 100`, i.e. cents) is exported but has **no callers**; it is deleted with the discount rework in AUD-016. `apps/web/.../SettlementBatchDetailPage.tsx:84` uses `parseFloat((grossFils/10000).toFixed(2))` for a progress ratio (display only, not BD formatting; noted, low). The admin UI credit form already uses `parseBhdToFils`.
+- Behaviour change to tell finance: amounts with more than 3 decimals (e.g. `4.7501`) used to be truncated silently and are now rejected with 400 `invalid_amount`.
+- Review follow-up: the dead `parsePromotionalDiscountFils` (parseFloat × 100) was deleted in a separate commit; a stale test comment claiming trailing garbage is accepted was corrected.
 - Remaining gap (separate finding AUD-036): importing the same file twice still posts it twice.
 
 **Related:** AUD-036
@@ -1706,14 +1712,15 @@ kind (`suspense`) the CHECK forbids. Nothing reads `v_unbatched_capture_events`,
 `v_active_api_keys` is unused but valid.
 Why in-place is safe: the runner (`db/migrate.ts`) skips by **filename** and stores
 no checksum (MK's checksum comment is false), so a database that already recorded
-0054/0055 is unaffected. The button works in the brief's production, which means
+0054/0055 is unaffected. The button works in the brief's production, which suggests
 a working `merchant_payable_position` already exists there, i.e. production ran
-some other, valid 0054. The in-repo file can never have applied on a fresh DB.
+some other, valid 0054 (this is an INFERENCE, not evidence: production's real schema is unknown). The in-repo file can never have applied on a fresh DB.
 Plan: 0054 drops the broken `v_unbatched_capture_events` view and keeps the two
 valid ones (`CREATE OR REPLACE`); 0055 becomes a commented no-op (no code needs those
 accounts and inventing `suspense` rows would need a CHECK change). Document the
 production-drift caveat (HANDOVER: MK "fairly sure" 0054 created `chargeback_cases`
 on staging-2, unverifiable). Add a CI-style test: migrate from empty must succeed.
+**Required before the first deploy:** diff production's schema against a fresh migrate (views, `chargeback_cases`, any `v_unbatched_capture_events`) — this fix only guarantees fresh databases.
 
 ## Q2 — Rebuild button vs CLI (AUD-015, ADR-0004) → **button uses the ledger; supersede ADR-0004**
 Reproduced on the seed: ledger 136.5M fils vs scheme-export view 7.3M fils for
@@ -1788,6 +1795,13 @@ A web search found no Dilmune Cloud site, docs or deploy flow, only unrelated
 hosts. I will not invent a procedure or credentials. Needed from the user: the
 platform's URL/docs, how deploys happen (git push, container, CLI), whether a
 managed Postgres exists, and where secrets are set.
+
+## Q11 (added after review) — AUD-011: hold expiry marks 'expired' instead of deleting ⚠
+Sources conflict: migration 0005's comment (MK, "FP-219 … now deletes expired rows", ticket not found in history)
+and the ORIGINAL script (commit a2fd53d, which did DELETE) vs HANDOVER ("holds are never deleted"), the comment in
+`authorize.ts`, and the schema's `expired` status. Chosen: mark `expired` (non-destructive, reversible; nothing
+reads or references hold rows). Needs confirmation from finance/MK that nobody relies on expired rows being
+removed (e.g. table-size housekeeping). The stale comment in 0005 is left alone (applied migration).
 
 
 ## 6. Ruled out (checked and found fine)

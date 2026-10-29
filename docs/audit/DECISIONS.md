@@ -15,14 +15,15 @@ kind (`suspense`) the CHECK forbids. Nothing reads `v_unbatched_capture_events`,
 `v_active_api_keys` is unused but valid.
 Why in-place is safe: the runner (`db/migrate.ts`) skips by **filename** and stores
 no checksum (MK's checksum comment is false), so a database that already recorded
-0054/0055 is unaffected. The button works in the brief's production, which means
+0054/0055 is unaffected. The button works in the brief's production, which suggests
 a working `merchant_payable_position` already exists there, i.e. production ran
-some other, valid 0054. The in-repo file can never have applied on a fresh DB.
+some other, valid 0054 (this is an INFERENCE, not evidence: production's real schema is unknown). The in-repo file can never have applied on a fresh DB.
 Plan: 0054 drops the broken `v_unbatched_capture_events` view and keeps the two
 valid ones (`CREATE OR REPLACE`); 0055 becomes a commented no-op (no code needs those
 accounts and inventing `suspense` rows would need a CHECK change). Document the
 production-drift caveat (HANDOVER: MK "fairly sure" 0054 created `chargeback_cases`
 on staging-2, unverifiable). Add a CI-style test: migrate from empty must succeed.
+**Required before the first deploy:** diff production's schema against a fresh migrate (views, `chargeback_cases`, any `v_unbatched_capture_events`) — this fix only guarantees fresh databases.
 
 ## Q2 — Rebuild button vs CLI (AUD-015, ADR-0004) → **button uses the ledger; supersede ADR-0004**
 Reproduced on the seed: ledger 136.5M fils vs scheme-export view 7.3M fils for
@@ -97,3 +98,10 @@ A web search found no Dilmune Cloud site, docs or deploy flow, only unrelated
 hosts. I will not invent a procedure or credentials. Needed from the user: the
 platform's URL/docs, how deploys happen (git push, container, CLI), whether a
 managed Postgres exists, and where secrets are set.
+
+## Q11 (added after review) — AUD-011: hold expiry marks 'expired' instead of deleting ⚠
+Sources conflict: migration 0005's comment (MK, "FP-219 … now deletes expired rows", ticket not found in history)
+and the ORIGINAL script (commit a2fd53d, which did DELETE) vs HANDOVER ("holds are never deleted"), the comment in
+`authorize.ts`, and the schema's `expired` status. Chosen: mark `expired` (non-destructive, reversible; nothing
+reads or references hold rows). Needs confirmation from finance/MK that nobody relies on expired rows being
+removed (e.g. table-size housekeeping). The stale comment in 0005 is left alone (applied migration).
