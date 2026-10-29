@@ -23,7 +23,7 @@
 | [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | fixed (merged into main; historical files already sent are not corrected) | A |
 | [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (merged into main; historical data repair still needed) | A |
-| [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | made safe (branch `fix/AUD-013-march-sweep-idempotent`, pending merge); still must not be applied to production until finance confirms the accounting | A |
+| [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | made safe (merged into main); still must not be applied to production until finance confirms the accounting | A |
 | [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
@@ -54,7 +54,7 @@
 | [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
 | [AUD-050](#aud-050) | Manual credit MDR reversal uses the fallback rate, not the rate that was charged | Medium | BUG (traced) | confirmed (trace) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | confirmed (trace) | A |
-| [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation mismatch only, not a code bug | A |
+| [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change | A |
 | [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | suspected | B |
 | [AUD-043](#aud-043) | Slow settlement summary query | Low | UNVERIFIED | suspected | B |
 | [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | suspected | B |
@@ -62,7 +62,7 @@
 | [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
 | [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | confirmed (trace) | A |
 | [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | confirmed (trace) | A |
-| [AUD-052](#aud-052) | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | HYGIENE | fixed (branch `fix/AUD-052-test-isolation-volume-counter`, pending merge) | A |
+| [AUD-052](#aud-052) | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | HYGIENE | fixed (merged into main) | A |
 
 ## 2. Bugs (by severity)
 
@@ -539,7 +539,7 @@ _Source file: [findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-
 
 - Severity: **High** · Category: ops script / money · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Second run doubles the posting (170 to 340 fils).
-- Status: made safe (branch `fix/AUD-013-march-sweep-idempotent`, pending merge); still must not be applied to production until finance confirms the accounting · Fix commit: see `git log fix/AUD-013-march-sweep-idempotent`
+- Status: made safe (merged into main); still must not be applied to production until finance confirms the accounting · Fix commit: see `git log fix/AUD-013-march-sweep-idempotent`
 
 **Where**
 
@@ -1795,7 +1795,7 @@ _Source file: [findings/AUD-042-unbounded-memory-in-exports-archives-large-expor
 
 - Severity: **Low** · Category: data integrity / docs · Owner: A
 - Verdict: **DESIGN** (confidence high): **Not a code bug.** `applyBalanceCorrection` is cache-only exactly as ADR-0006 says; the journaled variant exists but is not wired. Only ADMIN.md ("journaled to the ledger") is wrong.
-- Status: by design (ADR-0006); documentation mismatch only, not a code bug · Fix commit: — (not fixed; Phase 2)
+- Status: by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change · Fix commit: — (not fixed; Phase 2)
 
 **What is wrong**
 
@@ -1821,7 +1821,7 @@ Read.
 
 **Fix**
 
-No code change. Documentation only: correct `docs/ADMIN.md` (Adjust balance is display-only and is lost on rebuild). Whether to expose the journaled variant is a product/finance decision (meeting 2026-09-17 chose option A: leave as is).
+No code change. Documentation fixed on 2026-10-29 (`docs/ADMIN.md`: Adjust balance is display-only and is lost on a rebuild; the claimed nightly 02:00 recompute does not exist in the code; rebuild caveat AUD-048). Original proposal: correct `docs/ADMIN.md` (Adjust balance is display-only and is lost on rebuild). Whether to expose the journaled variant is a product/finance decision (meeting 2026-09-17 chose option A: leave as is).
 
 **Related:** AUD-015
 
@@ -1964,7 +1964,7 @@ _Source file: [findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-co
 
 - Severity: **Low** · Category: test quality · Owner: A
 - Verdict: **HYGIENE** (confidence high): Reproduced: counter above 2e9 turns on the 15 bps tier and three fee tests fail. Test isolation only; fixed by resetting the counter in `mustPool`.
-- Status: fixed (branch `fix/AUD-052-test-isolation-volume-counter`, pending merge) · Fix commit: see `git log fix/AUD-052-test-isolation-volume-counter`
+- Status: fixed (merged into main) · Fix commit: see `git log fix/AUD-052-test-isolation-volume-counter`
 
 **What is wrong**
 

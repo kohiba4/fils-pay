@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | ops script / money |
-| Status | **made safe** (branch `fix/AUD-013-march-sweep-idempotent`, pending merge); **still must not be applied to production until finance confirms the accounting** |
+| Status | **made safe** (merged into main); **still must not be applied to production until finance confirms the accounting** |
 | Fix commit | see `git log fix/AUD-013-march-sweep-idempotent` |
 
 ## Summary

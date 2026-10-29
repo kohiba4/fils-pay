@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Low** |
 | Category | test quality |
-| Status | **fixed** (branch `fix/AUD-052-test-isolation-volume-counter`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | see `git log fix/AUD-052-test-isolation-volume-counter` |
 
 ## Summary

@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Low** |
 | Category | data integrity / docs |
-| Status | by design (ADR-0006); documentation mismatch only, not a code bug |
+| Status | by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -26,7 +26,7 @@ Read.
 No money bug. Consequence of the design (not new): a correction is overwritten by the next balance rebuild, so support must re-apply it, and it hides underlying ledger problems such as AUD-015. Support reading ADMIN.md may wrongly believe the ledger changed.
 
 ## Fix (proposed)
-No code change. Documentation only: correct `docs/ADMIN.md` (Adjust balance is display-only and is lost on rebuild). Whether to expose the journaled variant is a product/finance decision (meeting 2026-09-17 chose option A: leave as is).
+No code change. Documentation fixed on 2026-10-29 (`docs/ADMIN.md`: Adjust balance is display-only and is lost on a rebuild; the claimed nightly 02:00 recompute does not exist in the code; rebuild caveat AUD-048). Original proposal: correct `docs/ADMIN.md` (Adjust balance is display-only and is lost on rebuild). Whether to expose the journaled variant is a product/finance decision (meeting 2026-09-17 chose option A: leave as is).
 
 ## Re-attack notes
 _To be filled after the fix (bypass via other route / tenant / retry / concurrency)._

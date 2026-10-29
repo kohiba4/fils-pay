@@ -53,7 +53,7 @@ from last month, pick the effective date the credit belongs to.
 
 **Adjust balance** — when a merchant's balance on screen is wrong and support
 has confirmed the right figure (statement, phone call), enter the difference
-and a reason. The adjustment is journaled to the ledger and the dashboard
+and a reason. The adjustment is NOT journaled to the ledger: it only changes the displayed (cached) balance, by design (ADR-0006), and a balance rebuild will overwrite it, so re-apply it afterwards. *[Audit note 2026-10-29 (AUD-037): this paragraph used to say it was journaled to the ledger, which is false.]* The dashboard
 shows the corrected balance straight away; no need to wait for the next
 settlement run.
 
@@ -78,7 +78,7 @@ is always safe.
 Run it whenever a balance looks off or after any manual correction.
 It only rewrites the balance cache, never the ledger, so it's safe to run
 as often as you like; it asks for confirmation because it covers every
-merchant at once. The nightly recompute does the same thing at 02:00.
+merchant at once. *[Audit note 2026-10-29: there is no nightly recompute in the code (no scheduler exists for it); a rebuild only runs when someone triggers it. The rebuild now reads the ledger, the same as the CLI (ADR-0007), but it is not safe to run intraday while captures are unbatched: AUD-048.]*
 
 **Rebuild analytics** — dashboards lag a little behind live activity by
 design. If they look stale, rebuild them from scratch here instead of

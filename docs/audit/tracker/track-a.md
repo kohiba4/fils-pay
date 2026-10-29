@@ -20,7 +20,8 @@ Owner: the user + their agent. Updated with each fix; Track B does not edit this
 | 13 | AUD-025 | daily close at Bahrain midnight | merged (PR #9) |
 | 14 | AUD-031 | admin fee display | merged (PR #8) |
 | 15 | AUD-034 | ledger append-only | merged (PR #11, migration 0076) |
-| 16 | AUD-013 | March sweep dry-run + idempotent | PR #12 (review in progress; accounting needs finance) |
-| 17 | AUD-052 | fee tests independent of the volume counter | PR #13 |
-| 18 | AUD-033, 036, 037, 045, 049, 050, 051 | remaining Track A items | todo |
+| 16 | AUD-013 | March sweep dry-run + idempotent | merged (PR #12); accounting still needs finance sign-off before anyone applies it |
+| 17 | AUD-052 | fee tests independent of the volume counter | merged (PR #13) |
+| 18 | AUD-037 | ADMIN.md corrections (docs only) | PR #17 |
+| 19 | AUD-033, 036, 045, 049, 050, 051 | remaining Track A items | todo |
 | - | open question | adjustments (MDR recalc on paid batches, credits, imports) never reach a payout instruction | needs a finance decision |
