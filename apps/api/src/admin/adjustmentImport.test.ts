@@ -249,3 +249,62 @@ test("getAdjustmentImportRows returns an empty list for an unknown import", asyn
   const rows = await getAdjustmentImportRows(pool, randomUUID());
   assert.deepEqual(rows, []);
 });
+
+// AUD-036: the same CSV submitted twice (double click, retry) posted every row twice.
+test("applyAdjustmentImport rejects the same content a second time (409 duplicate_import)", async () => {
+  const adminUserId = await createAdminUser();
+  const merchantId = await createMerchant();
+  const rows = [
+    { merchantId, amount: "4.75", reason: "correction" },
+    { merchantId, amount: "1.25" },
+  ];
+
+  const first = await applyAdjustmentImport(pool, { adminUserId, originalFilename: "a.csv", rows });
+  await assert.rejects(
+    // a different filename and different spelling of the same amounts is still the same content
+    applyAdjustmentImport(pool, {
+      adminUserId,
+      originalFilename: "renamed.csv",
+      rows: [
+        { merchantId: merchantId.toUpperCase(), amount: "4.750", reason: "correction" },
+        { merchantId, amount: "1.250" },
+      ],
+    }),
+    (err: unknown) => (err as { statusCode?: number; code?: string }).statusCode === 409 &&
+      (err as { code?: string }).code === "duplicate_import" &&
+      /imp/i.test(String((err as Error).message)) && String((err as Error).message).includes(first.importId),
+  );
+
+  const ledger = await pool.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM ledger_entries WHERE merchant_id = $1 AND account_id = 'merchant_payable'`, [merchantId]);
+  assert.equal(Number(ledger.rows[0]!.n), 2, "only the first import posted");
+  const bal = await pool.query<{ c: string }>(`SELECT cached_payable_fils::text AS c FROM merchant_balances WHERE merchant_id = $1`, [merchantId]);
+  assert.equal(Number(bal.rows[0]!.c), 6000);
+});
+
+test("applyAdjustmentImport allows a deliberate repeat with allowDuplicate, and different content is fine", async () => {
+  const adminUserId = await createAdminUser();
+  const merchantId = await createMerchant();
+  const rows = [{ merchantId, amount: "2.00", reason: "monthly" }];
+
+  await applyAdjustmentImport(pool, { adminUserId, originalFilename: "m.csv", rows });
+  await applyAdjustmentImport(pool, { adminUserId, originalFilename: "m.csv", rows, allowDuplicate: true });
+  await applyAdjustmentImport(pool, { adminUserId, originalFilename: "m.csv", rows: [{ merchantId, amount: "2.00", reason: "other" }] });
+
+  const bal = await pool.query<{ c: string }>(`SELECT cached_payable_fils::text AS c FROM merchant_balances WHERE merchant_id = $1`, [merchantId]);
+  assert.equal(Number(bal.rows[0]!.c), 6000);
+});
+
+test("applyAdjustmentImport: two concurrent submits of the same file post it once", async () => {
+  const adminUserId = await createAdminUser();
+  const merchantId = await createMerchant();
+  const rows = [{ merchantId, amount: "3.00", reason: "race" }];
+
+  const results = await Promise.allSettled([
+    applyAdjustmentImport(pool, { adminUserId, originalFilename: "r.csv", rows }),
+    applyAdjustmentImport(pool, { adminUserId, originalFilename: "r.csv", rows }),
+  ]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal(results.filter((r) => r.status === "rejected").length, 1);
+  const bal = await pool.query<{ c: string }>(`SELECT cached_payable_fils::text AS c FROM merchant_balances WHERE merchant_id = $1`, [merchantId]);
+  assert.equal(Number(bal.rows[0]!.c), 3000);
+});

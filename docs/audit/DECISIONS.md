@@ -105,3 +105,11 @@ and the ORIGINAL script (commit a2fd53d, which did DELETE) vs HANDOVER ("holds a
 `authorize.ts`, and the schema's `expired` status. Chosen: mark `expired` (non-destructive, reversible; nothing
 reads or references hold rows). Needs confirmation from finance/MK that nobody relies on expired rows being
 removed (e.g. table-size housekeeping). The stale comment in 0005 is left alone (applied migration).
+
+## Q12 — AUD-036: what counts as a duplicate CSV import
+Chosen: a content fingerprint (sha256 of the sorted rows `merchantId|parsed fils|reason`, file name ignored) stored on
+`adjustment_imports.content_sha256` (migration 0077). The same content is refused with 409 `duplicate_import` unless the
+request carries the new optional `allowDuplicate: true` (admin UI: "Import anyway" with a confirm). Not a unique
+index, because finance may legitimately repeat an identical file (recurring monthly credit); the check runs under an
+advisory lock so two concurrent submits cannot both pass. Alternative rejected: "any identical file within N hours"
+(arbitrary window). Needs finance to confirm that a repeat should require the explicit override.

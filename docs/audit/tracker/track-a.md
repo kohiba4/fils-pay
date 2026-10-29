@@ -24,6 +24,7 @@ Owner: the user + their agent. Updated with each fix; Track B does not edit this
 | 17 | AUD-052 | fee tests independent of the volume counter | merged (PR #13) |
 | 18 | AUD-037 | ADMIN.md corrections (docs only) | PR #17 |
 | 19 | AUD-051 | admin default run date is the Bahrain day | merged (PR #18) |
-| 20 | AUD-049 | `rebuild-balances --merchant` writes the cache | in review (branch `fix/AUD-049-rebuild-one-merchant`) |
-| 21 | AUD-033, 036, 045, 050 | remaining small Track A items | todo |
+| 20 | AUD-049 | `rebuild-balances --merchant` writes the cache | merged (PR #19) |
+| 21 | AUD-036 | CSV import duplicate guard (migration 0077, Q12) | in review (branch `fix/AUD-036-import-duplicate-guard`) |
+| 22 | AUD-033, 045, 050 | remaining small Track A items (050 waits for a finance decision) | todo |
 | - | open question | adjustments (MDR recalc on paid batches, credits, imports) never reach a payout instruction | needs a finance decision |

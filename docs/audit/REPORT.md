@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **17**.
+- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **18**.
 - By verdict: BUG 36, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -46,7 +46,7 @@
 | [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | fixed (merged into main; TRUNCATE and the application role's privileges still need an ops change) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
-| [AUD-036](#aud-036) | Adjustment import has no duplicate-submit protection | Medium | BUG (traced) | confirmed (trace) | A |
+| [AUD-036](#aud-036) | Adjustment import has no duplicate-submit protection | Medium | BUG (traced) | fixed (branch `fix/AUD-036-import-duplicate-guard`) | A |
 | [AUD-038](#aud-038) | Admin API-key rotation never revokes the old key | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-039](#aud-039) | Second-approver check on credits compares display names | Medium | UNVERIFIED | suspected | B |
 | [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | UNVERIFIED | suspected (runtime failure, cause not yet traced) | B |
@@ -1381,7 +1381,7 @@ _Source file: [findings/AUD-035-ops-deploy-hazards-missing-dockerfiles-broken-de
 
 - Severity: **Medium** · Category: idempotency · Owner: A
 - Verdict: **BUG (traced)** (confidence high): Slack shows a double import. The "unique filename" claim is false (no such constraint).
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-036-import-duplicate-guard`) · Fix commit: see `git log fix/AUD-036-import-duplicate-guard`
 
 **Where**
 
@@ -1391,19 +1391,23 @@ apps/api/src/admin/adjustmentImport.ts:47-110
 
 **Why it happens (root cause)**
 
-No idempotency key/checksum.
+The importer inserted an `adjustment_imports` row and posted every row with no check of what had been imported before. The code comment "re-upload is blocked by the unique original_filename" is false: no such constraint exists (migration 0065 has only a non-unique uploader index), and the filename is optional and defaults to `pasted.csv`.
 
 **What it breaks (impact)**
 
-Double ledger postings.
+Every duplicate submit (double click, retry, someone re-pasting the file) posts every row again: the merchant balance and ledger are overstated or understated by the full file, with no error. Money rows are never idempotent here, so the only recovery is a manual counter-import.
 
 **Proof / evidence**
 
-Slack 2026-09-04: same file imported twice seconds apart.
+Slack 2026-09-04: same file imported twice seconds apart. Reproduced by tests (before the fix the second submit posted every row again, and two concurrent submits both succeeded).
 
 **Fix**
 
-Content-hash unique per import (new migration) — after AUD-012.
+Migration 0077 adds `adjustment_imports.content_sha256` (nullable, plain index). `applyAdjustmentImport` parses all rows first, computes an order-independent fingerprint of `merchantId(lowercase)|fils|reason`, takes `pg_advisory_xact_lock` on it, and refuses (409 `duplicate_import`, message names the earlier import id and time) if an import with that fingerprint exists, unless the optional request field `allowDuplicate: true` is given (boolean, else 400). The route passes the flag through; the admin page shows the server message with an "Import anyway" button (confirm dialog). Decision Q12 (finance to confirm the override is the right shape). Imports made before the migration have no fingerprint and are not matched (a re-upload of an old file is not caught once). Tests: 3 unit tests (duplicate with a different file name/spelling/id case, deliberate repeat and different content, two concurrent submits) and 1 route test. Tests changed: none. Docs: ADMIN.md corrected, stale "2dp" comment in the admin API client fixed.
+
+**Re-attack and side notes**
+
+Concurrency: advisory lock per fingerprint, tested with two simultaneous submits (one wins). Other routes posting adjustments (single manual adjustment, credits) are separate flows with their own approvals and are not affected. Changing the reason text or one amount makes the content differ, so a "slightly edited" re-upload is not blocked (by design: it is different content). Row order is ignored.
 
 **Related:** AUD-012
 
@@ -2120,6 +2124,14 @@ and the ORIGINAL script (commit a2fd53d, which did DELETE) vs HANDOVER ("holds a
 `authorize.ts`, and the schema's `expired` status. Chosen: mark `expired` (non-destructive, reversible; nothing
 reads or references hold rows). Needs confirmation from finance/MK that nobody relies on expired rows being
 removed (e.g. table-size housekeeping). The stale comment in 0005 is left alone (applied migration).
+
+## Q12 — AUD-036: what counts as a duplicate CSV import
+Chosen: a content fingerprint (sha256 of the sorted rows `merchantId|parsed fils|reason`, file name ignored) stored on
+`adjustment_imports.content_sha256` (migration 0077). The same content is refused with 409 `duplicate_import` unless the
+request carries the new optional `allowDuplicate: true` (admin UI: "Import anyway" with a confirm). Not a unique
+index, because finance may legitimately repeat an identical file (recurring monthly credit); the check runs under an
+advisory lock so two concurrent submits cannot both pass. Alternative rejected: "any identical file within N hours"
+(arbitrary window). Needs finance to confirm that a repeat should require the explicit override.
 
 
 ## 6. Ruled out (checked and found fine)

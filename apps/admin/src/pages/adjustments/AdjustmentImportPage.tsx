@@ -5,7 +5,7 @@ import {
   listAdjustmentImports,
   uploadAdjustmentImport,
 } from "../../api/adjustmentImports.js";
-import { describeError } from "../../api/client.js";
+import { ApiError, describeError } from "../../api/client.js";
 import { RequireRole } from "../../auth/RequireRole.js";
 import type {
   AdjustmentImportRowDetail,
@@ -34,6 +34,7 @@ export function AdjustmentImportPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [duplicate, setDuplicate] = useState(false);
 
   const [imports, setImports] = useState<AdjustmentImportSummary[]>([]);
   const [listError, setListError] = useState<string | null>(null);
@@ -57,15 +58,23 @@ export function AdjustmentImportPage() {
   }, [loadHistory]);
 
   /** Amounts are BD with three decimals and are parsed server-side with parseBhdToFils. */
-  async function handleApply(event: React.FormEvent): Promise<void> {
-    event.preventDefault();
+  async function handleApply(event: React.FormEvent | null, allowDuplicate = false): Promise<void> {
+    event?.preventDefault();
+    if (
+      allowDuplicate &&
+      !window.confirm("This exact content was already imported. Post every row again?")
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
+    setDuplicate(false);
     try {
       const result = await uploadAdjustmentImport(
         csvContent,
         filename.trim() ? filename.trim() : undefined,
+        allowDuplicate,
       );
       setNotice(
         `Applied ${result.rowCount} row(s), posting ${bhd(result.totalPostedFils)} in total.`,
@@ -75,6 +84,7 @@ export function AdjustmentImportPage() {
       await loadHistory();
     } catch (err) {
       setError(describeError(err));
+      setDuplicate(err instanceof ApiError && err.code === "duplicate_import");
     } finally {
       setBusy(false);
     }
@@ -138,6 +148,11 @@ export function AdjustmentImportPage() {
       </RequireRole>
 
       {error ? <p className="admin-error">{error}</p> : null}
+      {duplicate ? (
+        <button type="button" disabled={busy} onClick={() => void handleApply(null, true)}>
+          Import anyway
+        </button>
+      ) : null}
       {notice ? <p>{notice}</p> : null}
 
       <h2>Past imports</h2>

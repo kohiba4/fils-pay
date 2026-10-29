@@ -65,8 +65,8 @@ reconciliation match what finance agreed with them.
 **Import adjustments** — paste a CSV of corrections with a
 `merchantId,amount,reason` header. Amounts are in BD as finance's sheets
 already have them (`4.75`, `120.00`). Rows are applied as soon as you
-submit; each import's rows are kept with the original text for reference.
-Don't submit the same file twice; there's no duplicate detection yet.
+submit; each import's rows are kept with the original text for reference. Amounts take up to three decimals (`4.750`).
+Submitting the same content twice is refused (409 `duplicate_import`; the message names the earlier import): the check compares merchant, amount in fils and reason per row, ignoring file name, order and how the amount is spelled. If you really mean to post the same rows again (for example a monthly recurring credit), use **Import anyway**. *[Audit note 2026-10-30 (AUD-036): this paragraph used to say there was no duplicate detection.]*
 
 ## Settlement ops
 
