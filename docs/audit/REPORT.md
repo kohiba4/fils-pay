@@ -4,8 +4,8 @@
 
 ## 1. Summary
 
-- Findings: **51** (Critical 5, High 19, Medium 18, Low 9); fixed so far: **13**.
-- By verdict: BUG 36, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
+- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **15**.
+- By verdict: BUG 36, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
@@ -23,7 +23,7 @@
 | [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | fixed (merged into main; historical files already sent are not corrected) | A |
 | [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (merged into main; historical data repair still needed) | A |
-| [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | made safe (branch `fix/AUD-013-march-sweep-idempotent`, pending merge); still must not be applied to production until finance confirms the accounting | A |
 | [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
@@ -62,6 +62,7 @@
 | [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
 | [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | confirmed (trace) | A |
 | [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | confirmed (trace) | A |
+| [AUD-052](#aud-052) | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | HYGIENE | fixed (branch `fix/AUD-052-test-isolation-volume-counter`, pending merge) | A |
 
 ## 2. Bugs (by severity)
 
@@ -538,7 +539,7 @@ _Source file: [findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-
 
 - Severity: **High** · Category: ops script / money · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Second run doubles the posting (170 to 340 fils).
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: made safe (branch `fix/AUD-013-march-sweep-idempotent`, pending merge); still must not be applied to production until finance confirms the accounting · Fix commit: see `git log fix/AUD-013-march-sweep-idempotent`
 
 **Where**
 
@@ -562,7 +563,16 @@ Trace; brief: ran twice on staging and the gap doubled.
 
 **Fix**
 
-Not to be run. If kept: dry-run default, deterministic idempotency (unique description/key), correct legs, Bahrain window. Ask before investing.
+- `scripts/reconcile_march.ts`: **dry run by default** (prints per-merchant residue and `DRY RUN: nothing was posted`); `--apply` posts. Posting is **idempotent**: inside one transaction an advisory lock (`pg_advisory_xact_lock`) serialises concurrent runs and a merchant that already has a ledger leg with the sweep description is skipped. The false comment "re-running is safe, entry_group_id dedupes it" (the group id is a fresh random uuid per call) is replaced by the real mechanism. Totals now say "found" vs "posted by this run".
+- Tests (written first; both failed on the old script: a plain run posted a row, and two applies posted 2 rows / 20 fils instead of 10): `scripts/reconcile_march.rerun.test.ts` runs the REAL script against a throwaway database: dry run posts nothing, `--apply` twice posts once (10 fils, not 20), three simultaneous `--apply` runs post once (3 repeats). The existing `reconcile_march.integration.test.ts` ("2000 ledger entries, zero net residual") never calls the script's posting code or a rerun: it recomputes the residue inside the test itself, so it could never have caught this; left unchanged.
+- **Deliberately NOT changed (needs finance): the accounting itself.** The script debits `merchant_payable` and credits `scheme_rounding_residue`, i.e. it takes the residue out of the merchants' payable. ADR-0002 books residue between `card_scheme_clearing` (credit) and `scheme_rounding_residue` (debit) and does not touch merchants. It also uses the UTC month (ADR-0003; decision Q6 prefers the Bahrain month), computes residue from `transactions.captured_fils` (a running total) rather than per scheme line, and posts with `occurred_at = now()`. Changing any of this would change what gets booked, so the safe state is: idempotent, dry-run, and not to be applied until finance signs off.
+
+**Re-attack and side notes**
+
+- Answer to the brief's question "was it run more than once in production, and is it safe to rerun?": the old script was NOT safe (reproduced on a scratch database: a second run doubled the posting; that proves the mechanism, not what happened in production). Evidence that it WAS run again somewhere: `docs/meetings/2026-07-08-finance-eng.md` says FH "re-ran `scripts/reconcile_march.ts` as a dry run on 3 July: 13 lines, 70 fils, identical to the original run". The old script had no dry-run mode and always applied (it printed "reconciliation applied successfully"), so that "dry run" almost certainly posted the 70 fils a second time; the note does not say which environment (finance separately reports a run twice on staging). The log file the brief mentions (`scripts/out/`) is not in the repo, so a single timestamp in it cannot be checked, and a log cannot prove a single execution anyway. Finance can check each environment with: `SELECT merchant_id, count(DISTINCT entry_group_id) AS sweeps, sum(amount_fils) AS fils FROM ledger_entries WHERE description LIKE 'March 2026 scheme rounding residue sweep%' AND account_id = 'scheme_rounding_residue' GROUP BY 1;` (`sweeps` above 1 for a merchant means the sweep was applied more than once; the extra groups need a reviewed reversing entry, NOT a script).
+- **Idempotent, but not self-correcting (review):** a merchant already swept is skipped even if their March transactions changed afterwards or the earlier sweep (including one made by the OLD script) was a different amount. The script now prints what was swept earlier next to the current residue and a `WARNING` when they differ, but it never adds to or corrects a sweep. The idempotency key is the exact description string plus the account: never edit `SWEEP_DESCRIPTION`. An unknown argument (e.g. the typo `--aply`) now exits non-zero instead of silently dry-running, and the residue rows are re-read inside the advisory lock so they cannot be stale. The simultaneous-run test is probabilistic: with the lock removed it failed once in two trials, so it catches a missing lock only some of the time.
+- `RUNBOOK.md` told finance to copy this script every month and said "a second run is a no-op": that was false for the old script and the copies would have inherited the bug. An audit note was added there.
+- The March "gap" finance still sees (about 4.75 BD) is not explained by this script (its residue was 0.070 BD in the original run); candidates are the CSV import bug (AUD-012, 4.75 posted as 0.475) or the window difference, but the data is not in the repo.
 
 **Related:** AUD-010, ADR-0003
 
@@ -1948,6 +1958,48 @@ Report only; ask before removing data.
 **Related:** suspicious/S-08
 
 _Source file: [findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md](findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md)_
+
+### AUD-052
+**Settlement fee tests depend on the global volume-tier counter (intermittent failures)**
+
+- Severity: **Low** · Category: test quality · Owner: A
+- Verdict: **HYGIENE** (confidence high): Reproduced: counter above 2e9 turns on the 15 bps tier and three fee tests fail. Test isolation only; fixed by resetting the counter in `mustPool`.
+- Status: fixed (branch `fix/AUD-052-test-isolation-volume-counter`, pending merge) · Fix commit: see `git log fix/AUD-052-test-isolation-volume-counter`
+
+**What is wrong**
+
+Three Go tests that assert exact fees (`TestCloseBatch_FeePerEventThenSummed`, `TestCloseBatch_EligibleEventSelection`, `TestRunBatch_ValidTokenAndDate`) failed intermittently on a shared database.
+
+**Where**
+
+apps/settlement/internal/settlement/batch_test.go (`mustPool`), apps/settlement/internal/internalapi/server_test.go (`mustPool`); the dependency is `platform_stats.total_processed_fils` read by `CloseBatch` (`VolumeTierMdrBonusBps`).
+
+**Sibling locations checked:** the ledger and splits packages do not close batches; the TS suites do not read the counter except `platformVolumeTier.test.ts`, which sets it explicitly.
+
+**Why it happens (root cause)**
+
+Every `CloseBatch` adds the batch gross to one shared counter and the platform-wide tier discount (15 bps) switches on at 2,000,000,000 fils. The tests assume the tier is off but never reset the counter, so after enough runs (about 1.2 billion fils accumulated per full run) a run starts above the threshold and the fees come out 15 bps lower (235 vs 250, 112 vs 119, 190 vs 202). Which run failed depended on how the counter happened to be left by the previous run.
+
+**What it breaks (impact)**
+
+Flaky tests that hid real regressions behind "just rerun it", and cost me an investigation during AUD-034. Not a product bug, but a useful product observation: capture (API) and close (Go) read the same counter at different moments, so when the tier switches on between a capture and its batch close, the ledger fee and the batch fee differ (see AUD-016, AUD-017).
+
+**Proof / evidence**
+
+Set the counter to 2,500,000,000 and run those three tests on `main`: all three fail with exactly the numbers above. With the fix, the same scenario passes.
+
+**Fix**
+
+`mustPool` in both test packages zeroes the counter before each DB test. Verified: the failing scenario now passes, and three consecutive full serial Go runs fail only on AUD-048's intentional repro and leave the counter at 0. No assertion was changed. (Parallel packages still share one database; run `go test -p 1 ./...`.)
+
+**Re-attack and side notes**
+
+- The tier behaviour itself is covered by `platform_volume_test.go`, which sets the counter explicitly (including the above-2^31 case from AUD-017).
+- A stronger design would give tests their own database; out of scope.
+
+**Related:** AUD-016, AUD-017, AUD-044
+
+_Source file: [findings/AUD-052-settlement-fee-tests-depend-on-the-global-volume-tier-coun.md](findings/AUD-052-settlement-fee-tests-depend-on-the-global-volume-tier-coun.md)_
 
 
 ## 5. Decisions taken

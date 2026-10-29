@@ -4,7 +4,7 @@
 
 Sorted by severity. The status text is the first line of each finding's Status field; the verdict is from [TRIAGE.md](TRIAGE.md).
 
-Counts: Critical 5, High 19, Medium 18, Low 9 (51 findings, 13 fixed or partly fixed)
+Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 15 fixed or partly fixed)
 
 | ID | Title | Severity | Owner | Verdict | Status | Detail |
 |---|---|---|---|---|---|---|
@@ -20,7 +20,7 @@ Counts: Critical 5, High 19, Medium 18, Low 9 (51 findings, 13 fixed or partly f
 | AUD-010 | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | A | BUG (runtime) | fixed (merged into main; historical files already sent are not corrected) | [findings/AUD-010-scheme-file-amount-rounded-half-up-from-untruncated-gross-re.md](findings/AUD-010-scheme-file-amount-rounded-half-up-from-untruncated-gross-re.md) |
 | AUD-011 | `expire_holds` deletes ALL holds when nothing has expired | High | A | BUG (runtime) | fixed (merged into main) | [findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md](findings/AUD-011-expire-holds-deletes-all-holds-when-nothing-has-expired.md) |
 | AUD-012 | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | A | BUG (runtime) | fixed (merged into main; historical data repair still needed) | [findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md](findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md) |
-| AUD-013 | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | A | BUG (runtime) | confirmed (runtime) | [findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md](findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md) |
+| AUD-013 | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | A | BUG (runtime) | made safe (branch fix/AUD-013-march-sweep-idempotent, pending merge); still must not be... | [findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md](findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md) |
 | AUD-014 | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | A | BUG (runtime) | fixed (merged into main) | [findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md](findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md) |
 | AUD-015 | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | A | BUG (runtime) | fixed (merged into main) | [findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md](findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md) |
 | AUD-016 | Fee computed differently at capture vs settlement (discount, order, tier) | High | A | BUG (traced) | confirmed (trace) | [findings/AUD-016-fee-computed-differently-at-capture-vs-settlement-discount-o.md](findings/AUD-016-fee-computed-differently-at-capture-vs-settlement-discount-o.md) |
@@ -59,5 +59,6 @@ Counts: Critical 5, High 19, Medium 18, Low 9 (51 findings, 13 fixed or partly f
 | AUD-047 | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | B | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | [findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md](findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md) |
 | AUD-049 | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | A | BUG (traced) | confirmed (trace) | [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md](findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md) |
 | AUD-051 | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | A | BUG (traced) | confirmed (trace) | [findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md](findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md) |
+| AUD-052 | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | A | HYGIENE | fixed (branch fix/AUD-052-test-isolation-volume-counter, pending merge) | [findings/AUD-052-settlement-fee-tests-depend-on-the-global-volume-tier-coun.md](findings/AUD-052-settlement-fee-tests-depend-on-the-global-volume-tier-coun.md) |
 
 See also: [REPORT.md](REPORT.md), [TRIAGE.md](TRIAGE.md), [ruled-out/](ruled-out/), [suspicious/](suspicious/), [CLAIMS.md](CLAIMS.md), [INVARIANTS.md](INVARIANTS.md), [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md), [BASELINE.md](BASELINE.md), [PLAN.md](PLAN.md), [TEAM.md](TEAM.md), [DECISIONS.md](DECISIONS.md), [tracker/](tracker/).
