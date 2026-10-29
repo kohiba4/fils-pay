@@ -29,6 +29,7 @@ const config = loadConfig({
   ACQUIRER_LATENCY_MIN_MS: "0",
   ACQUIRER_LATENCY_MAX_MS: "1",
   WEBHOOK_SECRET_ENCRYPTION_KEY: "Y1ZTGTcYbe30GZJebys9w7T3OYZNKewuOH3SUCEdRQk=",
+  REFUNDS_ENABLED: "true",
 });
 
 const pool = new Pool({ connectionString: databaseUrl, max: 5 });
@@ -156,21 +157,22 @@ test("the Idempotency-Key header is required, and replay returns the first answe
   assert.equal((reused.json() as { error: string }).error, "idempotency_key_reused");
 });
 
-test("invalid bodies are 400s", async () => {
+test("invalid bodies are rejected with the right status and nothing is refunded", async () => {
   const m = await createApprovedMerchantWithApiKey("badbody");
   const id = await capturedTransaction(m.rawKey, 10_000);
-  for (const payload of [
-    {},
-    { transactionId: "not-a-uuid" },
-    { transactionId: id, amountFils: 10.5 },
-    { transactionId: id, amountFils: "1000" },
-    { transactionId: id, amountFils: -5 },
-    { transactionId: id, reason: "" },
-    { transactionId: id, reason: "x".repeat(256) },
-  ]) {
+  const cases: Array<[unknown, number]> = [
+    [{}, 400],
+    [{ transactionId: "not-a-uuid" }, 400],
+    [{ transactionId: id, amountFils: 10.5 }, 400],
+    [{ transactionId: id, amountFils: "1000" }, 400],
+    [{ transactionId: id, amountFils: -5 }, 400],
+    [{ transactionId: id, amountFils: 0 }, 422],
+    [{ transactionId: id, reason: "" }, 400],
+    [{ transactionId: id, reason: "x".repeat(256) }, 400],
+  ];
+  for (const [payload, expected] of cases) {
     const res = await refund(bearer(m.rawKey), payload);
-    assert.ok([400, 422].includes(res.statusCode), `${JSON.stringify(payload)} -> ${res.statusCode} ${res.body}`);
-    assert.notEqual(res.statusCode, 200);
+    assert.equal(res.statusCode, expected, `${JSON.stringify(payload)} -> ${res.statusCode} ${res.body}`);
   }
   const n = await pool.query<{ c: number }>(`SELECT count(*)::int AS c FROM refunds WHERE transaction_id = $1`, [id]);
   assert.equal(n.rows[0]!.c, 0);
@@ -232,4 +234,50 @@ test("a refund shows up in the transaction timeline as a negative event and in r
   const last = events[events.length - 1]!;
   assert.equal(last.eventType, "refund_partial");
   assert.equal(last.amountFils, -3_000);
+});
+
+async function impersonationCookie(merchantId: string, adminRole: "support" | "finance" | "super_admin") {
+  const admin = await pool.query<{ id: string }>(
+    `INSERT INTO admin_users (email, password_hash, display_name, role)
+     VALUES ($1, 'not-a-real-hash', 'Refund Impersonation Test', $2) RETURNING id`,
+    [`imp-${randomUUID()}@admin.test`, adminRole],
+  );
+  const rawToken = randomToken(32);
+  await pool.query(
+    `INSERT INTO admin_impersonation_grants (admin_user_id, merchant_id, token_hash, expires_at)
+     VALUES ($1, $2, $3, now() + interval '1 hour')`,
+    [admin.rows[0]!.id, merchantId, sha256Hex(rawToken)],
+  );
+  return { cookie: `${config.impersonationCookieName}=${rawToken}` };
+}
+
+test("a 'view as merchant' operator cannot refund, whatever role their grant maps to", async () => {
+  const m = await createApprovedMerchantWithApiKey("impersonation");
+  const id = await capturedTransaction(m.rawKey, 10_000);
+  for (const adminRole of ["support", "finance", "super_admin"] as const) {
+    const res = await refund(await impersonationCookie(m.merchantId, adminRole), { transactionId: id, amountFils: 100 });
+    assert.equal(res.statusCode, 403, `${adminRole}: ${res.body}`);
+  }
+  const n = await pool.query<{ c: number }>(`SELECT count(*)::int AS c FROM refunds WHERE transaction_id = $1`, [id]);
+  assert.equal(n.rows[0]!.c, 0);
+});
+
+test("refunds are off unless REFUNDS_ENABLED is true (503), nothing is written", async () => {
+  const offApp = buildApp(loadConfig({ ...process.env, DATABASE_URL: databaseUrl!, NODE_ENV: "test", REFUNDS_ENABLED: "false",
+    INTERNAL_API_TOKEN: "test-internal-token", ACQUIRER_FAILURE_RATE: "0", ACQUIRER_LATENCY_MIN_MS: "0", ACQUIRER_LATENCY_MAX_MS: "1",
+    WEBHOOK_SECRET_ENCRYPTION_KEY: "Y1ZTGTcYbe30GZJebys9w7T3OYZNKewuOH3SUCEdRQk=" }), pool);
+  try {
+    const m = await createApprovedMerchantWithApiKey("switch-off");
+    const id = await capturedTransaction(m.rawKey, 10_000);
+    const res = await offApp.inject({
+      method: "POST", url: PATH, headers: { ...bearer(m.rawKey), "idempotency-key": randomUUID() },
+      payload: { transactionId: id, amountFils: 100 },
+    });
+    assert.equal(res.statusCode, 503, res.body);
+    assert.equal((res.json() as { error: string }).error, "refunds_disabled");
+    const n = await pool.query<{ c: number }>(`SELECT count(*)::int AS c FROM refunds WHERE transaction_id = $1`, [id]);
+    assert.equal(n.rows[0]!.c, 0);
+  } finally {
+    await offApp.close();
+  }
 });

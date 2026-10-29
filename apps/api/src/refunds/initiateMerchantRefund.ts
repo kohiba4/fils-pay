@@ -11,6 +11,9 @@ import { ForbiddenError, NotFoundError } from "../lib/errors.js";
  */
 
 /**
+ * Not used by `POST /v1/refunds` (there is no merchant in the path any more; the merchant is the authenticated one).
+ * Kept with its tests from the original `/v1/merchants/:merchantId/refunds` design.
+ *
  * The path-scope check the route performs before this module's work begins —
  * the same shape `routes/paymentLinks.ts`'s `assertOwnMerchant` has, lifted
  * out so it is testable without a live route.

@@ -21,7 +21,7 @@ Refunds were designed with a `refunds.settlement_batch_id` column and an "unbatc
 Traced in code (the refund route was a 501 stub until FP-300 PR 1, so this was latent). Becomes real the moment refunds work: capture 10.000, refund 4.000, close the batch: net payout is still 10.000 less fee.
 
 ## Impact
-The platform refunds the cardholder and still pays the merchant in full: direct financial loss, and the ledger (merchant_payable reduced) and the payout (not reduced) disagree, so reconciliation cannot tie out. Refunds must not go live anywhere before this is fixed.
+The platform refunds the cardholder and still pays the merchant in full: direct financial loss, and the ledger (merchant_payable reduced) and the payout (not reduced) disagree, so reconciliation cannot tie out. Refunds must not go live anywhere before this is fixed: `POST /v1/refunds` is therefore off by default (`REFUNDS_ENABLED`, 503 `refunds_disabled`) until PR 2 flips the default.
 
 ## Fix (proposed)
 See docs/audit/FP-300-PLAN.md (PR 2): `refund_fils` / `refund_fee_reversed_fils` on `settlement_batches`, pickup of succeeded unbatched refunds with `occurred_at < windowEnd`, RecalculateMDR keeps the refund terms and filters events by type, exact pending refunds for reconciliation, additive API/payload fields. Open finance decision Q13: negative net (no netting vs cap payouts at the balance).

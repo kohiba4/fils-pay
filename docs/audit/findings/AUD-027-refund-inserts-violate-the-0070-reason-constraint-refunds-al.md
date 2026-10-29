@@ -28,7 +28,7 @@ Refund feature cannot work (FP-300 blocker).
 ## Fix
 The INSERT now uses `COALESCE($6, 'unspecified')` for `reason`, so an omitted reason takes the default 0070 intended instead of an explicit NULL. The route validates `reason` (1-255 characters) and stores it trimmed.
 
-Tests: All 11 previously failing refund tests pass (processRefund x8, initiateMerchantRefund x4); `routes/refunds.test.ts` checks the default and a custom reason. Tests changed: none.
+Tests: All 11 previously failing refund tests pass (7 in `processRefund.test.ts`, 4 in `initiateMerchantRefund.test.ts`); `routes/refunds.test.ts` checks the default and a custom reason. Tests changed for FP-300 as a whole: the 501 stub test in `routes/transactions.test.ts` was converted (see AUD-003); none of the 11 was edited.
 
 ## Re-attack notes
 Migration 0070 is untouched (applied). No other writer inserts into `refunds`.

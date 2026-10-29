@@ -161,7 +161,7 @@ Trace only (route is a 501 stub). Unit tests exist for the helper; none for a fo
 
 **Fix**
 
-`POST /v1/refunds` is wired (FP-300 PR 1). The authenticated merchant comes only from `request.merchantAuth`; `initiateMerchantRefund` looks the transaction up by id AND that merchant, and `processRefund` locks it with `WHERE id = $1 AND merchant_id = $2`. A foreign transaction answers 404 `transaction_not_found`, indistinguishable from a missing one, and nothing is written. Session users need the owner or finance role (support and "view as merchant" operators get 403).
+`POST /v1/refunds` is wired (FP-300 PR 1). The authenticated merchant comes only from `request.merchantAuth`; `initiateMerchantRefund` looks the transaction up by id AND that merchant, and `processRefund` locks it with `WHERE id = $1 AND merchant_id = $2`. A foreign transaction answers 404 `transaction_not_found`, indistinguishable from a missing one, and nothing is written. Session users need the owner or finance role (support gets 403). A "view as merchant" operator is refused explicitly by actor type: the impersonation role map turns `super_admin` into `owner` and `finance` into `finance` (AUD-024), so the role check alone would have let them refund, recorded as the merchant's own session. Test: `routes/refunds.test.ts` "a view as merchant operator cannot refund, whatever role their grant maps to".
 
 Tests: `processRefund.test.ts` (AUD-003: another merchant is a 404 and nothing is refunded), `initiateMerchantRefund.test.ts` (same, replacing the old TODO), `routes/refunds.test.ts` (404 for a foreign id; 401/403/200 by role). Tests changed: the stale TODO comment in `initiateMerchantRefund.test.ts` ("currently refunds it") was replaced by the test it asked for.
 
@@ -989,7 +989,7 @@ Baseline: 11 tests fail with `violates check constraint "chk_refunds_reason_not_
 
 The INSERT now uses `COALESCE($6, 'unspecified')` for `reason`, so an omitted reason takes the default 0070 intended instead of an explicit NULL. The route validates `reason` (1-255 characters) and stores it trimmed.
 
-Tests: All 11 previously failing refund tests pass (processRefund x8, initiateMerchantRefund x4); `routes/refunds.test.ts` checks the default and a custom reason. Tests changed: none.
+Tests: All 11 previously failing refund tests pass (7 in `processRefund.test.ts`, 4 in `initiateMerchantRefund.test.ts`); `routes/refunds.test.ts` checks the default and a custom reason. Tests changed for FP-300 as a whole: the 501 stub test in `routes/transactions.test.ts` was converted (see AUD-003); none of the 11 was edited.
 
 **Re-attack and side notes**
 
@@ -1088,7 +1088,7 @@ Refunds were designed with a `refunds.settlement_batch_id` column and an "unbatc
 
 **What it breaks (impact)**
 
-The platform refunds the cardholder and still pays the merchant in full: direct financial loss, and the ledger (merchant_payable reduced) and the payout (not reduced) disagree, so reconciliation cannot tie out. Refunds must not go live anywhere before this is fixed.
+The platform refunds the cardholder and still pays the merchant in full: direct financial loss, and the ledger (merchant_payable reduced) and the payout (not reduced) disagree, so reconciliation cannot tie out. Refunds must not go live anywhere before this is fixed: `POST /v1/refunds` is therefore off by default (`REFUNDS_ENABLED`, 503 `refunds_disabled`) until PR 2 flips the default.
 
 **Proof / evidence**
 
@@ -1257,7 +1257,7 @@ _Source file: [findings/AUD-028-0072-refund-summary-view-joins-t-id-r-id-always-
 
 packages/money/src/fils.ts `calculateRefundFee`, processRefund.ts:113-121
 
-**Sibling locations checked:** Fee 'charged' is read as SUM of platform_fee_revenue credits, ignoring discount debits (AUD-016).
+**Sibling locations checked (the old code ignored the discount debit; the new query includes it):** Fee 'charged' is read as SUM of platform_fee_revenue credits, ignoring discount debits (AUD-016).
 
 **Why it happens (root cause)**
 
@@ -1275,11 +1275,11 @@ Arithmetic trace.
 
 Kept the finance-approved per-refund rule (`calculateRefundFee`, banker's rounding, meeting 2026-07-08) and added the missing guarantee: the reversal is clamped to the fee still kept (`feeKept - sum(refunds.fee_reversed_fils)`), and the refund that brings the refunded total up to the captured amount reverses exactly the remainder. The fee "kept" is read from the ledger as capture's fee credit minus the negotiated-discount debit (the old code summed only the credits, so a discounted merchant got back more fee than the platform had kept).
 
-Tests: `processRefund.test.ts` "AUD-029" (captured 3 fils at 66.67%: three refunds of 1 reverse 2 in total, not 3; captured 7 fils at 25%: seven refunds of 1 end at exactly the fee, never above it at any step), "a negotiated discount lowers the fee a refund gives back" (full refund of a 20%-discounted 10.000: 200 reversed, fee revenue on the transaction ends at 0, never negative). Tests changed: none.
+Tests: `processRefund.test.ts` "AUD-029" (captured 3 fils at 66.67%: three refunds of 1 reverse 2 in total, not 3; captured 7 fils at 25%: seven refunds of 1 end at exactly the fee, never above it at any step), "a negotiated discount lowers the fee a refund gives back" (full refund of a 20%-discounted 10.000: 200 reversed, fee revenue on the transaction ends at 0, never negative). Tests changed: none (the converted 501 test belongs to AUD-003).
 
 **Re-attack and side notes**
 
-Known gap (recorded in AUD-016): capture applies the negotiated discount in a second transaction after it commits (`applyCaptureDiscountAdjustment`), so a refund that lands between the two would reverse the undiscounted fee. It closes when AUD-016 moves the discount into capture. Pay-link captures never get the discount (AUD-016), so their ledger fee is the undiscounted one and the refund follows the ledger.
+Known gap (recorded in AUD-016): capture applies the negotiated discount in a second transaction after it commits (`applyCaptureDiscountAdjustment`), so a refund that lands between the two reverses the undiscounted share. Review follow-up: if the late discount then makes "kept" smaller than "already reversed", the remaining fee would have been negative and the INSERT would have violated `CHECK fee_reversed_fils >= 0` AFTER the acquirer had refunded; now the remaining fee is floored at 0 and the whole reversal is computed before the acquirer call (test "a negotiated discount that lands after an earlier refund ..."). It closes when AUD-016 moves the discount into capture. Pay-link captures never get the discount (AUD-016), so their ledger fee is the undiscounted one and the refund follows the ledger.
 
 **Related:** AUD-016
 

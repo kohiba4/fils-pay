@@ -167,10 +167,10 @@ export async function claimIdempotencyKey(
     return { outcome: "retry_after_failure", row: toRow(updated) };
   }
 
-  // MK: processRefund commits the claim before the acquirer call, so in_progress can
-  // legitimately be seen there. 409 is correct, client just retries later
-  // YA: Claude suggested a stale-claim sweeper (in_progress older than 5 min -> failed)
-  // — ignore, sweeper already exists in scripts/sweep_idempotency.ts
+  // Capture and refund both claim the key and hold the transaction row lock in ONE transaction that spans the acquirer
+  // call, so a concurrent request with the same key blocks on the unique index and then sees 'completed' or 'failed'.
+  // (The old comment here claimed processRefund committed the claim before the acquirer call, and that a stale-claim
+  // sweeper exists in scripts/sweep_idempotency.ts; neither is true: that file does not exist.)
   // existing.status === 'in_progress'. Given the blocking behavior above,
   // this is only reachable if a previous process claimed the key and then
   // crashed without ever reaching a COMMIT/ROLLBACK Postgres could detect —

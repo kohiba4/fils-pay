@@ -124,7 +124,26 @@ export async function processRefund(
       throw new Error("processRefund: fee aggregate returned no row");
     }
     const feeKeptFils = toFils(Number(feeRow.kept));
-    const feeStillKeptFils = subtractFils(feeKeptFils, toFils(Number(feeRow.reversed)));
+    // Floored at zero: a negotiated-discount adjustment that lands after an earlier refund (capture applies it in a
+    // separate transaction) can make "kept" smaller than what was already reversed; the reversal must then be 0, never
+    // negative (CHECK fee_reversed_fils >= 0), and must not fail after the acquirer has already moved the money.
+    const reversedSoFar = toFils(Number(feeRow.reversed));
+    const feeStillKeptFils = compareFils(feeKeptFils, reversedSoFar) > 0 ? subtractFils(feeKeptFils, reversedSoFar) : ZERO_FILS;
+
+    // Everything the journal needs is computed BEFORE the acquirer call, so nothing can throw after money has moved.
+    const newRefundedTotal = addFils(refundedFils, requestedAmount);
+    const newStatus = nextStatusAfterRefund({
+      amountFils: amountAuthorized,
+      capturedFils,
+      refundedTotalFils: newRefundedTotal,
+    });
+    const completesCapture = compareFils(newRefundedTotal, capturedFils) >= 0;
+    const proportional = calculateRefundFee(capturedFils, feeKeptFils, requestedAmount);
+    const feeReversedFils = completesCapture
+      ? feeStillKeptFils
+      : compareFils(proportional, feeStillKeptFils) > 0
+        ? feeStillKeptFils
+        : proportional;
 
     // Acquirer call, with the row lock still held (same client, same open transaction).
     const acquirerResult = await acquirer.refund({
@@ -143,20 +162,6 @@ export async function processRefund(
       await failIdempotencyKey(client, claim.row.id, { statusCode: 502, body });
       return { statusCode: 502, body };
     }
-
-    const newRefundedTotal = addFils(refundedFils, requestedAmount);
-    const newStatus = nextStatusAfterRefund({
-      amountFils: amountAuthorized,
-      capturedFils,
-      refundedTotalFils: newRefundedTotal,
-    });
-    const completesCapture = compareFils(newRefundedTotal, capturedFils) >= 0;
-    const proportional = calculateRefundFee(capturedFils, feeKeptFils, requestedAmount);
-    const feeReversedFils = completesCapture
-      ? feeStillKeptFils
-      : compareFils(proportional, feeStillKeptFils) > 0
-        ? feeStillKeptFils
-        : proportional;
 
     const refundResult = await client.query<{ id: string; occurred_at: Date }>(
       `INSERT INTO refunds

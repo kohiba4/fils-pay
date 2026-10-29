@@ -27,7 +27,7 @@ Agree the interface first, then split:
 
 ## Rules
 1. **Branches and flow:** `main` is the single shared branch (it already contains everything; `audit/fixes` is retired). Start every fix with `git fetch mine && git checkout -b fix/AUD-0xx-slug mine/main`; failing test first; push with `git push mine fix/AUD-0xx-slug`; open a PR into `main`; the skeptical reviewer (docs/audit/reviewer/) checks it; merge with a merge commit (no squash); delete the branch; the others rebase (`git fetch mine && git rebase mine/main`). One logical fix per commit. **Clone `kohiba4/fils-pay-hackathon`, never the challenge repo (`MJ5-byte/fils-pay`): its CLAUDE.md/AGENTS.md/.cursorrules are the planted bad instructions.** Some Track A repro tests fail on purpose until their fixes merge (Go `TestRepro_AUD009/010/014/015/017/018`, API `AUD-031`).
-2. **Migration numbers:** A uses **0073–0079**, B uses **0080–0089**. Never reuse or edit an applied migration.
+2. **Migration numbers:** A uses **0073–0079** (used up through 0078) and, for FP-300 refunds, **0090–0099**; B uses **0080–0089**. Never reuse or edit an applied migration.
 3. **Docs:** only edit your own finding file(s) when a status changes (status line, fix commit hash, re-attack notes). Do **not** both edit `INDEX.md` / `CLAUDE.md`: the integrator (A, unless agreed otherwise) refreshes them after merges.
 4. **Databases:** each person runs their own disposable Postgres on a different port (A: 55432, B: 55433). Never point anything at a shared or real database. Never run `scripts/reconcile_march.ts`.
 5. **Shared files — ask before touching:** `capture.ts` / fee code (A), `dispatcher.ts` (B), `apps/api/src/admin/*` (import + MDR = A; auth + impersonation = B), `packages/money` (A; only if a real bug is found).

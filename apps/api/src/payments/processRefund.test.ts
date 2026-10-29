@@ -632,3 +632,56 @@ test("AUD-029: partial refunds never reverse more fee than was kept, and a full 
   }
   assert.equal((await refundsOf(t2.id)).reduce((s, r) => s + r.fee, 0), 2);
 });
+
+test("a negotiated discount that lands after an earlier refund never makes the next fee reversal negative, and the refund still completes", async () => {
+  // capture applies the discount in a second transaction after it commits; a refund in that gap reverses the
+  // undiscounted share, and the late discount then makes "fee kept" smaller than "already reversed".
+  const merchant = await createApprovedMerchantWithApiKey("late-discount", 250);
+  const txn = await capturedTransaction(merchant.rawKey, 10_000); // fee 250 kept, no discount yet
+  const actor = await apiKeyActor(merchant.merchantId);
+
+  const first = await processRefund(pool, approvingAcquirer, {
+    transactionId: txn.id, merchantId: merchant.merchantId, amountFils: toFils(9_000), idempotencyKey: randomUUID(), actor,
+  });
+  assert.equal(first.statusCode, 200, JSON.stringify(first.body));
+  assert.equal((await refundsOf(txn.id))[0]!.fee, 225);
+
+  const group = randomUUID();
+  await pool.query(
+    `INSERT INTO ledger_entries (entry_group_id, merchant_id, transaction_id, account_id, direction, amount_fils, occurred_at, description)
+     VALUES ($1, $2, $3, 'platform_fee_revenue', 'debit', 50, now(), 'capture: negotiated discount adjustment'),
+            ($1, $2, $3, 'merchant_payable', 'credit', 50, now(), 'capture: negotiated discount adjustment')`,
+    [group, merchant.merchantId, txn.id],
+  ); // kept is now 200, but 225 was already given back
+
+  const last = await processRefund(pool, approvingAcquirer, {
+    transactionId: txn.id, merchantId: merchant.merchantId, amountFils: toFils(1_000), idempotencyKey: randomUUID(), actor,
+  });
+  assert.equal(last.statusCode, 200, JSON.stringify(last.body));
+  const refunds = await refundsOf(txn.id);
+  assert.equal(refunds[1]!.fee, 0, "nothing left to reverse; never negative");
+});
+
+test("a refund and a capture of the same transaction are serialised: both land, totals agree", async () => {
+  const merchant = await createApprovedMerchantWithApiKey("refund-vs-capture");
+  const txn = await capturedTransaction(merchant.rawKey, 10_000, 4_000); // captured 4.000 of 10.000
+  const actor = await apiKeyActor(merchant.merchantId);
+  const slow = slowApprovingAcquirer(200);
+
+  const [refundResult, captureRes] = await Promise.all([
+    processRefund(pool, slow, {
+      transactionId: txn.id, merchantId: merchant.merchantId, amountFils: toFils(4_000), idempotencyKey: randomUUID(), actor,
+    }),
+    app.inject({
+      method: "POST", url: `/v1/transactions/${txn.id}/capture`,
+      headers: { authorization: `Bearer ${merchant.rawKey}`, "idempotency-key": randomUUID() },
+      payload: { amountFils: 6_000 },
+    }),
+  ]);
+  assert.equal(refundResult.statusCode, 200, JSON.stringify(refundResult.body));
+  assert.equal(captureRes.statusCode, 200, captureRes.body);
+  const row = await pool.query<{ captured_fils: string; refunded_fils: string }>(
+    `SELECT captured_fils, refunded_fils FROM transactions WHERE id = $1`, [txn.id]);
+  assert.equal(Number(row.rows[0]!.captured_fils), 10_000);
+  assert.equal(Number(row.rows[0]!.refunded_fils), 4_000);
+});

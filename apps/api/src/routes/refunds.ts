@@ -6,7 +6,8 @@ import {
   requireMerchantWriterActor,
 } from "../auth/requireMerchantAuth.js";
 import { UUID_RE } from "../admin/merchants.js";
-import { BadRequestError } from "../lib/errors.js";
+import { AppError, BadRequestError, ForbiddenError } from "../lib/errors.js";
+import type { FastifyRequest } from "fastify";
 import { initiateMerchantRefund } from "../refunds/initiateMerchantRefund.js";
 
 interface CreateRefundBody {
@@ -26,10 +27,22 @@ const MAX_REASON_LENGTH = 255;
  * a "view as merchant" operator cannot move money); an API key has full merchant authority, as for capture.
  * Omitting `amountFils` refunds everything still refundable (captured minus already refunded).
  */
+async function refuseImpersonation(request: FastifyRequest): Promise<void> {
+  if (request.merchantAuth?.actorType === "admin_impersonation") {
+    throw new ForbiddenError("forbidden", "an impersonation grant is read-only");
+  }
+}
+
+async function requireRefundsLive(request: FastifyRequest): Promise<void> {
+  if (!request.server.config.refundsEnabled) {
+    throw new AppError(503, "refunds_disabled", "refunds are not enabled on this deployment");
+  }
+}
+
 export async function refundRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: CreateRefundBody }>(
     "/",
-    { preHandler: [requireMerchantAuth, requireMerchantRole("owner", "finance")] },
+    { preHandler: [requireRefundsLive, requireMerchantAuth, refuseImpersonation, requireMerchantRole("owner", "finance")] },
     async (request, reply) => {
       const header = request.headers["idempotency-key"];
       const idempotencyKey = Array.isArray(header) ? header[0] : header;

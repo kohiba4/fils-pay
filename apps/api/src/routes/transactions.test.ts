@@ -31,6 +31,7 @@ const config = loadConfig({
   ACQUIRER_LATENCY_MIN_MS: "0",
   ACQUIRER_LATENCY_MAX_MS: "1",
   WEBHOOK_SECRET_ENCRYPTION_KEY: "Y1ZTGTcYbe30GZJebys9w7T3OYZNKewuOH3SUCEdRQk=",
+  REFUNDS_ENABLED: "true",
 });
 
 const pool = new Pool({ connectionString: databaseUrl, max: 5 });
