@@ -87,7 +87,8 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 		return SplitPayoutResult{}, err
 	}
 
-	var shares []ChildShare
+	var weights []ChildWeight
+	var childIDs []uuid.UUID
 	for rows.Next() {
 		var childID uuid.UUID
 		var weightBps int64
@@ -95,8 +96,8 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 			rows.Close()
 			return SplitPayoutResult{}, err
 		}
-		share := money.ApplyRateFils(money.Fils(netPayout), weightBps)
-		shares = append(shares, ChildShare{ChildMerchantID: childID, WeightBps: weightBps, AllocatedFils: share})
+		childIDs = append(childIDs, childID)
+		weights = append(weights, ChildWeight{WeightBps: weightBps})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -104,19 +105,38 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 	}
 	rows.Close()
 
-	var totalAllocated money.Fils
+	// A parent whose weights do not sum to 100% must NOT be paid: the old code paid whatever the rounding
+	// gave and silently stranded or invented the difference (AUD-009). The batch stays 'closed'.
+	// A non-positive net (fees above gross) has nothing to pay out, exactly like PayoutBatch.
+	amounts := make([]money.Fils, len(weights))
+	if netPayout > 0 {
+		var err error
+		amounts, err = ChildShares(money.Fils(netPayout), weights)
+		if err != nil {
+			return SplitPayoutResult{}, err
+		}
+	} else if _, err := ChildShares(0, weights); err != nil {
+		return SplitPayoutResult{}, err
+	}
+
+	var shares []ChildShare
+	for i, childID := range childIDs {
+		shares = append(shares, ChildShare{ChildMerchantID: childID, WeightBps: weights[i].WeightBps, AllocatedFils: amounts[i]})
+	}
+
 	for _, s := range shares {
 		if s.AllocatedFils <= 0 {
 			continue // ledger_entries.amount_fils has a CHECK (amount_fils > 0)
 		}
 		groupID := uuid.New()
+		description := "settlement payout: split to sub-merchant " + s.ChildMerchantID.String()
 		_, err = tx.Exec(ctx, `
 			INSERT INTO ledger_entries
 			  (entry_group_id, merchant_id, settlement_batch_id, account_id, direction, amount_fils, occurred_at, description)
 			VALUES
-			  ($1, $2, $3, 'merchant_payable', 'debit',  $4, now(), 'settlement payout: split to sub-merchant'),
-			  ($1, $2, $3, 'platform_cash',    'credit', $4, now(), 'settlement payout: split to sub-merchant')
-		`, groupID, parentMerchantID, batchID, int64(s.AllocatedFils))
+			  ($1, $2, $3, 'merchant_payable', 'debit',  $4, now(), $5),
+			  ($1, $2, $3, 'platform_cash',    'credit', $4, now(), $5)
+		`, groupID, parentMerchantID, batchID, int64(s.AllocatedFils), description)
 		if err != nil {
 			return SplitPayoutResult{}, err
 		}
@@ -128,14 +148,11 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 		if err != nil {
 			return SplitPayoutResult{}, err
 		}
-		totalAllocated += s.AllocatedFils
 	}
 
-	// Bring the parent's cached balance down by what the legs above actually
-	// debited from its merchant_payable account, same as PayoutBatch does
-	// for a non-split merchant.
-	// am: should pass netPayout here not totalAllocated, otherwise the cache drifts from the batch
-	if err := balances.ApplyPayout(ctx, tx, parentMerchantID, batchID, totalAllocated); err != nil {
+	// Bring the parent's cached balance down by the batch net, exactly as PayoutBatch does for a
+	// non-split merchant. The shares sum to the net, so this equals the ledger debit above.
+	if err := balances.ApplyPayout(ctx, tx, parentMerchantID, batchID, money.Fils(netPayout)); err != nil {
 		return SplitPayoutResult{}, err
 	}
 

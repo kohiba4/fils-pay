@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
@@ -451,6 +452,12 @@ func RunDailyBatch(ctx context.Context, db *pgxpool.Pool, businessDate time.Time
 		var alreadyPaid bool
 		if isSplitParent {
 			splitResult, err := splits.PayoutSplitBatch(ctx, db, closeResult.BatchID)
+			if errors.Is(err, splits.ErrInvalidSplitWeights) {
+				// Misconfigured parent: leave its batch 'closed' (unpaid, retried on the next run once the
+				// weights are fixed) rather than abort the whole daily run for every other merchant.
+				log.Printf("settlement: RunDailyBatch: batch %s for split parent %s NOT paid: %v", closeResult.BatchID, merchantID, err)
+				continue
+			}
 			if err != nil {
 				return report, fmt.Errorf("settlement: RunDailyBatch: PayoutSplitBatch(%s): %w", closeResult.BatchID, err)
 			}
