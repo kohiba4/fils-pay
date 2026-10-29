@@ -23,7 +23,7 @@ locking the cache rows up front. `RefreshBalanceCache` and its view-based path w
 
 ## Consequences
 
-- The button and `settlement rebuild-balances` (no flag) share one implementation and agree. (`--merchant` currently only prints, see AUD-049.)
+- The button and `settlement rebuild-balances` share one implementation and agree; `--merchant` is the same code restricted to one merchant and writes that merchant's cache row (AUD-049).
 - Known remaining problem (AUD-048): the incremental cache adds a capture's net at batch CLOSE while the
   ledger counts it at CAPTURE, so a rebuild with unbatched captures is double counted at the next close.
 - Adjust balance stays display-only (ADR-0006): its cache-only corrections are overwritten by a rebuild. Corrections that post ledger legs (credits, CSV adjustment import) survive.
