@@ -12,16 +12,20 @@ import type {
  *
  * Applied immediately on upload: there is no preview or dry-run step.
  */
-// MK: amounts in BD, 2dp
+// Amounts are BD with up to 3 decimals (parsed server-side). The same content twice is a 409
+// `duplicate_import` unless `allowDuplicate` is set (AUD-036).
 export function uploadAdjustmentImport(
   csvContent: string,
   originalFilename?: string,
+  allowDuplicate = false,
 ): Promise<AdjustmentImportResult> {
   return request("/v1/admin/adjustment-imports", {
     method: "POST",
-    body: JSON.stringify(
-      originalFilename === undefined ? { csvContent } : { csvContent, originalFilename },
-    ),
+    body: JSON.stringify({
+      csvContent,
+      ...(originalFilename === undefined ? {} : { originalFilename }),
+      ...(allowDuplicate ? { allowDuplicate: true } : {}),
+    }),
   });
 }
 

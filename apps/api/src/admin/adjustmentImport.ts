@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { addFils, toFils, ZERO_FILS, type Fils } from "@filspay/money";
 import { insertAdminAuditLog } from "../adminAudit/log.js";
 import { withTransaction } from "../db/withTransaction.js";
-import { BadRequestError } from "../lib/errors.js";
+import { BadRequestError, ConflictError } from "../lib/errors.js";
 import { parseAdjustmentAmountFils } from "./adjustmentCsvParsing.js";
 import { postLedgerAdjustment } from "./ledgerAdjustments.js";
 
@@ -18,6 +19,16 @@ export interface AdjustmentImportResult {
   importId: string;
   rowCount: number;
   totalPostedFils: Fils;
+}
+
+/**
+ * Order-independent fingerprint of what an import would post: merchant, parsed integer fils and reason per row.
+ * Filename, spelling of the amount ("4.75" vs "4.750") and id case do not matter (AUD-036).
+ */
+function importFingerprint(rows: AdjustmentImportRow[], amounts: Fils[]): string {
+  // JSON-encoded tuples, so no character in a merchant id or reason can shift fields or merge rows.
+  const lines = rows.map((row, i) => JSON.stringify([row.merchantId.toLowerCase(), amounts[i], (row.reason ?? "").trim()])).sort();
+  return createHash("sha256").update(JSON.stringify(lines)).digest("hex");
 }
 
 async function postAdjustmentToLedgerAndCache(
@@ -45,26 +56,43 @@ async function postAdjustmentToLedgerAndCache(
  */
 export async function applyAdjustmentImport(
   pool: Pool,
-  input: { adminUserId: string; originalFilename: string; rows: AdjustmentImportRow[] },
+  input: { adminUserId: string; originalFilename: string; rows: AdjustmentImportRow[]; allowDuplicate?: boolean },
 ): Promise<AdjustmentImportResult> {
   if (input.rows.length === 0) {
     throw new BadRequestError("empty_import", "the CSV must contain at least one row");
   }
+  // Parse everything up front: a bad row fails before any lock or write, and the fingerprint uses the parsed integers.
+  const parsed = input.rows.map((row) => parseAdjustmentAmountFils(row.amount));
+  const fingerprint = importFingerprint(input.rows, parsed);
 
   return withTransaction(pool, async (client) => {
+    // Serialize submits of the same content so two concurrent requests cannot both pass the check below.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`adjustment_import:${fingerprint}`]);
+    const prior = await client.query<{ id: string; applied_at: string }>(
+      `SELECT id, applied_at::text AS applied_at FROM adjustment_imports WHERE content_sha256 = $1 ORDER BY created_at LIMIT 1`,
+      [fingerprint],
+    );
+    const priorImportId = prior.rows[0]?.id ?? null;
+    if (input.allowDuplicate !== true) {
+      if (prior.rows[0]) {
+        throw new ConflictError(
+          "duplicate_import",
+          `this exact content was already imported as ${prior.rows[0].id} at ${prior.rows[0].applied_at}; resubmit with allowDuplicate=true only if you really mean to post it again`,
+        );
+      }
+    }
     const importRow = await client.query<{ id: string }>(
-      `INSERT INTO adjustment_imports (uploaded_by_admin_user_id, original_filename, row_count)
-       VALUES ($1, $2, $3) RETURNING id`,
-      [input.adminUserId, input.originalFilename, input.rows.length],
+      `INSERT INTO adjustment_imports (uploaded_by_admin_user_id, original_filename, row_count, content_sha256)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [input.adminUserId, input.originalFilename, input.rows.length, fingerprint],
     );
     const importId = importRow.rows[0]!.id;
 
     let total = ZERO_FILS;
-    // FH: claude says nothing here stops the same CSV being applied twice. intended? (asked in #fp-backend 14/8, no answer)
-    // re-upload is blocked by the unique original_filename i think — am
+    // Re-upload protection is the content fingerprint above; there is no unique original_filename (AUD-036).
     for (let i = 0; i < input.rows.length; i++) {
       const row = input.rows[i]!;
-      const amountFils = parseAdjustmentAmountFils(row.amount);
+      const amountFils = parsed[i]!;
       const entryGroupId = await postAdjustmentToLedgerAndCache(client, row.merchantId, amountFils);
 
       await client.query(
@@ -85,6 +113,9 @@ export async function applyAdjustmentImport(
         rowCount: input.rows.length,
         totalPostedFils: total,
         originalFilename: input.originalFilename,
+        contentSha256: fingerprint,
+        // set only when the operator knowingly re-applied content that was already imported
+        ...(input.allowDuplicate === true && priorImportId ? { allowDuplicate: true, priorImportId } : {}),
       },
     });
 

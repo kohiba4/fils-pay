@@ -4,7 +4,7 @@
 
 Sorted by severity. The status text is the first line of each finding's Status field; the verdict is from [TRIAGE.md](TRIAGE.md).
 
-Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 17 fixed or partly fixed)
+Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 18 fixed or partly fixed)
 
 | ID | Title | Severity | Owner | Verdict | Status | Detail |
 |---|---|---|---|---|---|---|
@@ -43,7 +43,7 @@ Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 17 fixed or partly 
 | AUD-032 | Test merchants pushed into real settlement by an admin tool | Medium | B | BUG (traced) | confirmed (trace) | [findings/AUD-032-test-merchants-pushed-into-real-settlement-by-an-admin-tool.md](findings/AUD-032-test-merchants-pushed-into-real-settlement-by-an-admin-tool.md) |
 | AUD-034 | Ledger immutability not enforced | Medium | A | BUG (runtime) | fixed (merged into main; TRUNCATE and the application role's privileges still need an o... | [findings/AUD-034-ledger-immutability-not-enforced.md](findings/AUD-034-ledger-immutability-not-enforced.md) |
 | AUD-035 | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | Deploy (TBD) | BUG (runtime/ops) | confirmed (runtime + read) | [findings/AUD-035-ops-deploy-hazards-missing-dockerfiles-broken-dev-key-prod-m.md](findings/AUD-035-ops-deploy-hazards-missing-dockerfiles-broken-dev-key-prod-m.md) |
-| AUD-036 | Adjustment import has no duplicate-submit protection | Medium | A | BUG (traced) | confirmed (trace) | [findings/AUD-036-adjustment-import-has-no-duplicate-submit-protection.md](findings/AUD-036-adjustment-import-has-no-duplicate-submit-protection.md) |
+| AUD-036 | Adjustment import has no duplicate-submit protection | Medium | A | BUG (traced) | fixed (branch fix/AUD-036-import-duplicate-guard) | [findings/AUD-036-adjustment-import-has-no-duplicate-submit-protection.md](findings/AUD-036-adjustment-import-has-no-duplicate-submit-protection.md) |
 | AUD-038 | Admin API-key rotation never revokes the old key | Medium | B | BUG (traced) | confirmed (trace) | [findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md](findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md) |
 | AUD-039 | Second-approver check on credits compares display names | Medium | B | UNVERIFIED | suspected | [findings/AUD-039-second-approver-check-on-credits-compares-display-names.md](findings/AUD-039-second-approver-check-on-credits-compares-display-names.md) |
 | AUD-041 | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | B | UNVERIFIED | suspected (runtime failure, cause not yet traced) | [findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md](findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md) |
