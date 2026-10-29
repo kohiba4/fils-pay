@@ -53,8 +53,12 @@ func TestRunDailyBatch_SkipsAParentWithInvalidSplitWeights(t *testing.T) {
 	start, _ := BusinessDayWindow(date)
 	insertCaptureEvent(t, pool, parent, 250, 50_000, start.Add(time.Hour))
 
-	if _, err := RunDailyBatch(ctx, pool, date, &parent); err != nil {
+	report, err := RunDailyBatch(ctx, pool, date, &parent)
+	if err != nil {
 		t.Fatalf("RunDailyBatch aborted on an invalid split config: %v", err)
+	}
+	if len(report.Skipped) != 1 || report.Skipped[0].MerchantID != parent {
+		t.Errorf("report.Skipped = %+v, want the invalid parent listed so it is not silently dropped", report.Skipped)
 	}
 	var status string
 	_ = pool.QueryRow(ctx, `SELECT status FROM settlement_batches WHERE merchant_id = $1 AND batch_date = $2`, parent, date).Scan(&status)
@@ -82,5 +86,21 @@ func TestSplitPayout_PaysExactlyNetAndReducesCacheByNet(t *testing.T) {
 	_ = pool.QueryRow(ctx, `SELECT cached_payable_fils FROM merchant_balances WHERE merchant_id=$1`, parent).Scan(&cache)
 	if debited != net || allocated != net || cache != 5000-net {
 		t.Errorf("net=%d: ledger debited %d, children allocated %d, cache %d (want %d)", net, debited, allocated, cache, 5000-net)
+	}
+}
+
+// A child whose share rounds to 0 fils still gets its audit row (no ledger legs: amount_fils > 0 CHECK).
+func TestSplitPayout_ZeroShareChildKeepsAnAuditRow(t *testing.T) {
+	pool := mustPool(t)
+	ctx := context.Background()
+	parent := splitParent(t, []int64{5000, 5000})
+	batchID := insertBatch(t, pool, parent, time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC), "closed", 1) // 1 fil: one child gets it, one gets 0
+	if _, err := splits.PayoutSplitBatch(ctx, pool, batchID); err != nil {
+		t.Fatal(err)
+	}
+	var rows, total int64
+	_ = pool.QueryRow(ctx, `SELECT count(*), COALESCE(SUM(allocated_fils),0) FROM settlement_batch_splits WHERE settlement_batch_id = $1`, batchID).Scan(&rows, &total)
+	if rows != 2 || total != 1 {
+		t.Errorf("settlement_batch_splits rows = %d (want 2), allocated total = %d (want 1)", rows, total)
 	}
 }

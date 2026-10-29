@@ -125,20 +125,21 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 	}
 
 	for _, s := range shares {
-		if s.AllocatedFils <= 0 {
-			continue // ledger_entries.amount_fils has a CHECK (amount_fils > 0)
-		}
-		groupID := uuid.New()
-		description := "settlement payout: split to sub-merchant " + s.ChildMerchantID.String()
-		_, err = tx.Exec(ctx, `
-			INSERT INTO ledger_entries
-			  (entry_group_id, merchant_id, settlement_batch_id, account_id, direction, amount_fils, occurred_at, description)
-			VALUES
-			  ($1, $2, $3, 'merchant_payable', 'debit',  $4, now(), $5),
-			  ($1, $2, $3, 'platform_cash',    'credit', $4, now(), $5)
-		`, groupID, parentMerchantID, batchID, int64(s.AllocatedFils), description)
-		if err != nil {
-			return SplitPayoutResult{}, err
+		// ledger_entries.amount_fils has a CHECK (amount_fils > 0), so a zero share posts no legs, but
+		// the child still gets its settlement_batch_splits row so the per-child record is complete.
+		if s.AllocatedFils > 0 {
+			groupID := uuid.New()
+			description := "settlement payout: split to sub-merchant " + s.ChildMerchantID.String()
+			_, err = tx.Exec(ctx, `
+				INSERT INTO ledger_entries
+				  (entry_group_id, merchant_id, settlement_batch_id, account_id, direction, amount_fils, occurred_at, description)
+				VALUES
+				  ($1, $2, $3, 'merchant_payable', 'debit',  $4, now(), $5),
+				  ($1, $2, $3, 'platform_cash',    'credit', $4, now(), $5)
+			`, groupID, parentMerchantID, batchID, int64(s.AllocatedFils), description)
+			if err != nil {
+				return SplitPayoutResult{}, err
+			}
 		}
 
 		_, err = tx.Exec(ctx, `

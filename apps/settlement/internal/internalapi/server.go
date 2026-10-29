@@ -67,6 +67,14 @@ type merchantBatchOutcomeResponse struct {
 type runBatchResponse struct {
 	BusinessDate    string                         `json:"businessDate"`
 	MerchantResults []merchantBatchOutcomeResponse `json:"merchantResults"`
+	// Skipped lists closed-but-unpaid batches (additive field, AUD-009).
+	Skipped []skippedBatchResponse `json:"skipped"`
+}
+
+type skippedBatchResponse struct {
+	MerchantID string `json:"merchantId"`
+	BatchID    string `json:"batchId"`
+	Reason     string `json:"reason"`
 }
 
 // rebuildDiffResponse is the JSON projection of ledger.RebuildDiff.
@@ -254,9 +262,15 @@ func handleRunBatch(pool *pgxpool.Pool) http.Handler {
 			})
 		}
 
+		skipped := make([]skippedBatchResponse, 0, len(report.Skipped))
+		for _, sk := range report.Skipped {
+			skipped = append(skipped, skippedBatchResponse{MerchantID: sk.MerchantID.String(), BatchID: sk.BatchID.String(), Reason: sk.Reason})
+		}
+
 		writeJSON(w, http.StatusOK, runBatchResponse{
 			BusinessDate:    report.BusinessDate.Format(businessDateLayout),
 			MerchantResults: results,
+			Skipped:         skipped,
 		})
 	})
 }
