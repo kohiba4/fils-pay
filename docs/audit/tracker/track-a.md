@@ -27,6 +27,6 @@ Owner: the user + their agent. Updated with each fix; Track B does not edit this
 | 20 | AUD-049 | `rebuild-balances --merchant` writes the cache | merged (PR #19) |
 | 21 | AUD-036 | CSV import duplicate guard (migration 0077, Q12) | merged (PR #20) |
 | 22 | AUD-033 | payout estimate integer BIGINT (migration 0078) | merged (PR #21) |
-| 24 | FP-300 refunds | plan in [FP-300-PLAN.md](../FP-300-PLAN.md): PR1 route+core, PR2 settlement, PR3 webhook/reporting, PR4 web | plan in review; PR1 next |
+| 24 | FP-300 refunds | plan in [FP-300-PLAN.md](../FP-300-PLAN.md): PR1 route+core (AUD-003/004/005/027/029, migration 0090), PR2 settlement (AUD-054), PR3 webhook/reporting (AUD-028/030), PR4 web | PR1 in review (branch `feat/FP-300-refund-core`); new finding AUD-053 (dispatcher starvation) handed to Track B |
 | 23 | AUD-045, 050 | remaining small Track A items (050 waits for a finance decision) | todo |
 | - | open question | adjustments (MDR recalc on paid batches, credits, imports) never reach a payout instruction | needs a finance decision |

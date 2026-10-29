@@ -478,3 +478,157 @@ test("unknown transaction ids answer 404", async () => {
   assert.equal(result.statusCode, 404);
   assert.deepEqual(result.body, { error: "transaction_not_found" });
 });
+
+// ---------------------------------------------------------------------------
+// FP-300 / AUD-003, 004, 005, 029: ownership, ceiling, concurrency, fee reversal.
+// ---------------------------------------------------------------------------
+
+/** An acquirer that approves after a delay, so concurrent refunds really overlap. */
+function slowApprovingAcquirer(delayMs: number): AcquirerSimulator {
+  return {
+    authorize() {
+      throw new Error("not used");
+    },
+    capture() {
+      throw new Error("not used");
+    },
+    async refund(req): Promise<AcquirerRefundResult> {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return { outcome: "approved", acquirerReference: req.acquirerReference, latencyMs: delayMs };
+    },
+  };
+}
+
+async function refundsOf(transactionId: string) {
+  const r = await pool.query<{ amount_fils: string; fee_reversed_fils: string }>(
+    `SELECT amount_fils, fee_reversed_fils FROM refunds WHERE transaction_id = $1 AND status = 'succeeded' ORDER BY occurred_at, id`,
+    [transactionId],
+  );
+  return r.rows.map((row) => ({ amount: Number(row.amount_fils), fee: Number(row.fee_reversed_fils) }));
+}
+
+test("AUD-005: the ceiling is captured minus refunded, not authorized minus refunded", async () => {
+  const merchant = await createApprovedMerchantWithApiKey("ceiling");
+  const txn = await capturedTransaction(merchant.rawKey, 10_000, 4_000); // authorize 10.000, capture 4.000
+  const actor = await apiKeyActor(merchant.merchantId);
+
+  const tooMuch = await processRefund(pool, approvingAcquirer, {
+    transactionId: txn.id,
+    merchantId: merchant.merchantId,
+    amountFils: toFils(5_000),
+    idempotencyKey: randomUUID(),
+    actor,
+  });
+  assert.equal(tooMuch.statusCode, 422, JSON.stringify(tooMuch.body));
+  assert.deepEqual(tooMuch.body, { ok: false, code: "refund_exceeds_refundable", refundableFils: 4_000 });
+  assert.deepEqual(await refundsOf(txn.id), []);
+
+  const exact = await processRefund(pool, approvingAcquirer, {
+    transactionId: txn.id,
+    merchantId: merchant.merchantId,
+    idempotencyKey: randomUUID(), // amount omitted: everything still refundable
+    actor,
+  });
+  assert.equal(exact.statusCode, 200, JSON.stringify(exact.body));
+  assert.equal((await refundsOf(txn.id))[0]!.amount, 4_000);
+});
+
+test("AUD-003: another merchant's transaction is a 404 and nothing is refunded", async () => {
+  const owner = await createApprovedMerchantWithApiKey("owner-a");
+  const attacker = await createApprovedMerchantWithApiKey("attacker-b");
+  const txn = await capturedTransaction(owner.rawKey, 10_000);
+
+  const result = await processRefund(pool, approvingAcquirer, {
+    transactionId: txn.id,
+    merchantId: attacker.merchantId, // the caller's own merchant, from its authentication
+    amountFils: toFils(10_000),
+    idempotencyKey: randomUUID(),
+    actor: await apiKeyActor(attacker.merchantId),
+  });
+  assert.equal(result.statusCode, 404, JSON.stringify(result.body));
+  assert.deepEqual(await refundsOf(txn.id), []);
+  const row = await pool.query<{ refunded_fils: string }>(`SELECT refunded_fils FROM transactions WHERE id = $1`, [txn.id]);
+  assert.equal(Number(row.rows[0]!.refunded_fils), 0);
+});
+
+test("AUD-004: two simultaneous refunds cannot both succeed past the captured amount", async () => {
+  const merchant = await createApprovedMerchantWithApiKey("race");
+  const txn = await capturedTransaction(merchant.rawKey, 10_000);
+  const actor = await apiKeyActor(merchant.merchantId);
+  const slow = slowApprovingAcquirer(150);
+
+  const results = await Promise.all(
+    [0, 1].map(() =>
+      processRefund(pool, slow, {
+        transactionId: txn.id,
+        merchantId: merchant.merchantId,
+        amountFils: toFils(6_000),
+        idempotencyKey: randomUUID(),
+        actor,
+      }),
+    ),
+  );
+  assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 422], JSON.stringify(results));
+  const row = await pool.query<{ refunded_fils: string }>(`SELECT refunded_fils FROM transactions WHERE id = $1`, [txn.id]);
+  assert.equal(Number(row.rows[0]!.refunded_fils), 6_000);
+  assert.equal((await refundsOf(txn.id)).reduce((sum, r) => sum + r.amount, 0), 6_000);
+});
+
+test("a negotiated discount lowers the fee that a refund gives back (it reverses what was kept)", async () => {
+  const merchant = await createApprovedMerchantWithApiKey("discount", 250);
+  await pool.query(`UPDATE merchants SET negotiated_discount_bps = 2000 WHERE id = $1`, [merchant.merchantId]);
+  const txn = await capturedTransaction(merchant.rawKey, 10_000); // fee 250 less 20% = 200 kept (tier bonus is 0 in tests)
+  const actor = await apiKeyActor(merchant.merchantId);
+
+  const kept = await pool.query<{ net: string }>(
+    `SELECT COALESCE(SUM(CASE direction WHEN 'credit' THEN amount_fils ELSE -amount_fils END), 0)::text AS net
+       FROM ledger_entries WHERE transaction_id = $1 AND account_id = 'platform_fee_revenue'`,
+    [txn.id],
+  );
+  assert.equal(Number(kept.rows[0]!.net), 200, "fee kept after the discount");
+
+  const result = await processRefund(pool, approvingAcquirer, {
+    transactionId: txn.id,
+    merchantId: merchant.merchantId,
+    idempotencyKey: randomUUID(),
+    actor,
+  });
+  assert.equal(result.statusCode, 200, JSON.stringify(result.body));
+  assert.deepEqual(await refundsOf(txn.id), [{ amount: 10_000, fee: 200 }]);
+
+  const after = await pool.query<{ net: string }>(
+    `SELECT COALESCE(SUM(CASE direction WHEN 'credit' THEN amount_fils ELSE -amount_fils END), 0)::text AS net
+       FROM ledger_entries WHERE transaction_id = $1 AND account_id = 'platform_fee_revenue'`,
+    [txn.id],
+  );
+  assert.equal(Number(after.rows[0]!.net), 0, "a full refund leaves no fee revenue on the transaction, and never negative");
+});
+
+test("AUD-029: partial refunds never reverse more fee than was kept, and a full refund reverses all of it", async () => {
+  // captured 3 fils at 66.67% -> fee 2; three refunds of 1 each round to 1 fil of fee each (3 > 2).
+  const over = await createApprovedMerchantWithApiKey("fee-over", 6_667);
+  const t1 = await capturedTransaction(over.rawKey, 3);
+  const actor1 = await apiKeyActor(over.merchantId);
+  for (let i = 0; i < 3; i++) {
+    const r = await processRefund(pool, approvingAcquirer, {
+      transactionId: t1.id, merchantId: over.merchantId, amountFils: toFils(1), idempotencyKey: randomUUID(), actor: actor1,
+    });
+    assert.equal(r.statusCode, 200, JSON.stringify(r.body));
+  }
+  const feeCharged1 = 2;
+  assert.equal((await refundsOf(t1.id)).reduce((s, r) => s + r.fee, 0), feeCharged1);
+
+  // captured 7 fils at 25% -> fee 2; seven refunds of 1 each round DOWN to 0 (nothing reversed): the last one catches up.
+  const under = await createApprovedMerchantWithApiKey("fee-under", 2_500);
+  const t2 = await capturedTransaction(under.rawKey, 7);
+  const actor2 = await apiKeyActor(under.merchantId);
+  for (let i = 0; i < 7; i++) {
+    const r = await processRefund(pool, approvingAcquirer, {
+      transactionId: t2.id, merchantId: under.merchantId, amountFils: toFils(1), idempotencyKey: randomUUID(), actor: actor2,
+    });
+    assert.equal(r.statusCode, 200, JSON.stringify(r.body));
+    const soFar = (await refundsOf(t2.id)).reduce((s, x) => s + x.fee, 0);
+    assert.ok(soFar <= 2, `reversed ${soFar} > fee 2 after ${i + 1} refunds`);
+  }
+  assert.equal((await refundsOf(t2.id)).reduce((s, r) => s + r.fee, 0), 2);
+});

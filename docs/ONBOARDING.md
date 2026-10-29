@@ -61,12 +61,12 @@ already exists:
 
 | Piece | Where | State |
 |---|---|---|
-| Route | `POST /v1/refunds` (`apps/api/src/routes/refunds.ts`) | stub, returns `501` |
-| Core helper | `apps/api/src/payments/processRefund.ts` | complete, tested |
+| Route | `POST /v1/refunds` (`apps/api/src/routes/refunds.ts`) | live since FP-300 PR 1 *(audit note: was a 501 stub)* |
+| Core helper | `apps/api/src/payments/processRefund.ts` | rewritten in FP-300 PR 1 *(audit note: the original was not complete: AUD-003/004/005/027/029)* |
 | Validation / status | `refundValidation.ts`, `refundState.ts` | complete, tested |
-| Fee reversal | `calculateRefundFee()` in `packages/money` | complete |
+| Fee reversal | `calculateRefundFee()` in `packages/money` | per-refund share kept; the total is now clamped to the fee kept (AUD-029) |
 | Schema | `refunds` (0042), `transactions.refunded_fils` (0043), event types (0044) | migrated |
-| Settlement | batch reopen in `apps/settlement` | to do |
+| Settlement | refunds reduce the next batch (not a reopen of closed or paid batches: AUD-014) | to do, FP-300 PR 2 (AUD-054) |
 | Webhook | add `refund.succeeded` to the eligible list in `dispatcher.ts` | to do |
 | UI | `apps/web/src/pages/transactions/RefundDrawer.tsx` | parked (commented out) |
 
