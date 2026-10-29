@@ -2137,6 +2137,9 @@ index, because finance may legitimately repeat an identical file (recurring mont
 advisory lock so two concurrent submits cannot both pass. Alternative rejected: "any identical file within N hours"
 (arbitrary window). Needs finance to confirm that a repeat should require the explicit override.
 
+## Q13-Q15 (FP-300 refunds) — see docs/audit/FP-300-PLAN.md
+Q13 (how a refund reaches a payout, negative net) **needs finance** before go-live; Q14 (concurrency) decided: row lock held across the acquirer call, like capture; Q15 (summary view) decided: plain view. Fee reversal keeps the finance-approved per-refund rounding and adds a clamp so the total never exceeds the fee charged.
+
 
 ## 6. Ruled out (checked and found fine)
 
