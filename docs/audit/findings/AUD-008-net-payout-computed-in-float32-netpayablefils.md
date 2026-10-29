@@ -5,8 +5,8 @@
 | Owner | A |
 | Severity | **Critical** |
 | Category | money / float |
-| Status | confirmed (runtime) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **fixed** (branch `fix/AUD-008-net-payout-integer`, pending merge) |
+| Fix commit | see `git log fix/AUD-008-net-payout-integer` (fix(settlement) commit) |
 
 ## Summary
 Net payout computed in float32 (`NetPayableFils`).
@@ -27,11 +27,20 @@ Trace + numeric check (scratchpad): 729 simulated batches, gross 1,000–900,000
 ## Impact
 Bank payout and `net_payout_fils` differ from gross−fee for large batches; ledger payout legs inherit it → payable drift.
 
-## Fix (proposed)
-`return grossFils - feeFils`.
+## Fix (applied)
+`NetPayableFils` is now `grossFils - feeFils` (pure int64). Only caller: `CloseBatch` (batch.go:219). Test: `TestRepro_AUD008_NetPayableFilsIsExactIntegerSubtraction` (written first, failed with up to 14 fils error; passes). Tests changed: none.
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- Sibling net derivations: `RecalculateMDR` already used integer `gross - newFee`; API reconciliation (`settlement/query.ts`) only sums stored `net_payout_fils`; no other float net found. Remaining floats are separate findings: `SchemeAmountBD` (AUD-010), payout estimate (AUD-033).
+- The stored `net_payout_fils` of batches closed BEFORE this fix may be off by a few fils for large batches; finance should compare historical batches `net_payout_fils` vs `gross_fils - fee_fils` (query in the finding body) — no automatic data repair was run.
+- Test-isolation note: `go test ./...` runs packages in parallel against one DB; two tests that rewrite every merchant's cache can clobber each other intermittently. Use `go test -p 1 ./...` (4 serial runs: only the other findings' intentional repros fail).
 
 ## Related
 AUD-016, AUD-033
+
+## Data check for finance (read-only)
+```sql
+SELECT id, merchant_id, batch_date, gross_fils, fee_fils, net_payout_fils,
+       net_payout_fils - (gross_fils - fee_fils) AS diff_fils
+FROM settlement_batches WHERE status IN ('closed','paid') AND net_payout_fils <> gross_fils - fee_fils;
+```

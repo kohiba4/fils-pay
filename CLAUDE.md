@@ -59,7 +59,7 @@ Report to the user: what was wrong / why / what it breaks, plus any test changed
 |---|---|---|
 | 1 | AUD-026 broken migrations 0054/0055 | in progress |
 | 2 | AUD-008 float32 net payout | queued |
-| 3 | AUD-011 expire_holds deletes all | queued |
+| 3 | AUD-011 expire_holds deletes all | next |
 | 4 | AUD-012 CSV import (+036) | queued |
 | 5 | AUD-015 rebuild button source | queued |
 | 6 | AUD-010 scheme amount rounding | queued |
@@ -79,4 +79,4 @@ Repro tests: branch `a/phase1-repros` (merged into `main`); each lands with its 
 Env: `. /tmp/claude-1000/-home-weed/8fde90f5-7b75-4a51-a99f-1b20c2a21d51/scratchpad/env.sh`
 (DATABASE_URL + throwaway WEBHOOK_SECRET_ENCRYPTION_KEY). Remotes: `mine` = team repo, `origin` = challenge repo.
 Baseline before fixes: api 350/362 (11 refund + 1 jitter, not ours), reporting 7/11 (B), money 40/40,
-events 4/4, web 8/8, scripts 5/5, Go all ok; plus 8 intentional repro failures from a/phase1-repros.
+events 4/4, web 8/8, scripts 5/5, Go all ok. Run Go as `go test -p 1 ./...` (shared DB; parallel packages clobber global cache tests); plus 8 intentional repro failures from a/phase1-repros.
