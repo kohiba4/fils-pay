@@ -103,7 +103,9 @@ func runIfDue(ctx context.Context, db *pgxpool.Pool, runDelayMinutes int) {
 	// like RunDailyBatch above. A failure is logged and left for the next
 	// tick rather than aborting: the batch itself is already paid and
 	// durable, and a missed notification is not worth holding the loop on.
-	// FH: double settlement.paid if the CLI overlaps -- resolved, see FP-260
+	// The daemon and `run-batch` both call this; they can overlap, and the insert is the claim (unique index
+	// uq_outbox_settlement_paid_per_batch, migration 0075), so at most one settlement.paid event is enqueued per batch
+	// (AUD-018). The earlier note here claimed this was already resolved by FP-260; it was not.
 	enqueued, err := settlement.EnqueuePayoutNotifications(ctx, db)
 	if err != nil {
 		log.Printf("settlement daemon: EnqueuePayoutNotifications failed: %v", err)
