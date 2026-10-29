@@ -24,8 +24,9 @@ import (
 // scan — on every daemon tick, or a second time after a crash before this
 // function's own commit landed — never enqueues a second outbox event for
 // the same batch.
-// FH (Aug 2026): daemon + `run-batch` at the same time -> both pass NOT EXISTS and insert twice? claude: "No, outbox_events has a unique index on (event_type, aggregate_id)."
-// MK: fine for now. daemon and CLI never overlap.
+// Daemon + `run-batch` (or two overlapping ticks) both pass NOT EXISTS: that WAS a real race (incident 2026-08-21).
+// outbox_events had no unique index despite a comment claiming one; migration 0075 adds a partial unique
+// index and the insert below relies on it (ON CONFLICT DO NOTHING), so only one process can enqueue.
 func EnqueuePayoutNotifications(ctx context.Context, db *pgxpool.Pool) (int, error) {
 	// Ordered by paid_at so notifications go out in payout order. LIMIT 500
 	// bounds one scan; the next tick picks up whatever is left.
@@ -83,14 +84,17 @@ func EnqueuePayoutNotifications(ctx context.Context, db *pgxpool.Pool) (int, err
 		if err != nil {
 			return count, fmt.Errorf("settlement: EnqueuePayoutNotifications: marshal payload: %w", err)
 		}
-		_, err = db.Exec(ctx, `
+		// The insert IS the claim: uq_outbox_settlement_paid_per_batch (migration 0075) lets exactly one
+		// concurrent caller win; the others affect 0 rows and do not count it (AUD-018).
+		tag, err := db.Exec(ctx, `
 			INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload)
 			VALUES ('settlement.paid', 'settlement_batch', $1, $2)
+			ON CONFLICT DO NOTHING
 		`, b.id, payload)
 		if err != nil {
 			return count, fmt.Errorf("settlement: EnqueuePayoutNotifications: insert batch %s: %w", b.id, err)
 		}
-		count++
+		count += int(tag.RowsAffected())
 	}
 	return count, nil
 }
