@@ -1,4 +1,4 @@
-# Track A tracker (money, settlement, data)
+# Track A tracker (owner: @kohiba4; money, settlement, data)
 
 Owner: the user + their agent. Updated with each fix; Track B does not edit this file. Statuses: `todo` · `in progress (branch)` ·
 `PR #n` · `merged`. Migrations 0073-0079. Fix order approved 2026-10-29.

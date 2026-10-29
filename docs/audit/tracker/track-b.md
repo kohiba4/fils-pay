@@ -1,4 +1,4 @@
-# Track B tracker (teammate: API security + integrations)
+# Track B tracker (owner: @The-Tifo; API security + integrations)
 
 **This file is the live status of Track B. The teammate (and their agent) updates ONLY this file's Status column
 and the finding files for Track B; do not edit track-a.md.** Statuses: `todo` · `in progress (branch)` ·
@@ -39,6 +39,8 @@ Triage verdicts for these items came from reading code; **confirm each with a fa
 | AUD-043 | slow settlement summary query | `EXPLAIN` on `transaction_events` join; index `(transaction_id, event_type)` | todo |
 
 ## Cross-track dependencies (read before touching these files)
+_Track A (@kohiba4) is waiting on @The-Tifo for: **AUD-046** (blocks Track A's AUD-016) and the dispatcher half of **AUD-018**. See the open issue assigned to The-Tifo._
+
 - **`routes/transactions.ts`**: AUD-046 (you) lands first; Track A's AUD-016 (remove the post-commit discount call) rebases on it.
 - **AUD-018 duplicate payout notifications/disbursements** is joint. Track A adds the unique index (migration **0075**, `uq_outbox_settlement_paid_per_batch`) and `ON CONFLICT` claim in the Go daemon; **you** make `apps/api/src/webhooks/dispatcher.ts` / `payoutDisbursement.ts` idempotent (one `settlement_payout_disbursements` row per batch, not per delivery/replay; unique key + `ON CONFLICT DO NOTHING`, migration 0080+). Agree the unique-key name with Track A first.
 - **FP-300 refunds** (Phase 3, after the queue above): you own the `POST /v1/refunds` route + ownership scope (AUD-003), `refund.succeeded` envelope + dispatcher entry (AUD-030), timeline, and the 0070 reason bug (AUD-027); Track A owns ledger legs, settlement adjustment, cumulative fee reversal (AUD-029), the refund summary view (AUD-028) and the concurrency lock (AUD-004).
