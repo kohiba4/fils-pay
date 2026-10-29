@@ -31,6 +31,10 @@ spots are listed in TEAM.md. Work only on branches `fix/AUD-0xx-slug`; never com
 5. Money = integer fils (1 BD = 1000). No float/Number/parseFloat/toFixed on money. Reuse
    `packages/money`; it is correct (ruled-out R-01).
 6. Duplicate logic: after each fix grep every app for sibling implementations of the same rule.
+7. **Some reported "bugs" are NOT bugs** (tip from the user; AUD-037 was one). Before fixing, prove it is a defect:
+   read the executing code (not just the ADR/comment), check ADRs, design docs and the brief for intent, and
+   write the verdict + reasoning in docs/audit/TRIAGE.md. By design / limitation / hygiene → no behaviour
+   change (fix docs only) and say so. A fix to by-design behaviour needs the user's OK.
 
 ## Safety rules
 - Read any script/compose/hook before running it. Run things only against the disposable DB
@@ -63,7 +67,11 @@ Every change that alters code, a finding, a decision, a test or the plan updates
   INDEX.md rows, counts and "Phase / status" in one docs commit; never commit with conflict markers
   (`git grep -n '^<<<<<<<'` before every commit).
 - **Before ending any prompt:** say what docs were updated. If a doc is now wrong and you did not fix it, say so.
-- Keep this file short (< ~100 lines): details belong in the finding files, not here.
+- **Every bug must be report-ready** (the user presents it): finding file states what is wrong, why it happens
+  (root cause) and what it breaks, with proof and fix. After ANY docs change run
+  `python3 -I docs/audit/build_report.py` and commit the regenerated `docs/audit/REPORT.md` (generated; never
+  hand-edit). New finding → add its row to TRIAGE.md or the report shows MISSING.
+- Keep this file short (< ~110 lines): details belong in the finding files, not here.
 
 ## Phase / status
 **Phase 2 (fixing), Track A.** Fix order approved by the user. Decisions Q1–Q9: docs/audit/DECISIONS.md
@@ -85,9 +93,8 @@ Every change that alters code, a finding, a decision, a test or the plan updates
 | 12 | AUD-025, 031, 034, 013, 033, 037, 045 | queued |
 
 ## Key files (docs/audit/)
-INDEX.md (all 47 findings) · findings/ · DECISIONS.md · TEAM.md · PHASE1-TRACK-A.md · CLAIMS.md ·
-INVARIANTS.md · ARCHITECTURE-MAP.md · BASELINE.md · BRIEF.md · ruled-out/ · suspicious/
-Repro tests: branch `a/phase1-repros` (merged into `main`); each lands with its fix.
+REPORT.md (generated, for the presentation) · INDEX.md · TRIAGE.md (is-it-a-bug verdicts) · findings/ · DECISIONS.md ·
+TEAM.md · PHASE1-TRACK-A.md · CLAIMS.md · INVARIANTS.md · ARCHITECTURE-MAP.md · BASELINE.md · BRIEF.md · ruled-out/ · suspicious/
 
 ## Environment / baseline
 Env: `. /tmp/claude-1000/-home-weed/8fde90f5-7b75-4a51-a99f-1b20c2a21d51/scratchpad/env.sh`
