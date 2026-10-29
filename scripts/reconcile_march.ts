@@ -3,10 +3,16 @@
  * One-off March 2026 reconciliation sweep. Finance wants the scheme
  * rounding residue (the gap between what gets journaled at capture and
  * what the scheme export can actually carry at 2 decimal places) written
- * off for March before the books close on it. Run manually, once — see
- * scripts/out/reconcile-2026-03.log for the last real run's output.
+ * off for March before the books close on it.
  *
- * Usage: DATABASE_URL=postgres://... npx tsx scripts/reconcile_march.ts
+ * SAFETY (AUD-013): by default this is a DRY RUN and posts nothing. `--apply` posts, and is idempotent:
+ * a merchant already swept (a ledger leg with SWEEP_DESCRIPTION exists) is skipped, and an advisory lock
+ * serialises concurrent runs, so running it twice no longer doubles the correction (it did, on staging).
+ * DO NOT apply it to production before finance confirms the accounting: it debits merchant_payable, while
+ * ADR-0002 books residue between card_scheme_clearing and scheme_rounding_residue and leaves merchants alone.
+ *
+ * Usage: DATABASE_URL=postgres://... npx tsx scripts/reconcile_march.ts            (dry run)
+ *        DATABASE_URL=postgres://... npx tsx scripts/reconcile_march.ts --apply    (post, once)
  */
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -68,11 +74,23 @@ function groupByMerchant(rows: ResidueRow[]): MerchantResidue[] {
   return [...byMerchant.values()];
 }
 
-// am: re-running is safe, entry_group_id dedupes it
+/** Marks the legs this script posts; also the idempotency key (with the merchant). */
+export const SWEEP_DESCRIPTION = "March 2026 scheme rounding residue sweep — manual recon per finance";
+
+async function alreadySwept(client: Client, merchantId: string): Promise<boolean> {
+  const result = await client.query(
+    `SELECT 1 FROM ledger_entries WHERE merchant_id = $1 AND description = $2 AND account_id = 'scheme_rounding_residue' LIMIT 1`,
+    [merchantId, SWEEP_DESCRIPTION],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+// Idempotency is enforced by alreadySwept() inside the locked transaction in main(), NOT by entry_group_id
+// (that is a fresh random uuid per call, so the old comment claiming it dedupes reruns was false).
 async function postResidueCorrection(client: Client, merchant: MerchantResidue, now: Date): Promise<void> {
   if (merchant.residueFils <= 0) return;
   const entryGroupId = randomUUID();
-  const description = "March 2026 scheme rounding residue sweep — manual recon per finance";
+  const description = SWEEP_DESCRIPTION;
   await client.query(
     `INSERT INTO ledger_entries (entry_group_id, merchant_id, account_id, direction, amount_fils, occurred_at, description)
      VALUES ($1, $2, 'merchant_payable', 'debit', $3, $4, $5),
@@ -103,25 +121,46 @@ async function main(): Promise<void> {
     console.log(`window: ${start.toISOString().slice(0, 10)} .. ${end.toISOString().slice(0, 10)}`);
     console.log("");
 
-    await client.query("BEGIN");
-    try {
+    const apply = process.argv.includes("--apply");
+    let sweptFils = 0;
+    if (!apply) {
       for (const merchant of merchantResidues) {
-        await postResidueCorrection(client, merchant, now);
         console.log(
-          `merchant ${merchant.merchantId}: ${merchant.lineCount} line(s), residue ${formatBhd(toFils(merchant.residueFils))} BD (${merchant.residueFils} fils)`,
+          `merchant ${merchant.merchantId}: ${merchant.lineCount} line(s), residue ${formatBhd(toFils(merchant.residueFils))} BD (${merchant.residueFils} fils) [dry run]`,
         );
       }
-      await client.query("COMMIT");
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
+      console.log("");
+      console.log("DRY RUN: nothing was posted. Re-run with --apply to post (idempotent; see the safety note in this file).");
+    } else {
+      await client.query("BEGIN");
+      try {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('reconcile_march_2026'))");
+        for (const merchant of merchantResidues) {
+          if (await alreadySwept(client, merchant.merchantId)) {
+            console.log(`merchant ${merchant.merchantId}: already swept, skipped`);
+            continue;
+          }
+          await postResidueCorrection(client, merchant, now);
+          sweptFils += merchant.residueFils;
+          console.log(
+            `merchant ${merchant.merchantId}: ${merchant.lineCount} line(s), residue ${formatBhd(toFils(merchant.residueFils))} BD (${merchant.residueFils} fils)`,
+          );
+        }
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      }
     }
 
     console.log("---");
     console.log(`total lines matched: ${rows.length}`);
-    console.log(`total residue swept: ${formatBhd(toFils(totalResidueFils))} BD (${totalResidueFils} fils)`);
-    console.log("");
-    console.log("reconciliation applied successfully");
+    console.log(`total residue found: ${formatBhd(toFils(totalResidueFils))} BD (${totalResidueFils} fils)`);
+    if (apply) {
+      console.log(`total residue posted by this run: ${formatBhd(toFils(sweptFils))} BD (${sweptFils} fils)`);
+      console.log("");
+      console.log("reconciliation applied successfully");
+    }
   } finally {
     await client.end();
   }
