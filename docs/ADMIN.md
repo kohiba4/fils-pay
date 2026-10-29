@@ -105,7 +105,7 @@ deliveries, so any range is fine.
 | | |
 |---|---|
 | Impact | Two merchants received `settlement.paid` twice for the 20 Aug batch; two disbursement records each |
-| Root cause | Reporting worker restarted at 03:01 and replayed NOTIFYs, waking the dispatcher twice for the same outbox rows |
+| Root cause | Reporting worker restarted at 03:01 and replayed NOTIFYs, waking the dispatcher twice for the same outbox rows. *[Audit note 2026-10-29: not supported by the evidence on this page: the two deliveries had different outbox event ids, i.e. two INSERTs, which is what the check-then-insert race in `EnqueuePayoutNotifications` produces (AUD-018, reproduced). Fixed by migration 0075.]* |
 | Why it wasn't caught | Receivers are expected to dedupe on `Webhook-Delivery-Id` |
 | Actions | NOTIFY debounce in apps/reporting (FP-251); ask merchants to dedupe (done) |
 
