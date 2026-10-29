@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **49** (Critical 5, High 20, Medium 16, Low 8); fixed so far: **5**.
+- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **5**.
 - By verdict: BUG 34, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -35,7 +35,6 @@
 | [AUD-026](#aud-026) | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | BUG (runtime) | fixed (branch `fix/AUD-026-fresh-migrate`, pending merge) | A |
 | [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | confirmed (runtime) | FP-300 (shared) |
 | [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | confirmed (trace) | B |
-| [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
@@ -52,6 +51,7 @@
 | [AUD-039](#aud-039) | Second-approver check on credits compares display names | Medium | UNVERIFIED | suspected | B |
 | [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | UNVERIFIED | suspected (runtime failure, cause not yet traced) | B |
 | [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | suspected | B |
+| [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | confirmed (trace) | A |
 | [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation mismatch only, not a code bug | A |
 | [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | suspected | B |
@@ -930,39 +930,6 @@ Add `requireMerchantRole('owner','finance')` to capture, void (and the refund ro
 
 _Source file: [findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md](findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md)_
 
-### AUD-048
-**Cache and ledger define the balance differently: a rebuild is double counted at the next batch close**
-
-- Severity: **High** · Category: money / data integrity · Owner: A
-- Verdict: **BUG (runtime)** (confidence high): Reproduced with a scratch test (cache 195,000 vs ledger 97,500 after rebuild then close). Pre-existing in the CLI; the definitions of 'balance' differ between the incremental cache and the ledger.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
-
-**Where**
-
-apps/settlement/internal/balances/cache.go (`ApplyBatchClose`, `ApplyPayout`), batch.go step 14, ledger/rebuild.go
-
-**Sibling locations checked:** CloseBatch posts no ledger legs; capture.ts posts payable legs at capture; PayoutBatch posts payout legs and reduces the cache; RecalculateMDR and the CSV import update both. The nightly 02:00 refresh in the docs does not exist in code.
-
-**Why it happens (root cause)**
-
-The incremental cache adds a batch's net at CLOSE and subtracts it at PAYOUT, so it means 'settled, not yet paid'. The ledger credits the merchant's payable at CAPTURE, so it means 'captured, not yet paid'. A rebuild sets the cache to the ledger figure, which already contains the captures that are still unbatched; the next close adds their net again and the payout only removes it once.
-
-**What it breaks (impact)**
-
-Merchant dashboard balance is inflated by the amount captured but unbatched at the time of every rebuild, permanently, until the next rebuild. Support's 'Rebuild then Adjust' workflow makes it routine. Makes the rebuild button (fixed in AUD-015) unsafe to use intraday.
-
-**Proof / evidence**
-
-Scratch Go test (not committed; becomes a regression test with the fix): capture 100,000 fils at 2.5% fee. cache/ledger: after capture 0/97,500; after rebuild 97,500/97,500; after CloseBatch 195,000/97,500; after PayoutBatch 97,500/0 (permanent +97,500). Same for the CLI rebuild.
-
-**Fix**
-
-Decision needed on the definition (propose: balance = ledger payable). Options: (A) rebuild subtracts the net of capture events with `settlement_batch_id IS NULL` so it matches the incremental meaning (depends on AUD-016 so close and capture compute the same fee); (B) move the cache increment to capture time and drop it at close (cache == ledger always; touches api capture.ts and the Go close). Recommend (B) after AUD-016.
-
-**Related:** AUD-015, AUD-016, AUD-037, AUD-049
-
-_Source file: [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md)_
-
 ### AUD-019
 **Acquirer callbacks are not deduplicated — FP-201 (reopened)**
 
@@ -1364,6 +1331,41 @@ Set `revoked_at = now(), revoked_reason='rotated'` in the same transaction (or a
 **Related:** —
 
 _Source file: [findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md](findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md)_
+
+### AUD-048
+**Cache and ledger define the balance differently: a rebuild is double counted at the next batch close**
+
+- Severity: **Medium** · Category: money / data integrity · Owner: A
+- Verdict: **BUG (runtime)** (confidence high): Reproduced (cache 195,000 vs ledger 97,500 after rebuild then close); display-only impact, so Medium. Pre-existing in the CLI; the definitions of 'balance' differ between the incremental cache and the ledger.
+- Status: confirmed (runtime; repro committed as `TestRepro_AUD048_*`) · Fix commit: — (not fixed; Phase 2)
+
+**Where**
+
+apps/settlement/internal/balances/cache.go (`ApplyBatchClose`, `ApplyPayout`), batch.go step 14, ledger/rebuild.go
+
+**Sibling locations checked:** CloseBatch posts no ledger legs; capture.ts posts payable legs at capture; PayoutBatch posts payout legs and reduces the cache; RecalculateMDR and the CSV import update both. The nightly 02:00 refresh in the docs does not exist in code.
+
+**Why it happens (root cause)**
+
+The incremental cache adds a batch's net at CLOSE and subtracts it at PAYOUT, so it means 'settled, not yet paid'. The ledger credits the merchant's payable at CAPTURE, so it means 'captured, not yet paid'. A rebuild sets the cache to the ledger figure, which already contains the captures that are still unbatched; the next close adds their net again and the payout only removes it once.
+
+**What it breaks (impact)**
+
+_Severity lowered High to Medium after independent review: the cache only feeds the merchant dashboard (apps/api/src/admin/merchants.ts) and payout amounts come from `settlement_batches.net_payout_fils`, so this is a wrong DISPLAYED balance, not a wrong payment._
+
+The displayed balance is inflated by the amount captured but unbatched at the moment of each rebuild; after that day's payout the extra stays until the next rebuild corrects it (and a rebuild during the next trading day re-inflates it). Support's 'Rebuild then Adjust' workflow makes it routine, so the rebuild button is not safe to use intraday. Also not covered by any cache writer: refunds post ledger legs but never touch the cache (processRefund.ts), so once refunds go live the cache drifts from the ledger even without a rebuild.
+
+**Proof / evidence**
+
+Scratch Go test (not committed; becomes a regression test with the fix): capture 100,000 fils at 2.5% fee. cache/ledger: after capture 0/97,500; after rebuild 97,500/97,500; after CloseBatch 195,000/97,500; after PayoutBatch 97,500/0 (the +97,500 stays until the next rebuild). Same for the CLI rebuild.
+
+**Fix**
+
+Decision needed on the definition (propose: balance = ledger payable). Options: (A) rebuild subtracts the net of capture events with `settlement_batch_id IS NULL` so it matches the incremental meaning (depends on AUD-016 so close and capture compute the same fee); (B) move the cache increment to capture time and drop it at close (cache == ledger always; touches api capture.ts and the Go close). Recommend (B) after AUD-016.
+
+**Related:** AUD-015, AUD-016, AUD-037, AUD-049
+
+_Source file: [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md)_
 
 ### AUD-033
 **Lifetime payout estimate is float32/REAL (drifts)**

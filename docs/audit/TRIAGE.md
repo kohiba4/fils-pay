@@ -59,5 +59,5 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-045 | HYGIENE | high | Dev seed prints keys; the SQL dump is harmless (no PII). |
 | AUD-046 | BUG (traced) | high | No role gate on capture/void; MK's "enforced in requireMerchantAuth" comment is false. |
 | AUD-047 | BUG (traced, low) | high | Route lacks the auth hook (fails closed with a 500). |
-| AUD-048 | BUG (runtime) | high | Reproduced with a scratch test (cache 195,000 vs ledger 97,500 after rebuild then close). Pre-existing in the CLI; the definitions of 'balance' differ between the incremental cache and the ledger. |
+| AUD-048 | BUG (runtime) | high | Reproduced (cache 195,000 vs ledger 97,500 after rebuild then close); display-only impact, so Medium. Pre-existing in the CLI; the definitions of 'balance' differ between the incremental cache and the ledger. |
 | AUD-049 | BUG (traced) | high | The --merchant path only reads; the comment and RUNBOOK claim it writes. |

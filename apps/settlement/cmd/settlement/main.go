@@ -136,8 +136,8 @@ func main() {
 		}
 		fmt.Printf("run-batch: enqueued %d settlement.paid event(s)\n", enqueued)
 
-	// YA: CLI rebuild goes from ledger_entries. the admin button goes somewhere else, see internalapi
-	// MK: same thing, different source. both fine.
+	// The CLI and the admin console button now share ledger.RebuildAllBalances (ADR-0007, AUD-015).
+	// NOTE: the --merchant path below only READS and prints; it does not write the cache (AUD-049).
 	case "rebuild-balances":
 		fs := flag.NewFlagSet("rebuild-balances", flag.ExitOnError)
 		merchantFlag := fs.String("merchant", "", "merchant UUID (optional; omit to rebuild every merchant)")

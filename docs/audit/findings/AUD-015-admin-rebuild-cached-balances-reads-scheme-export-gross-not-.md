@@ -41,5 +41,11 @@ Every press corrupts every merchant's displayed balance; support then 'Adjusts' 
 - **Important side effect found while re-attacking: AUD-048.** The cache (incremental, adds net at batch close) and the ledger (counts at capture) define the balance differently; after ANY ledger rebuild (button or CLI) the next close double counts the unbatched captures. Measured: after capture cache 0 / ledger 97,500; after rebuild 97,500 / 97,500; after CloseBatch 195,000 / 97,500; after PayoutBatch 97,500 / 0. The brief wants button = CLI, and the CLI already had this property, so it is delivered as asked, but the rebuild is not safe to run intraday until AUD-048 is fixed. Tell support to treat the rebuilt number as the ledger figure only.
 - Sibling found: `rebuild-balances --merchant` never writes (AUD-049). ADMIN.md still claims a nightly 02:00 recompute that has no scheduler code.
 
+## Review follow-ups (independent reviewer, 2026-10-29; no blocking objections)
+- Added `SET LOCAL lock_timeout = '10s'` to the rebuild: it locks every cache row, so a clash fails fast instead of hanging the console. Known limits, not fixed: (1) a merchant with NO cache row yet is not locked, so a first-ever close racing a rebuild can be overwritten by the ledger figure (same definition mismatch as AUD-048); (2) other writers (CSV import, adjustments) lock merchant rows in file/arbitrary order while the rebuild locks in uuid order, so a deadlock abort of one of them is possible but unlikely; (3) the rebuild holds all cache locks for the duration of one ledger aggregate (every close/payout waits). Real interleavings with CloseBatch/payout/import were traced, not run.
+- Added tests: cache-only merchant rebuilds to 0, negative balance. (Empty-table case cannot be set up on the shared test DB.)
+- Corrected stale comments (ledger/rebuild.go package doc, cmd/settlement/main.go) and the HANDOVER.md line saying no console button exists.
+- ADR-0007 wording tightened (`--merchant` and the credits/import survive-a-rebuild nuance).
+
 ## Related
 ADR-0004, AUD-037

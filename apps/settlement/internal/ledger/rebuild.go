@@ -1,6 +1,8 @@
 // Package ledger rebuilds merchant_balances from ledger_entries. Nothing
-// automatic calls this — the incremental path is in internal/balances.
-// This is for the manual `rebuild-balances` CLI subcommand.
+// runs it automatically — the incremental path is in internal/balances. It is
+// used by the manual `rebuild-balances` CLI subcommand AND by the admin
+// console's "Rebuild cached balances" button (/internal/rebuild-balances),
+// which share RebuildAllBalances (ADR-0007).
 package ledger
 
 import (
@@ -64,6 +66,13 @@ func RebuildAllBalances(ctx context.Context, db *pgxpool.Pool) (map[uuid.UUID]Re
 		return nil, fmt.Errorf("ledger: RebuildAllBalances: begin: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// This transaction locks every cache row, so a clash with a long-running writer (a close, a CSV import
+	// holding rows in another order) must fail fast with an error the admin can retry, not hang the
+	// console or deadlock-abort the other writer unpredictably.
+	if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '10s'`); err != nil {
+		return nil, fmt.Errorf("ledger: RebuildAllBalances: set lock_timeout: %w", err)
+	}
 
 	before := make(map[uuid.UUID]int64)
 	rows, err := tx.Query(ctx, `

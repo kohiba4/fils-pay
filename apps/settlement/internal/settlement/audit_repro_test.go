@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/filspay/settlement/internal/ledger"
 	"github.com/filspay/settlement/internal/money"
 	"github.com/filspay/settlement/internal/splits"
 )
@@ -187,3 +188,28 @@ func TestRepro_AUD009_SplitPayoutAllocatesExactlyTheNet(t *testing.T) {
 }
 
 var _ = uuid.Nil
+
+// AUD-048: after a ledger rebuild, the next batch close must not double count the captures that were
+// still unbatched. Intentionally failing until the cache/ledger definition is reconciled.
+func TestRepro_AUD048_RebuildThenCloseDoesNotDoubleCount(t *testing.T) {
+	pool := mustPool(t)
+	ctx := context.Background()
+	m := insertActiveMerchant(t, pool, 250)
+	date := time.Date(2026, 4, 21, 0, 0, 0, 0, time.UTC)
+	start, _ := BusinessDayWindow(date)
+	insertCaptureEvent(t, pool, m, 250, 100_000, start.Add(time.Hour)) // ledger payable 97,500
+
+	if _, err := ledger.RebuildAllBalances(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	res, err := CloseBatch(ctx, pool, m, date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cache, led int64
+	_ = pool.QueryRow(ctx, `SELECT cached_payable_fils FROM merchant_balances WHERE merchant_id=$1`, m).Scan(&cache)
+	_ = pool.QueryRow(ctx, `SELECT COALESCE(SUM(CASE WHEN direction='credit' THEN amount_fils ELSE -amount_fils END),0) FROM ledger_entries WHERE merchant_id=$1 AND account_id='merchant_payable'`, m).Scan(&led)
+	if cache != led {
+		t.Errorf("after rebuild + close (net %d): cache=%d ledger=%d (cache double counts the closed captures)", res.NetPayoutFils, cache, led)
+	}
+}

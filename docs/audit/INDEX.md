@@ -2,7 +2,7 @@
 
 Sorted by severity. Status vocabulary: `confirmed (trace|runtime)`, `suspected`, `latent` (code exists but is not reachable until FP-300 wires it), `fixed`, `false-positive` (see ruled-out/).
 
-Counts: Critical 5, High 20, Medium 16, Low 8
+Counts: Critical 5, High 19, Medium 17, Low 8
 
 | ID | Title | Severity | Owner | Status | Detail |
 |---|---|---|---|---|---|
@@ -30,7 +30,6 @@ Counts: Critical 5, High 20, Medium 16, Low 8
 | AUD-026 | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | A | fixed (branch fix/AUD-026-fresh-migrate) | [findings/AUD-026-migrations-0054-0055-fail-on-a-fresh-database-and-occupy-num.md](findings/AUD-026-migrations-0054-0055-fail-on-a-fresh-database-and-occupy-num.md) |
 | AUD-027 | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | FP-300 (shared) | confirmed (runtime) | [findings/AUD-027-refund-inserts-violate-the-0070-reason-constraint-refunds-al.md](findings/AUD-027-refund-inserts-violate-the-0070-reason-constraint-refunds-al.md) |
 | AUD-046 | Capture and void have no role gate: support users and impersonating admins can move money | High | B | confirmed (trace) | [findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md](findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md) |
-| AUD-048 | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | High | A | confirmed (runtime) | [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md) |
 | AUD-019 | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | B | confirmed (trace) | [findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md](findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md) |
 | AUD-023 | OTP: Math.random codes and racy attempt limit | Medium | B | confirmed (trace) | [findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md](findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md) |
 | AUD-024 | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | B | confirmed (trace) — doc conflict | [findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md](findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md) |
@@ -47,6 +46,7 @@ Counts: Critical 5, High 20, Medium 16, Low 8
 | AUD-039 | Second-approver check on credits compares display names | Medium | B | suspected | [findings/AUD-039-second-approver-check-on-credits-compares-display-names.md](findings/AUD-039-second-approver-check-on-credits-compares-display-names.md) |
 | AUD-041 | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | B | suspected (runtime failure, cause not yet traced) | [findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md](findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md) |
 | AUD-042 | Unbounded memory in exports/archives (large export DoS) | Medium | B | suspected | [findings/AUD-042-unbounded-memory-in-exports-archives-large-export-dos.md](findings/AUD-042-unbounded-memory-in-exports-archives-large-export-dos.md) |
+| AUD-048 | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | A | confirmed (runtime) | [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md) |
 | AUD-033 | Lifetime payout estimate is float32/REAL (drifts) | Low | A | confirmed (trace) | [findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md](findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.md) |
 | AUD-037 | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | A | by design (ADR-0006), docs mismatch only | [findings/AUD-037-adjust-balance-writes-the-cache-only-docs-disagree.md](findings/AUD-037-adjust-balance-writes-the-cache-only-docs-disagree.md) |
 | AUD-040 | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | B | suspected | [findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md](findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md) |

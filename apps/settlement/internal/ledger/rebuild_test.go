@@ -180,3 +180,38 @@ func TestRebuildAllBalances_ConcurrentRunsDoNotDeadlock(t *testing.T) {
 		}
 	}
 }
+
+// Review follow-up (AUD-015): a merchant that has a cache row but no merchant_payable ledger rows
+// rebuilds to 0, and a negative ledger balance is preserved (signed sum).
+func TestRebuildAllBalances_CacheOnlyMerchantBecomesZero(t *testing.T) {
+	pool := mustPool(t)
+	m := insertActiveMerchant(t, pool)
+	if _, err := pool.Exec(context.Background(), `INSERT INTO merchant_balances (merchant_id, cached_payable_fils, updated_at) VALUES ($1, 4242, now())`, m); err != nil {
+		t.Fatal(err)
+	}
+	diffs, err := RebuildAllBalances(context.Background(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok := diffs[m]
+	if !ok || d.CachedBefore != 4242 || d.Rebuilt != 0 || !d.Changed() {
+		t.Fatalf("diff = %+v (present=%v), want before 4242 after 0 changed", d, ok)
+	}
+}
+
+func TestRebuildAllBalances_NegativeBalanceIsPreserved(t *testing.T) {
+	pool := mustPool(t)
+	m := insertActiveMerchant(t, pool)
+	postLedgerLeg(t, pool, m, "debit", 700) // payable debited with no credit: -700
+	diffs, err := RebuildAllBalances(context.Background(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := diffs[m].Rebuilt; got != -700 {
+		t.Fatalf("rebuilt = %d, want -700", got)
+	}
+	var persisted int64
+	if err := pool.QueryRow(context.Background(), `SELECT cached_payable_fils FROM merchant_balances WHERE merchant_id=$1`, m).Scan(&persisted); err != nil || persisted != -700 {
+		t.Fatalf("persisted = %d (err %v), want -700", persisted, err)
+	}
+}
