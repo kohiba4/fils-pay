@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
@@ -379,6 +380,17 @@ func PayoutBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) (Payo
 type DailyBatchReport struct {
 	BusinessDate    time.Time
 	MerchantResults []MerchantBatchOutcome
+	// Skipped lists batches that were closed but deliberately NOT paid (today: a split parent whose
+	// child weights do not sum to 10,000 bps). They stay 'closed'; the daemon only retries yesterday,
+	// so after fixing the weights an operator must run `run-batch --date D --merchant M`.
+	Skipped []SkippedBatch
+}
+
+// SkippedBatch is a batch RunDailyBatch closed but did not pay, and why.
+type SkippedBatch struct {
+	MerchantID uuid.UUID
+	BatchID    uuid.UUID
+	Reason     string
 }
 
 // MerchantBatchOutcome is one merchant's CloseBatch+PayoutBatch outcome
@@ -455,6 +467,14 @@ func RunDailyBatch(ctx context.Context, db *pgxpool.Pool, businessDate time.Time
 		var alreadyPaid bool
 		if isSplitParent {
 			splitResult, err := splits.PayoutSplitBatch(ctx, db, closeResult.BatchID)
+			if errors.Is(err, splits.ErrInvalidSplitWeights) {
+				// Misconfigured parent: leave its batch 'closed' (unpaid) rather than abort the whole daily
+				// run for every other merchant, and surface it in the report. NOT retried automatically
+				// once the date has rolled over (see DailyBatchReport.Skipped).
+				log.Printf("settlement: RunDailyBatch: batch %s for split parent %s NOT paid: %v", closeResult.BatchID, merchantID, err)
+				report.Skipped = append(report.Skipped, SkippedBatch{MerchantID: merchantID, BatchID: closeResult.BatchID, Reason: err.Error()})
+				continue
+			}
 			if err != nil {
 				return report, fmt.Errorf("settlement: RunDailyBatch: PayoutSplitBatch(%s): %w", closeResult.BatchID, err)
 			}

@@ -120,6 +120,10 @@ func main() {
 			log.Fatalf("settlement run-batch: %v", err)
 		}
 		fmt.Printf("run-batch: business date %s, %d merchant(s) processed\n", *dateFlag, len(report.MerchantResults))
+		for _, sk := range report.Skipped {
+			fmt.Printf("  !! NOT PAID: merchant=%s batch=%s reason=%s (fix it, then rerun: run-batch --date=%s --merchant=%s)\n",
+				sk.MerchantID, sk.BatchID, sk.Reason, *dateFlag, sk.MerchantID)
+		}
 		for _, r := range report.MerchantResults {
 			fmt.Printf("  merchant=%s batch=%s alreadyClosed=%v alreadyPaid=%v gross=%d fee=%d netPayout=%d\n",
 				r.MerchantID, r.BatchID, r.AlreadyClosed, r.AlreadyPaid, r.GrossFils, r.FeeFils, r.NetPayoutFils)
