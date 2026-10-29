@@ -289,10 +289,19 @@ test("posting the same CSV twice is a 409 duplicate_import; allowDuplicate=true 
   assert.equal((await post(payload)).statusCode, 201);
   const dup = await post({ ...payload, originalFilename: "again.csv" });
   assert.equal(dup.statusCode, 409, dup.body);
-  assert.equal((dup.json() as { code?: string; error?: string }).code ?? (dup.json() as { error?: string }).error, "duplicate_import");
+  assert.equal((dup.json() as { error?: string }).error, "duplicate_import");
   assert.equal((await post({ ...payload, allowDuplicate: "yes" })).statusCode, 400);
-  assert.equal((await post({ ...payload, allowDuplicate: true })).statusCode, 201);
+  const repeat = await post({ ...payload, allowDuplicate: true });
+  assert.equal(repeat.statusCode, 201);
 
   const bal = await pool.query<{ c: string }>(`SELECT cached_payable_fils::text AS c FROM merchant_balances WHERE merchant_id = $1`, [merchantId]);
   assert.equal(Number(bal.rows[0]!.c), 5000);
+
+  // the deliberate repeat is on the audit trail with the import it repeated
+  const audit = await pool.query<{ metadata: { allowDuplicate?: boolean; priorImportId?: string } }>(
+    `SELECT metadata FROM admin_audit_log WHERE action = 'adjustment_import_applied' AND target_id = $1`,
+    [(repeat.json() as { importId: string }).importId],
+  );
+  assert.equal(audit.rows[0]?.metadata.allowDuplicate, true);
+  assert.ok(audit.rows[0]?.metadata.priorImportId, "audit row records the prior import");
 });

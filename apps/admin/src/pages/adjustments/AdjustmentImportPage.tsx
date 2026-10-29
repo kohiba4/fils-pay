@@ -127,7 +127,10 @@ export function AdjustmentImportPage() {
             File name (optional)
             <input
               value={filename}
-              onChange={(e) => setFilename(e.target.value)}
+              onChange={(e) => {
+                setFilename(e.target.value);
+                setDuplicate(false);
+              }}
               placeholder="march-corrections.csv"
             />
           </label>
@@ -135,7 +138,11 @@ export function AdjustmentImportPage() {
             CSV (columns: merchantId, amount, reason)
             <textarea
               value={csvContent}
-              onChange={(e) => setCsvContent(e.target.value)}
+              onChange={(e) => {
+                setCsvContent(e.target.value);
+                // an edited file is new content: the server has not flagged it, so "Import anyway" must not apply to it
+                setDuplicate(false);
+              }}
               rows={8}
               placeholder={CSV_PLACEHOLDER}
               required

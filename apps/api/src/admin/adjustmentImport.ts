@@ -26,8 +26,9 @@ export interface AdjustmentImportResult {
  * Filename, spelling of the amount ("4.75" vs "4.750") and id case do not matter (AUD-036).
  */
 function importFingerprint(rows: AdjustmentImportRow[], amounts: Fils[]): string {
-  const lines = rows.map((row, i) => `${row.merchantId.toLowerCase()}|${amounts[i]}|${(row.reason ?? "").trim()}`).sort();
-  return createHash("sha256").update(lines.join("\n")).digest("hex");
+  // JSON-encoded tuples, so no character in a merchant id or reason can shift fields or merge rows.
+  const lines = rows.map((row, i) => JSON.stringify([row.merchantId.toLowerCase(), amounts[i], (row.reason ?? "").trim()])).sort();
+  return createHash("sha256").update(JSON.stringify(lines)).digest("hex");
 }
 
 async function postAdjustmentToLedgerAndCache(
@@ -67,11 +68,12 @@ export async function applyAdjustmentImport(
   return withTransaction(pool, async (client) => {
     // Serialize submits of the same content so two concurrent requests cannot both pass the check below.
     await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`adjustment_import:${fingerprint}`]);
+    const prior = await client.query<{ id: string; applied_at: string }>(
+      `SELECT id, applied_at::text AS applied_at FROM adjustment_imports WHERE content_sha256 = $1 ORDER BY created_at LIMIT 1`,
+      [fingerprint],
+    );
+    const priorImportId = prior.rows[0]?.id ?? null;
     if (input.allowDuplicate !== true) {
-      const prior = await client.query<{ id: string; applied_at: string }>(
-        `SELECT id, applied_at::text AS applied_at FROM adjustment_imports WHERE content_sha256 = $1 ORDER BY created_at LIMIT 1`,
-        [fingerprint],
-      );
       if (prior.rows[0]) {
         throw new ConflictError(
           "duplicate_import",
@@ -111,6 +113,9 @@ export async function applyAdjustmentImport(
         rowCount: input.rows.length,
         totalPostedFils: total,
         originalFilename: input.originalFilename,
+        contentSha256: fingerprint,
+        // set only when the operator knowingly re-applied content that was already imported
+        ...(input.allowDuplicate === true && priorImportId ? { allowDuplicate: true, priorImportId } : {}),
       },
     });
 
