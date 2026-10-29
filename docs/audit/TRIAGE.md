@@ -62,3 +62,4 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-048 | BUG (runtime) | high | Reproduced (cache 195,000 vs ledger 97,500 after rebuild then close); display-only impact, so Medium. Pre-existing in the CLI; the definitions of 'balance' differ between the incremental cache and the ledger. |
 | AUD-049 | BUG (traced) | high | The --merchant path only reads; the comment and RUNBOOK claim it writes. |
 | AUD-050 | BUG (traced) | medium | `calculateCreditFeeReversal(base, merchants.mdr_bps)` ignores `fee_schedules`; the stored default is only the fallback. Not yet reproduced as a test; what a goodwill reversal should mean is a finance call. |
+| AUD-051 | BUG (traced) | high | `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact. |
