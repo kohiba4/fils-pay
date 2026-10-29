@@ -26,7 +26,7 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-012 | BUG (runtime) | high | 4.75 BD posts 475 fils. The comment "import format is 2dp by agreement with finance" is contradicted by finance's own email. |
 | AUD-013 | BUG (runtime) | high | Second run doubles the posting (170 to 340 fils). |
 | AUD-014 | BUG (runtime) | high | Only the paid-batch rewrite is a bug. Recalculating CLOSED unpaid batches at current terms IS intended (finance flow, existing test). |
-| AUD-015 | BUG (runtime) | high | Reproduced 136.5M vs 7.3M fils. ADR-0004 chose this on purpose, but it contradicts the ledger being authoritative and the brief; decision Q2. |
+| AUD-015 | BUG (runtime) | high | Reproduced 136.5M vs 7.3M fils; fixed (ADR-0007). ADR-0004 chose this on purpose, but it contradicts the ledger being authoritative and the brief; decision Q2. |
 | AUD-016 | BUG (traced) | medium | Ledger fee and batch fee are computed by different formulas and pay-link captures skip the discount. Orderings differ by at most 1 fil, so the exact size per payment is small; to be run as a test in Phase 2. |
 | AUD-017 | BUG (runtime) | high | Counter wraps negative. Whether the tier discount itself is approved is a separate business question. |
 | AUD-018 | BUG (runtime) | high | 35 to 37 of 40 batches duplicated; the "unique index" in the code comment does not exist. |
@@ -59,3 +59,5 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-045 | HYGIENE | high | Dev seed prints keys; the SQL dump is harmless (no PII). |
 | AUD-046 | BUG (traced) | high | No role gate on capture/void; MK's "enforced in requireMerchantAuth" comment is false. |
 | AUD-047 | BUG (traced, low) | high | Route lacks the auth hook (fails closed with a 500). |
+| AUD-048 | BUG (runtime) | high | Reproduced with a scratch test (cache 195,000 vs ledger 97,500 after rebuild then close). Pre-existing in the CLI; the definitions of 'balance' differ between the incremental cache and the ledger. |
+| AUD-049 | BUG (traced) | high | The --merchant path only reads; the comment and RUNBOOK claim it writes. |

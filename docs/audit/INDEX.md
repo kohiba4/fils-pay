@@ -2,7 +2,7 @@
 
 Sorted by severity. Status vocabulary: `confirmed (trace|runtime)`, `suspected`, `latent` (code exists but is not reachable until FP-300 wires it), `fixed`, `false-positive` (see ruled-out/).
 
-Counts: Critical 5, High 19, Medium 16, Low 7
+Counts: Critical 5, High 20, Medium 16, Low 8
 
 | ID | Title | Severity | Owner | Status | Detail |
 |---|---|---|---|---|---|
@@ -20,7 +20,7 @@ Counts: Critical 5, High 19, Medium 16, Low 7
 | AUD-012 | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | A | fixed (branch fix/AUD-012-csv-bd-parsing) | [findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md](findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-10-too-small.md) |
 | AUD-013 | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | A | confirmed (runtime) | [findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md](findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-the-wrong-acco.md) |
 | AUD-014 | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | A | confirmed (runtime) | [findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md](findings/AUD-014-recalculate-mdr-rewrites-closed-and-paid-batches-at-the-wron.md) |
-| AUD-015 | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | A | confirmed (runtime) | [findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md](findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md) |
+| AUD-015 | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | A | fixed (branch fix/AUD-015-rebuild-from-ledger) | [findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md](findings/AUD-015-admin-rebuild-cached-balances-reads-scheme-export-gross-not-.md) |
 | AUD-016 | Fee computed differently at capture vs settlement (discount, order, tier) | High | A | confirmed (trace) | [findings/AUD-016-fee-computed-differently-at-capture-vs-settlement-discount-o.md](findings/AUD-016-fee-computed-differently-at-capture-vs-settlement-discount-o.md) |
 | AUD-017 | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | A | confirmed (runtime) | [findings/AUD-017-platform-volume-counter-is-int32-go-integer-db-and-overflows.md](findings/AUD-017-platform-volume-counter-is-int32-go-integer-db-and-overflows.md) |
 | AUD-018 | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | A | confirmed (runtime) | [findings/AUD-018-duplicate-payout-notifications-and-duplicate-disbursement-re.md](findings/AUD-018-duplicate-payout-notifications-and-duplicate-disbursement-re.md) |
@@ -30,6 +30,7 @@ Counts: Critical 5, High 19, Medium 16, Low 7
 | AUD-026 | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | A | fixed (branch fix/AUD-026-fresh-migrate) | [findings/AUD-026-migrations-0054-0055-fail-on-a-fresh-database-and-occupy-num.md](findings/AUD-026-migrations-0054-0055-fail-on-a-fresh-database-and-occupy-num.md) |
 | AUD-027 | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | FP-300 (shared) | confirmed (runtime) | [findings/AUD-027-refund-inserts-violate-the-0070-reason-constraint-refunds-al.md](findings/AUD-027-refund-inserts-violate-the-0070-reason-constraint-refunds-al.md) |
 | AUD-046 | Capture and void have no role gate: support users and impersonating admins can move money | High | B | confirmed (trace) | [findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md](findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md) |
+| AUD-048 | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | High | A | confirmed (runtime) | [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md) |
 | AUD-019 | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | B | confirmed (trace) | [findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md](findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md) |
 | AUD-023 | OTP: Math.random codes and racy attempt limit | Medium | B | confirmed (trace) | [findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md](findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md) |
 | AUD-024 | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | B | confirmed (trace) — doc conflict | [findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md](findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md) |
@@ -53,5 +54,6 @@ Counts: Critical 5, High 19, Medium 16, Low 7
 | AUD-044 | Flaky dispatcher backoff test (jitter) | Low | B | suspected | [findings/AUD-044-flaky-dispatcher-backoff-test-jitter.md](findings/AUD-044-flaky-dispatcher-backoff-test-jitter.md) |
 | AUD-045 | Seed prints raw API keys; 'production' seed dump committed | Low | A | confirmed (runtime + read) | [findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md](findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md) |
 | AUD-047 | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | B | confirmed (trace) / suspected (UTC part) | [findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md](findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md) |
+| AUD-049 | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | A | confirmed (trace) | [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md](findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md) |
 
 See also: [ruled-out/](ruled-out/), [suspicious/](suspicious/), [CLAIMS.md](CLAIMS.md), [INVARIANTS.md](INVARIANTS.md), [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md), [BASELINE.md](BASELINE.md), [PLAN.md](PLAN.md), [TEAM.md](TEAM.md), [DECISIONS.md](DECISIONS.md).

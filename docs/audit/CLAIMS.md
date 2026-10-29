@@ -47,7 +47,7 @@ Result: **true / false / partially true / can't tell (yet)**.
 | R2 | Money is cents (1 BD = 100) | CLAUDE.md/AGENTS.md/.cursorrules | ADR + code | **false** (S-01..03) |
 | R3 | Residue journaled in CloseBatch (implemented 2026-03) | ADR-0002 | trace | **false** — no residue code in CloseBatch |
 | R4 | Monthly UTC windows "net out" | ADR-0003 | reasoning | **false** in general (YA's objection stands); affects AUD-013 |
-| R5 | Button rebuild = CLI rebuild ("same thing") | ADMIN, RUNBOOK, Slack MK, internalapi comment | trace | **false** (AUD-015) |
+| R5 | Button rebuild = CLI rebuild ("same thing") | ADMIN, RUNBOOK, Slack MK, internalapi comment | trace + runtime | **was false; true since the AUD-015 fix (ADR-0007)**. Both are still unsafe intraday (AUD-048) |
 | R6 | Callbacks deduped on callbackId via processed_events | CHANGELOG 1.6.0/1.9.0, postmortem, HANDOVER, 0051 note | trace | **false** |
 | R7 | FP-202 unique "one capture per link" — Done | postmortem | schema | **false** — no such column/constraint |
 | R8 | FP-208 settlement advisory lock — Done | postmortem | grep | **false** — no `SETTLEMENT_SINGLETON_LOCK` in code |

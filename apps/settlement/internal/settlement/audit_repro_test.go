@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/filspay/settlement/internal/ledger"
 	"github.com/filspay/settlement/internal/money"
 	"github.com/filspay/settlement/internal/splits"
 )
@@ -184,31 +183,6 @@ func TestRepro_AUD009_SplitPayoutAllocatesExactlyTheNet(t *testing.T) {
 	_ = pool.QueryRow(ctx, `SELECT COALESCE(SUM(amount_fils),0) FROM ledger_entries WHERE settlement_batch_id = $1 AND account_id='merchant_payable' AND direction='debit'`, batchID).Scan(&debited)
 	if allocated != net || debited != net {
 		t.Errorf("net=%d but children allocated=%d and ledger debited=%d (stranded %d fils in payable)", net, allocated, debited, net-debited)
-	}
-}
-
-// AUD-015: the admin rebuild (RefreshBalanceCache) must agree with the ledger rebuild.
-func TestRepro_AUD015_RefreshBalanceCacheMatchesLedgerRebuild(t *testing.T) {
-	pool := mustPool(t)
-	ctx := context.Background()
-	merchantID := insertActiveMerchant(t, pool, 250)
-	date := time.Date(2026, 4, 7, 0, 0, 0, 0, time.UTC)
-	start, _ := BusinessDayWindow(date)
-	insertCaptureEvent(t, pool, merchantID, 250, 1_000_000, start.Add(time.Hour))
-
-	want, err := ledger.RebuildMerchantBalance(ctx, pool, merchantID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	diffs, err := ledger.RefreshBalanceCache(ctx, pool)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cached int64
-	_ = pool.QueryRow(ctx, `SELECT COALESCE(cached_payable_fils,0) FROM merchant_balances WHERE merchant_id = $1`, merchantID).Scan(&cached)
-	_ = diffs
-	if money.Fils(cached) != want {
-		t.Errorf("admin rebuild cached %d, ledger says %d", cached, want)
 	}
 }
 

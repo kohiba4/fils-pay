@@ -156,3 +156,27 @@ func TestRebuildAllBalances_OverwritesDriftedCache(t *testing.T) {
 		t.Errorf("persisted cached_payable_fils = %d, want %d (RebuildAllBalances must overwrite, not merely diff)", persisted, wantBalance)
 	}
 }
+
+// AUD-015 re-attack: concurrent rebuilds (e.g. two support users clicking the button, or the
+// button during the CLI) that must INSERT overlapping new cache rows must not deadlock.
+func TestRebuildAllBalances_ConcurrentRunsDoNotDeadlock(t *testing.T) {
+	pool := mustPool(t)
+	for i := 0; i < 40; i++ {
+		postLedgerLeg(t, pool, insertActiveMerchant(t, pool), "credit", 1000+int64(i)) // no cache row yet
+	}
+	errs := make(chan error, 8)
+	start := make(chan struct{})
+	for i := 0; i < 8; i++ {
+		go func() {
+			<-start
+			_, err := RebuildAllBalances(context.Background(), pool)
+			errs <- err
+		}()
+	}
+	close(start)
+	for i := 0; i < 8; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent RebuildAllBalances failed: %v", err)
+		}
+	}
+}
