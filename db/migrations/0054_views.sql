@@ -1,4 +1,11 @@
 -- Convenience views used by the API and admin dashboard.
+--
+-- AUD-026: this file originally also created `v_unbatched_capture_events`, which
+-- selected from `settlement_batch_events` — a table that exists in no migration
+-- (it belonged to the abandoned settlement-v2 branch, ADR-0005). That made the
+-- whole file fail on any fresh database, so 0054+ could never be applied.
+-- The broken view was removed; nothing in the repo reads it. Databases that
+-- already recorded this filename are unaffected (db/migrate.ts skips by name).
 
 CREATE OR REPLACE VIEW merchant_payable_position AS
 SELECT sb.merchant_id,
@@ -6,20 +13,6 @@ SELECT sb.merchant_id,
   FROM scheme_export_lines sel
   JOIN settlement_batches sb ON sb.id = sel.settlement_batch_id
  GROUP BY sb.merchant_id;
-
-CREATE OR REPLACE VIEW v_unbatched_capture_events AS
-SELECT te.id AS event_id,
-       te.transaction_id,
-       te.event_type,
-       te.amount_fils,
-       te.created_at,
-       t.merchant_id
-  FROM transaction_events te
-  JOIN transactions t ON t.id = te.transaction_id
- WHERE te.event_type = 'captured'
-   AND NOT EXISTS (
-     SELECT 1 FROM settlement_batch_events sbe WHERE sbe.transaction_event_id = te.id
-   );
 
 CREATE OR REPLACE VIEW v_active_api_keys AS
 SELECT ak.id,
