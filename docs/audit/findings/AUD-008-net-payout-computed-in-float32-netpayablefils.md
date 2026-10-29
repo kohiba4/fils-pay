@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / float |
-| Status | **fixed** (branch `fix/AUD-008-net-payout-integer`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | see `git log fix/AUD-008-net-payout-integer` (fix(settlement) commit) |
 
 ## Summary

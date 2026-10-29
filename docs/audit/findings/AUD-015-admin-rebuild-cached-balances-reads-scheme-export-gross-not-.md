@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | data integrity |
-| Status | **fixed** (branch `fix/AUD-015-rebuild-from-ledger`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | see `git log fix/AUD-015-rebuild-from-ledger` |
 
 ## Summary

@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / rounding |
-| Status | **fixed** (branch `fix/AUD-010-scheme-amount-truncate`, pending merge; historical files already sent are not corrected) |
+| Status | **fixed** (merged into main; historical files already sent are not corrected) |
 | Fix commit | see `git log fix/AUD-010-scheme-amount-truncate` |
 
 ## Summary

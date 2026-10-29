@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / parsing |
-| Status | **fixed** (branch `fix/AUD-012-csv-bd-parsing`, pending merge; historical data repair still needed) |
+| Status | **fixed** (merged into main; historical data repair still needed) |
 | Fix commit | see `git log fix/AUD-012-csv-bd-parsing` |
 
 ## Summary
