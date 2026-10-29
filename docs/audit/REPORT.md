@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **51** (Critical 5, High 19, Medium 18, Low 9); fixed so far: **11**.
+- Findings: **51** (Critical 5, High 19, Medium 18, Low 9); fixed so far: **12**.
 - By verdict: BUG 36, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -28,7 +28,7 @@
 | [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
 | [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | fixed (branch `fix/AUD-017-volume-counter-bigint`, pending merge; the tier approval question remains open) | A |
-| [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | partly fixed: duplicate `settlement.paid` events fixed (branch `fix/AUD-018-paid-notification-unique`, pending merge); duplicate disbursement records (dispatcher, Track B) still open | A |
 | [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | confirmed (trace) | B |
@@ -44,7 +44,7 @@
 | [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) | A |
 | [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
-| [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | fixed (branch `fix/AUD-034-ledger-append-only`, pending merge; TRUNCATE and the application role's privileges still need an ops change) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
 | [AUD-036](#aud-036) | Adjustment import has no duplicate-submit protection | Medium | BUG (traced) | confirmed (trace) | A |
 | [AUD-038](#aud-038) | Admin API-key rotation never revokes the old key | Medium | BUG (traced) | confirmed (trace) | B |
@@ -54,7 +54,7 @@
 | [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
 | [AUD-050](#aud-050) | Manual credit MDR reversal uses the fallback rate, not the rate that was charged | Medium | BUG (traced) | confirmed (trace) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | confirmed (trace) | A |
-| [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation mismatch only, not a code bug | A |
+| [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change | A |
 | [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | suspected | B |
 | [AUD-043](#aud-043) | Slow settlement summary query | Low | UNVERIFIED | suspected | B |
 | [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | suspected | B |
@@ -745,7 +745,7 @@ _Source file: [findings/AUD-017-platform-volume-counter-is-int32-go-integer-db-a
 
 - Severity: **High** · Category: race / idempotency · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): 35 to 37 of 40 batches duplicated; the "unique index" in the code comment does not exist.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: partly fixed: duplicate `settlement.paid` events fixed (branch `fix/AUD-018-paid-notification-unique`, pending merge); duplicate disbursement records (dispatcher, Track B) still open · Fix commit: Track A half: see `git log fix/AUD-018-paid-notification-unique`
 
 **Where**
 
@@ -769,7 +769,20 @@ Trace; incident review: two deliveries had different outbox event ids.
 
 **Fix**
 
-Atomic claim: unique partial index on outbox_events(aggregate_id) where event_type='settlement.paid' + ON CONFLICT DO NOTHING; disbursement unique on settlement_batch_id, written once, not from the webhook path.
+**Track A half (done):**
+- Migration **0075**: partial unique index `uq_outbox_settlement_paid_per_batch ON outbox_events (aggregate_id) WHERE event_type = 'settlement.paid' AND id > <max id at migration time>`. It covers only events created after the migration on purpose: historical duplicates exist (2,163 batches in the disposable DB, created by my own repro runs; real ones in production would be referenced by `webhook_deliveries`, but the production count is unknown), a plain unique index could not be built there, and rewriting history was rejected.
+- `payout_notify.go`: the insert is now the claim (`ON CONFLICT DO NOTHING`, count taken from `RowsAffected`), so the daemon and `run-batch` (or two overlapping ticks) can no longer both enqueue. The false comments ("outbox has a unique index", "daemon and CLI never overlap" in `payout_notify.go`, and "resolved, see FP-260" in `scheduler/daemon.go`) are replaced, plus a stray question about the dispatcher (it does deliver `settlement.paid`).
+- Tests (written first): `TestSettlementPaidEventIsUniquePerBatch` (second insert must raise 23505; failed with `err = <nil>`), `TestOtherOutboxEventsMayRepeatForAnAggregate` (guard: uniqueness is scoped to `settlement.paid`), and the Phase-1 repro `TestRepro_AUD018_ConcurrentPayoutNotificationsEnqueueOnce` (8 scanners x 40 batches: used to duplicate 35-37 batches, now 0; stable over 5 runs). No existing test changed.
+
+**Track B half (still open): duplicate disbursement records.** `apps/api/src/webhooks/dispatcher.ts` runs the `settlement.paid` pre-delivery effect `recordPayoutDisbursementEffect` for every first delivery attempt of every delivery row (one per endpoint, and again for every replay), inserting a new `settlement_payout_disbursements` row with a fresh reference each time. Fix (Track B, migration 0080+): unique `settlement_batch_id` (one disbursement per batch) with `ON CONFLICT DO NOTHING`, and ideally move the effect out of the webhook path. Tracked in `docs/audit/tracker/track-b.md`.
+
+**Re-attack and side notes**
+
+- Only one producer of `settlement.paid` exists (`payout_notify.go`); the dispatcher only consumes it.
+- The incident write-up in `docs/ADMIN.md` blamed "the reporting worker restarted and replayed NOTIFYs". Its own evidence (two deliveries with different outbox event ids) points at two INSERTs, which is what this race produces; the reproduction shows the race is real and easy to hit, but it does not prove it is what happened on 2026-08-21 (no production data). An audit note was added next to the incident table.
+- Deploy: migration 0075 is safe on a populated database (no table rewrite beyond the index build, no history changes). Duplicates created before it remain; merchants were already asked to dedupe on `Webhook-Delivery-Id`.
+- Limits (from the independent review): the migration is not re-runnable by hand (the runner skips it; a second manual run fails with 42P07); `id > N` is sound while ids come from the sequence (a restore that lowers the sequence fails loudly on the primary key; only gaps left by deleted rows could be silently unenforced); the bare `ON CONFLICT DO NOTHING` would also swallow any other unique violation on `outbox_events`, which is low risk because the primary key comes from a sequence; the index build briefly blocks writes to `outbox_events`; a nullable `dedupe_key` column would be an alternative design. The comment in migration 0030 ("the api is the only writer to outbox_events") is false (settlement writes there too).
+- Not covered: the notification scan still only sees batches with `net_payout_fils > 0` and reads `LIMIT 500` at a time (unchanged).
 
 **Related:** AUD-040
 
@@ -1278,8 +1291,8 @@ _Source file: [findings/AUD-032-test-merchants-pushed-into-real-settlement-by-an
 **Ledger immutability not enforced**
 
 - Severity: **Medium** · Category: data integrity · Owner: A
-- Verdict: **BUG (runtime)** (confidence high): Whole balanced group deleted and committed. Needs DB access, not an API path.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Verdict: **BUG (runtime)** (confidence high): Whole balanced group deleted and committed; fixed by migration 0076 (reject trigger). Needs DB access, not an API path; a superuser/owner can still bypass (see the finding).
+- Status: fixed (branch `fix/AUD-034-ledger-append-only`, pending merge; TRUNCATE and the application role's privileges still need an ops change) · Fix commit: see `git log fix/AUD-034-ledger-append-only`
 
 **Where**
 
@@ -1303,7 +1316,18 @@ Trace; repro SQL in Phase 1.
 
 **Fix**
 
-Reject UPDATE/DELETE trigger (new migration) — confirm no legitimate writer.
+- Migration **0076**: `BEFORE UPDATE OR DELETE` row trigger `ledger_entries_append_only` that raises `integrity_constraint_violation`. Corrections are new balanced groups (already how every writer works), so no application path is affected: a grep of all application code, scripts, seed and migrations finds no `UPDATE` or `DELETE` on `ledger_entries` (the reviewer confirmed this; all four foreign keys touching the table are NO ACTION, so deleting a merchant fails on the FK before any cascade); the only reset path is the dev seed's `TRUNCATE ... CASCADE`, which does not fire row triggers.
+- The deferred balance trigger from 0007 is unchanged (still rejects unbalanced inserts).
+- Tests (written first; the two mutation tests failed because the whole-group DELETE and the balanced UPDATE committed): `TestLedgerEntriesCannotBeDeleted`, `TestLedgerEntriesCannotBeUpdated`, guard `TestLedgerStillAcceptsBalancedInsertsAndRejectsUnbalanced`. No existing test changed.
+
+**Re-attack and side notes**
+
+- Seed on a fresh database (69 migrations) passes its self-checks twice; full API suite unchanged at the 12 known baseline failures (11 refund tests + 1 flaky jitter test); the Go suite fails only on AUD-048's intentional repro once the branch includes the AUD-018 fix (before that merged, AUD-018's concurrency repro could also fail in a full run).
+- **Bypasses (verified by the reviewer):** `ALTER TABLE ... DISABLE TRIGGER`, `SET session_replication_role = replica` (a `DELETE` then succeeds silently) and `TRUNCATE`, available to the table owner/superuser (in the compose stack the single application role is both). The trigger stops application bugs and honest mistakes, not a privileged database user.
+- **Not blocked, by design:** `TRUNCATE` (the dev seed needs it). In production the application role should also have `UPDATE`, `DELETE` and `TRUNCATE` revoked on `ledger_entries` (ops; all services currently share one database role, see AUD-035), and a table owner can still `DISABLE TRIGGER`. The trigger stops application bugs and honest mistakes, not a database superuser.
+- A one-off ledger repair (for example the finance corrections discussed in AUD-012/AUD-013) must now be written as new groups, or done under an explicit, reviewed `DISABLE TRIGGER` window.
+- The false comment in migration 0007 is left in place (applied migration), and the same false claim in `recalculate_mdr_test.go` was corrected; this finding and the new migration's header supersede it.
+- Production note: `docs/runbooks/shadow-ledger-cutover.md` already plans a `REVOKE ... ON ledger_entries FROM filspay_api`; doing the same for UPDATE/DELETE/TRUNCATE on the current role is the ops complement to this migration.
 
 **Related:** —
 
@@ -1761,7 +1785,7 @@ _Source file: [findings/AUD-042-unbounded-memory-in-exports-archives-large-expor
 
 - Severity: **Low** · Category: data integrity / docs · Owner: A
 - Verdict: **DESIGN** (confidence high): **Not a code bug.** `applyBalanceCorrection` is cache-only exactly as ADR-0006 says; the journaled variant exists but is not wired. Only ADMIN.md ("journaled to the ledger") is wrong.
-- Status: by design (ADR-0006); documentation mismatch only, not a code bug · Fix commit: — (not fixed; Phase 2)
+- Status: by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change · Fix commit: — (not fixed; Phase 2)
 
 **What is wrong**
 
@@ -1787,7 +1811,7 @@ Read.
 
 **Fix**
 
-No code change. Documentation only: correct `docs/ADMIN.md` (Adjust balance is display-only and is lost on rebuild). Whether to expose the journaled variant is a product/finance decision (meeting 2026-09-17 chose option A: leave as is).
+No code change. Documentation fixed on 2026-10-29 (`docs/ADMIN.md`: Adjust balance is display-only and is lost on a rebuild; the claimed nightly 02:00 recompute does not exist in the code; rebuild caveat AUD-048). Original proposal: correct `docs/ADMIN.md` (Adjust balance is display-only and is lost on rebuild). Whether to expose the journaled variant is a product/finance decision (meeting 2026-09-17 chose option A: leave as is).
 
 **Related:** AUD-015
 
