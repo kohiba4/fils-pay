@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Medium** |
 | Category | data / display |
-| Status | **fixed** (branch `fix/AUD-031-fee-display-effective-from`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | see `git log fix/AUD-031-fee-display-effective-from` |
 
 ## Summary

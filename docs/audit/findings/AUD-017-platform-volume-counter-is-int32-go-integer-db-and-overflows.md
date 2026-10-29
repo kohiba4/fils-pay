@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / overflow |
-| Status | **fixed** (branch `fix/AUD-017-volume-counter-bigint`, pending merge; the tier approval question remains open) |
+| Status | **fixed** (merged into main; the tier approval question remains open) |
 | Fix commit | see `git log fix/AUD-017-volume-counter-bigint` |
 
 ## Summary

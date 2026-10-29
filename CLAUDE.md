@@ -71,7 +71,7 @@ Every change that alters code, a finding, a decision, a test or the plan updates
 - **Before ending any prompt:** say what docs were updated. If a doc is now wrong and you did not fix it, say so.
 - **Every bug must be report-ready** (the user presents it): finding file states what is wrong, why it happens
   (root cause) and what it breaks, with proof and fix. After ANY docs change run
-  `python3 -I docs/audit/build_report.py` and commit the regenerated `docs/audit/REPORT.md` (generated; never
+  `python3 -I docs/audit/build_report.py` and commit the regenerated `docs/audit/REPORT.md` and `docs/audit/INDEX.md` (both generated; never
   hand-edit). New finding → add its row to TRIAGE.md or the report shows MISSING.
 - Keep this file short (< ~110 lines): details belong in the finding files, not here.
 

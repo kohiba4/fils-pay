@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **High** |
 | Category | race / idempotency |
-| Status | **partly fixed**: duplicate `settlement.paid` events fixed (branch `fix/AUD-018-paid-notification-unique`, pending merge); duplicate disbursement records (dispatcher, Track B) still open |
+| Status | **partly fixed**: duplicate `settlement.paid` events fixed (merged into main); duplicate disbursement records (dispatcher, Track B) still open |
 | Fix commit | Track A half: see `git log fix/AUD-018-paid-notification-unique` |
 
 ## Summary
