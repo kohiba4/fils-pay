@@ -1,4 +1,4 @@
-/** Phase-1 repro for AUD-031: display must show the rate in force (effective_from), not the last row typed. */
+/** AUD-031 parity: the displayed rate must equal the rate capture bills (getEffectiveMdrBps). */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
