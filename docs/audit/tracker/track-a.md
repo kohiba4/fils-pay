@@ -26,6 +26,7 @@ Owner: the user + their agent. Updated with each fix; Track B does not edit this
 | 19 | AUD-051 | admin default run date is the Bahrain day | merged (PR #18) |
 | 20 | AUD-049 | `rebuild-balances --merchant` writes the cache | merged (PR #19) |
 | 21 | AUD-036 | CSV import duplicate guard (migration 0077, Q12) | merged (PR #20) |
-| 22 | AUD-033 | payout estimate integer BIGINT (migration 0078) | in review (branch `fix/AUD-033-payout-estimate-integer`) |
+| 22 | AUD-033 | payout estimate integer BIGINT (migration 0078) | merged (PR #21) |
+| 24 | FP-300 refunds | plan in [FP-300-PLAN.md](../FP-300-PLAN.md): PR1 route+core, PR2 settlement, PR3 webhook/reporting, PR4 web | plan in review; PR1 next |
 | 23 | AUD-045, 050 | remaining small Track A items (050 waits for a finance decision) | todo |
 | - | open question | adjustments (MDR recalc on paid batches, credits, imports) never reach a payout instruction | needs a finance decision |
