@@ -399,8 +399,8 @@ func PayoutBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) (Payo
 		}
 	}
 
-	// Runs unconditionally, including for a zero-payout batch: adding zero
-	// is a no-op, and keeping the running total's every update in lockstep
+	// Runs unconditionally, including for a zero-payout batch (adding zero is a no-op) and for a
+	// refund-driven negative net (which lowers the running total, matching the 0078 backfill SUM(net)), and keeping the running total's every update in lockstep
 	// with every processed batch — rather than skipping zero-value ones —
 	// keeps its own bookkeeping simple.
 	if err := UpdateLifetimePayoutMonitoringEstimate(ctx, tx, merchantID, money.Fils(netPayout)); err != nil {

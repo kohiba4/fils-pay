@@ -268,7 +268,7 @@ export interface ReconciliationReport {
   ledgerMerchantPayableNetFils: number;
   settlementNetPayoutFils: number;
   pendingUnbatchedFils: number;
-  /** Net refund amount (refund minus fee reversed) made in the window but not absorbed by a batch dated in the window. Already included in pendingUnbatchedFils (as a deduction). */
+  /** Net refund amount (refund minus fee reversed) made in the window minus the net refund amount absorbed by batches dated in the window. Positive: refunds not yet absorbed. Negative: refunds from earlier periods absorbed by a batch of this period. Already deducted inside pendingUnbatchedFils. */
   refundTimingFils: number;
   gapFils: number;
   explained: boolean;

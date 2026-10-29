@@ -596,3 +596,31 @@ test("a refund made after its capture's batch lands in the later period; each pe
   assert.equal(second.ledgerMerchantPayableNetFils, -9_750 - 9_750);
   assert.equal(second.gapFils, -9_750, "exactly day 1's payout leg");
 });
+
+test("a refund made on day D and absorbed by the batch of day D+1: timing is positive for D, negative for D+1, both gaps are 0", async () => {
+  const { merchantId, rawKey } = await createApprovedMerchantWithApiKey("recon-refund-carried", 250);
+  const txn = await authorize(rawKey, 10_000);
+  await capture(rawKey, txn.id);
+  await refundViaApi(rawKey, txn.id, 4_000); // made today (fee given back 100): net refund 3.900
+  const today = todayBahrainDateString();
+  const tomorrow = addOneCalendarDay(today);
+  const dayAfter = addOneCalendarDay(tomorrow);
+
+  // today's batch is NOT closed (skipped run); tomorrow's batch absorbs the unbatched refund (no lower bound)
+  const batchId = await closeAndPayoutBatch(merchantId, tomorrow);
+  const detail = await app.inject({ method: "GET", url: `/v1/settlement/batches/${batchId}`, headers: authHeader(rawKey) });
+  const batch = detail.json() as { grossFils: number; refundFils: number; netPayoutFils: number };
+  assert.deepEqual([batch.grossFils, batch.refundFils, batch.netPayoutFils], [0, 4_000, -3_900]);
+
+  const report = async (from: string, to: string) =>
+    (await app.inject({ method: "GET", url: `/v1/settlement/reconciliation?from=${from}&to=${to}`, headers: authHeader(rawKey) })).json() as {
+      gapFils: number; explained: boolean; refundTimingFils: number; pendingUnbatchedFils: number;
+    };
+  const dayD = await report(today, tomorrow); // capture + refund happened here, no batch dated here
+  assert.equal(dayD.refundTimingFils, 3_900);
+  assert.equal(dayD.gapFils, 0);
+  const dayD1 = await report(tomorrow, dayAfter); // the batch absorbing the refund is dated here, nothing happened here
+  assert.equal(dayD1.refundTimingFils, -3_900, "absorbed here, made earlier");
+  assert.equal(dayD1.gapFils, 0);
+  assert.equal(dayD1.explained, true);
+});

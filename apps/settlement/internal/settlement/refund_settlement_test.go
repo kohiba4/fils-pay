@@ -192,8 +192,8 @@ func TestCloseBatch_RefundOnlyBatchHasNegativeNetAndPaysNothing(t *testing.T) {
 	if row := readBatch(t, pool, res.BatchID); row.Status != "paid" || row.Net != -9_750 {
 		t.Fatalf("batch = %+v", row)
 	}
-	if n, err := EnqueuePayoutNotifications(context.Background(), pool); err != nil || n < 0 {
-		t.Fatalf("EnqueuePayoutNotifications: %d, %v", n, err)
+	if _, err := EnqueuePayoutNotifications(context.Background(), pool); err != nil {
+		t.Fatalf("EnqueuePayoutNotifications: %v", err)
 	}
 	var events int
 	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM outbox_events WHERE event_type = 'settlement.paid' AND aggregate_id = $1`, res.BatchID).Scan(&events); err != nil {
