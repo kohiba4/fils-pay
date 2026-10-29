@@ -17,10 +17,10 @@ apps/admin/src/pages/settlement/SettlementPage.tsx:19-22 (`yesterdayIso`)
 **Sibling locations checked:** same bug class as AUD-025 (Go daemon, fixed), `apps/reporting/src/consumer/applyEvent.ts:170` (AUD-047), `apps/api/src/lib/dateUtil.ts` `todayStamp()` (log only).
 
 ## Root cause
-`yesterdayIso()` takes the browser-local date, subtracts a day, then formats it with `toISOString()`, which is UTC. At 02:00 in Bahrain on the 30th the local "yesterday" is the 29th at 02:00, i.e. 23:00 UTC on the 28th, so the field shows 2026-10-28 instead of 2026-10-29.
+`yesterdayIso()` moves the current instant back exactly 24 h (`setDate(getDate()-1)`) and then reads its **UTC** date with `toISOString()`. The result is therefore the UTC yesterday in every browser timezone, whatever the "browser-local" comment says. Bahrain's date is ahead of UTC from 21:00 to 24:00 UTC (00:00-03:00 Bahrain), so at 02:00 Bahrain on the 30th (23:00 UTC on the 29th) the field shows 2026-10-28 instead of 2026-10-29.
 
 ## Reproduction / evidence
-Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Reproduced by `apps/admin/src/lib/bahrainDate.test.ts`: at 23:00 UTC on the 29th (02:00 Bahrain on the 30th) the old logic gives 2026-10-28 (browser in Bahrain), the correct default is 2026-10-29.
+Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Reproduced by `apps/admin/src/lib/bahrainDate.test.ts`: at 23:00 UTC on the 29th (02:00 Bahrain on the 30th) the old logic gives 2026-10-28 (same result in any browser timezone), the correct default is 2026-10-29.
 
 ## Impact
 Only the default value of a manual field changes, but the operator who accepts it re-runs the wrong business day (a no-op because batches are idempotent) and believes yesterday was processed.
@@ -31,7 +31,7 @@ Only the default value of a manual field changes, but the operator who accepts i
 Tests changed: none (new tests only).
 
 ## Re-attack notes
-Browser timezone no longer matters (the old code was wrong for UTC browsers too, in the opposite window). No other `yesterdayIso`/`toISOString` use of a local date in apps/admin or apps/web (grep). AUD-047 (reporting `applyEvent.ts:170`) is the same bug class and stays with Track B.
+Browser timezone no longer matters. The old code gave the same wrong answer in every timezone (the independent review ran it under Bahrain, UTC, New York and Kiritimati). No other `yesterdayIso`/`toISOString` use of a local date in apps/admin or apps/web (grep). AUD-047 (reporting `applyEvent.ts:170`) is the same bug class and stays with Track B.
 
 ## Related
 AUD-025, AUD-047
