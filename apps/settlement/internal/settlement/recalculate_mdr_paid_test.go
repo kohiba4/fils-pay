@@ -108,3 +108,40 @@ func TestRecalculateMDR_PaidBatchAdjustmentIsIdempotentAndCumulative(t *testing.
 		t.Errorf("cumulative adjustment = %d, want +500 (3000 owed - 2500 paid)", n)
 	}
 }
+
+// Review of AUD-014 (found by the independent reviewer): a batch rewritten while still CLOSED already
+// has that adjustment folded into its row; after it is paid, a further recalculation must measure
+// against the row, not row + the earlier ledger adjustments (that counted the 1,500 twice).
+func TestRecalculateMDR_RewrittenWhileClosedThenPaidThenRecalculated(t *testing.T) {
+	pool := mustPool(t)
+	ctx := context.Background()
+	merchantID := insertActiveMerchant(t, pool, 250)
+	date := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
+	start, _ := BusinessDayWindow(date)
+	insertCaptureEvent(t, pool, merchantID, 250, 100_000, start.Add(time.Hour))
+	closed, err := CloseBatch(ctx, pool, merchantID, date) // fee 2,500
+	if err != nil {
+		t.Fatal(err)
+	}
+	from, to := date, date.AddDate(0, 0, 1)
+
+	setMdr(t, merchantID, 400) // while CLOSED: row is rewritten to fee 4,000, ledger +1,500
+	if _, err := RecalculateMDR(ctx, pool, merchantID, from, to); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PayoutBatch(ctx, pool, closed.BatchID); err != nil { // bank receives 96,000
+		t.Fatal(err)
+	}
+
+	setMdr(t, merchantID, 300) // true fee 3,000
+	res, err := RecalculateMDR(ctx, pool, merchantID, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Adjusted) != 1 || res.Adjusted[0].OldFeeFils != 4000 || res.Adjusted[0].NewFeeFils != 3000 || res.Adjusted[0].DiffFils != -1000 {
+		t.Fatalf("Adjusted = %+v, want 4000 -> 3000 (diff -1000), the fee the bank was paid against", res.Adjusted)
+	}
+	if _, n := adjustmentNet(t, closed.BatchID); n != 500 {
+		t.Errorf("total adjustment on the batch = %d, want +500 (3000 owed - 2500 originally closed)", n)
+	}
+}

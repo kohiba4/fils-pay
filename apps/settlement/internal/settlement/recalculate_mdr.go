@@ -43,6 +43,8 @@ type batchRow struct {
 	grossFils     money.Fils
 	feeFils       money.Fils
 	netPayoutFils money.Fils
+	// paidFeeAdjustment is the cumulative recalculation adjustment held OUTSIDE the row of a paid batch.
+	paidFeeAdjustment money.Fils
 }
 
 // RecalculateMDR re-derives the fee on a merchant's closed and paid batches in
@@ -63,7 +65,7 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils
+		SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, paid_fee_adjustment_fils
 		  FROM settlement_batches
 		 WHERE merchant_id = $1 AND batch_date >= $2 AND batch_date < $3
 		   AND status <> 'open'
@@ -76,14 +78,15 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 	var batches []batchRow
 	for rows.Next() {
 		var b batchRow
-		var gross, fee, net int64
-		if err := rows.Scan(&b.id, &b.batchDate, &b.status, &gross, &fee, &net); err != nil {
+		var gross, fee, net, paidAdj int64
+		if err := rows.Scan(&b.id, &b.batchDate, &b.status, &gross, &fee, &net, &paidAdj); err != nil {
 			rows.Close()
 			return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: scan batch: %w", err)
 		}
 		b.grossFils = money.Fils(gross)
 		b.feeFils = money.Fils(fee)
 		b.netPayoutFils = money.Fils(net)
+		b.paidFeeAdjustment = money.Fils(paidAdj)
 		batches = append(batches, b)
 	}
 	if err := rows.Err(); err != nil {
@@ -99,16 +102,10 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 			return RecalcResult{}, err
 		}
 		// A PAID batch's row is frozen (it matches the bank instruction and statement), so earlier
-		// recalculations are only visible as ledger adjustments: measure the new fee against the fee
+		// recalculations of it live in paid_fee_adjustment_fils: measure the new fee against the fee
 		// ALREADY adjusted to, otherwise every rerun would post the same difference again (AUD-014).
-		oldFee := b.feeFils
-		if b.status == "paid" {
-			prior, err := priorMdrAdjustmentFils(ctx, tx, b.id)
-			if err != nil {
-				return RecalcResult{}, err
-			}
-			oldFee += prior
-		}
+		// A batch rewritten while closed has its changes in fee_fils and 0 here, so nothing is counted twice.
+		oldFee := b.feeFils + b.paidFeeAdjustment
 		diff := newFee - oldFee
 		if diff == 0 {
 			continue
@@ -124,6 +121,12 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 				UPDATE settlement_batches SET fee_fils = $2, net_payout_fils = $3 WHERE id = $1
 			`, b.id, int64(newFee), int64(newNetPayout)); err != nil {
 				return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: update batch %s: %w", b.id, err)
+			}
+		} else {
+			if _, err := tx.Exec(ctx, `
+				UPDATE settlement_batches SET paid_fee_adjustment_fils = paid_fee_adjustment_fils + $2 WHERE id = $1
+			`, b.id, int64(diff)); err != nil {
+				return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: record adjustment for paid batch %s: %w", b.id, err)
 			}
 		}
 		// A fee increase (diff > 0) reduces net payout owed, so the cache
@@ -146,22 +149,6 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 		return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: commit: %w", err)
 	}
 	return RecalcResult{BatchesConsidered: len(batches), Adjusted: adjusted}, nil
-}
-
-// priorMdrAdjustmentFils is the net fee increase (positive) or decrease (negative) already posted to the
-// ledger for this batch by earlier recalculations: debits minus credits on the merchant's payable.
-func priorMdrAdjustmentFils(ctx context.Context, tx pgx.Tx, batchID uuid.UUID) (money.Fils, error) {
-	var net int64
-	err := tx.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_fils ELSE -amount_fils END), 0)
-		  FROM ledger_entries
-		 WHERE settlement_batch_id = $1 AND account_id = 'merchant_payable'
-		   AND description = 'MDR recalculation adjustment'
-	`, batchID).Scan(&net)
-	if err != nil {
-		return 0, fmt.Errorf("settlement: RecalculateMDR: prior adjustments for batch %s: %w", batchID, err)
-	}
-	return money.Fils(net), nil
 }
 
 // recomputeBatchFee sums ComputeSettlementFee over every transaction_events
