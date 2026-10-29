@@ -43,7 +43,7 @@ func TestRecordPlatformProcessedVolume_SmallValuesExact(t *testing.T) {
 		}
 	}
 
-	var got int32
+	var got int64
 	err = tx.QueryRow(ctx, `SELECT total_processed_fils FROM platform_stats WHERE id = 1`).Scan(&got)
 	if err != nil {
 		t.Fatalf("read back total: %v", err)
@@ -65,5 +65,29 @@ func TestVolumeTierMdrBonusBps_BelowAndAtThreshold(t *testing.T) {
 	}
 	if got := VolumeTierMdrBonusBps(2_000_000_000); got != 15 {
 		t.Errorf("exactly at threshold: got %d, want 15", got)
+	}
+}
+
+// AUD-017: the lifetime counter is in FILS and must be 64-bit. int32 wraps at 2,147,483,647 fils
+// (about 2.15M BD), only ~147M fils above the 2,000,000,000 tier threshold, and the column was INTEGER
+// although two comments claimed BIGINT.
+func TestVolumeTierMdrBonusBps_AboveInt32Max(t *testing.T) {
+	if got := VolumeTierMdrBonusBps(3_000_000_000); got != 15 {
+		t.Errorf("VolumeTierMdrBonusBps(3e9) = %d, want 15 (tier stays on above 2^31)", got)
+	}
+	if got := VolumeTierMdrBonusBps(1_999_999_999); got != 0 {
+		t.Errorf("VolumeTierMdrBonusBps(1,999,999,999) = %d, want 0", got)
+	}
+}
+
+func TestPlatformStatsCounterColumnIsBigint(t *testing.T) {
+	pool := mustPool(t)
+	var typ string
+	if err := pool.QueryRow(context.Background(),
+		`SELECT data_type FROM information_schema.columns WHERE table_name = 'platform_stats' AND column_name = 'total_processed_fils'`).Scan(&typ); err != nil {
+		t.Fatal(err)
+	}
+	if typ != "bigint" {
+		t.Errorf("platform_stats.total_processed_fils is %q, want bigint", typ)
 	}
 }

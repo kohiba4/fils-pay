@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **50** (Critical 5, High 19, Medium 18, Low 8); fixed so far: **9**.
+- Findings: **50** (Critical 5, High 19, Medium 18, Low 8); fixed so far: **10**.
 - By verdict: BUG 35, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -27,7 +27,7 @@
 | [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
-| [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | fixed (branch `fix/AUD-017-volume-counter-bigint`, pending merge; the tier approval question remains open) | A |
 | [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | confirmed (trace) | B |
@@ -698,8 +698,8 @@ _Source file: [findings/AUD-016-fee-computed-differently-at-capture-vs-settlemen
 **Platform volume counter is int32 (Go) / INTEGER (DB) and overflows**
 
 - Severity: **High** · Category: money / overflow · Owner: A
-- Verdict: **BUG (runtime)** (confidence high): Counter wraps negative. Whether the tier discount itself is approved is a separate business question.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Verdict: **BUG (runtime)** (confidence high): Counter wrapped negative; fixed (migration 0074, int64). Whether the tier discount itself is approved is a separate, open business question.
+- Status: fixed (branch `fix/AUD-017-volume-counter-bigint`, pending merge; the tier approval question remains open) · Fix commit: see `git log fix/AUD-017-volume-counter-bigint`
 
 **Where**
 
@@ -723,7 +723,17 @@ Trace + threshold history: `git log -S2_000_000_000` shows the constant present 
 
 **Fix**
 
-BIGINT column (new migration) + int64 in Go; question: should the unapproved tier exist at all?
+- Migration **0074**: `platform_stats.total_processed_fils` INTEGER -> BIGINT (single-row table).
+- Go (`settlement/platform_volume.go`): the counter is `int64` end to end (`ReadAndLockPlatformProcessedFils`, `RecordPlatformProcessedVolume`, `VolumeTierMdrBonusBps`); the old `int32(batchGrossFils)` truncation is gone.
+- TS (`api/src/fees/platformVolumeTier.ts`): node-pg returns BIGINT as a string, so the value is parsed with `Number()` (safe to 2^53, about 9e15 fils); the false "is BIGINT" comment is now true and says why.
+- Tests (written first; Go failed to compile on the int32 param, TS failed `value "3000000000" is out of range for type integer`, and the Phase-1 repro showed 2,147,000,000 + 1,000,000 -> -2,146,967,296): `TestRepro_AUD017_*` now passes, `TestVolumeTierMdrBonusBps_AboveInt32Max`, `TestPlatformStatsCounterColumnIsBigint`, and the TS test `a lifetime volume above int32 max (3,000,000,000 fils) keeps the tier bonus on`. Existing tests unchanged apart from one scan variable widened to int64 and a stale "nvm its bigint" comment.
+
+**Re-attack and side notes**
+
+- **Deploy order: run migration 0074 first.** Old Go + new BIGINT column: nothing improves (the old code still wraps in Go before writing, so the tier can still flip silently), but nothing new breaks. New Go + old INTEGER column: fine below 2^31; above it pgx raises an out-of-range error and the whole `CloseBatch` transaction rolls back (loud, not a silent flip; traced from pgx, not executed).
+- Other readers of the counter: only `capture.ts` (via `getVolumeTierBonusBps`) and `CloseBatch`; the seed inserts 0. No other `int32` money field found in `apps/settlement` (`LineSequence int32` and the pool size are not money).
+- **Not fixed, business question (needs finance):** nothing in the repo shows written sign-off for the platform-wide 0.15% tier discount (YA's handover required it, Huda "did not know", and the "threshold bumped in d69a813" claim has no commit behind it: the 2,000,000,000 constant exists from the first fees commit). The counter is dormant in test data (69,418 fils) but production state is unknown. Capture and close also read the counter at different moments, so a capture just before the tier flips can be priced differently from its batch (AUD-016).
+- Counter semantics are unchanged: it is the lifetime sum of batch GROSS fils at close, never decremented by refunds or MDR recalculation.
 
 **Related:** AUD-016
 

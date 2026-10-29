@@ -5,7 +5,7 @@
 | # | Invariant | Source | Status | Where it breaks |
 |---|---|---|---|---|
 | I1 | Every money value is an integer number of fils | ADR-0001 §1 | ❌ | float32 net payout (AUD-008), REAL estimate (AUD-033), float fee estimate in reconciliation (AUD-016), float64 scheme amount (AUD-010) |
-| I2 | Money columns end `_fils` and are BIGINT | ADR-0001 §1 | ❌ | 0040 REAL, 0049 INTEGER (AUD-017), 0050 NUMERIC(10,2) |
+| I2 | Money columns end `_fils` and are BIGINT | ADR-0001 §1 | ❌ | 0040 REAL (AUD-033), 0050 NUMERIC(10,2); 0049 INTEGER fixed to BIGINT by migration 0074 (AUD-017) |
 | I3 | TS uses `Fils`, Go uses `money.Fils` (int64) | ADR-0001 §2 | ⚠ | many `number` casts; Go int32 counter |
 | I4 | Text input parsed with `parseBhdToFils` | ADR-0001 §3 | ❌ | CSV import (AUD-012), promo discount parser |
 | I5 | Rates in bps applied with `applyRateFils`, one rounding, half-even | ADR-0001 §4 | ❌ | v1 half-up, `estimateFeeFils` float, double rounding in discount (AUD-016) |

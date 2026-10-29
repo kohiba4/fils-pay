@@ -28,7 +28,7 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-014 | BUG (runtime) | high | Only the paid-batch rewrite is a bug. Recalculating CLOSED unpaid batches at current terms IS intended (finance flow, existing test). |
 | AUD-015 | BUG (runtime) | high | Reproduced 136.5M vs 7.3M fils; fixed (ADR-0007). ADR-0004 chose this on purpose, but it contradicts the ledger being authoritative and the brief; decision Q2. |
 | AUD-016 | BUG (traced) | medium | Ledger fee and batch fee are computed by different formulas and pay-link captures skip the discount. Orderings differ by at most 1 fil, so the exact size per payment is small; to be run as a test in Phase 2. |
-| AUD-017 | BUG (runtime) | high | Counter wraps negative. Whether the tier discount itself is approved is a separate business question. |
+| AUD-017 | BUG (runtime) | high | Counter wrapped negative; fixed (migration 0074, int64). Whether the tier discount itself is approved is a separate, open business question. |
 | AUD-018 | BUG (runtime) | high | 35 to 37 of 40 batches duplicated; the "unique index" in the code comment does not exist. |
 | AUD-019 | BUG (traced) | high | Plain INSERT, no unique key; the "dedupe" commit is empty. Confirmed by the brief (FP-201). |
 | AUD-020 | BUG (traced) | high | Signs canonical JSON but sends the JSONB re-serialization. |

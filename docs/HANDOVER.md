@@ -40,6 +40,7 @@ button, and there shouldn't be one that reads anything else.
 volume passes a threshold. I said no until finance signs off in writing.
 `platform_stats.total_processed_fils` is INTEGER, which is fine while it's
 only a counter.
+*[Audit note 2026-10-29: it was NOT fine; the Go side kept it in int32 and wrapped negative at 2,147,483,647 fils. Widened to BIGINT by migration 0074 (AUD-017).]*
 
 **`apps/api/src/v1/`** is the partner API. Leave it alone; a partner
 integrates against it.
