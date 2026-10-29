@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **13**.
+- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **15**.
 - By verdict: BUG 36, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -23,12 +23,12 @@
 | [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | fixed (merged into main; historical files already sent are not corrected) | A |
 | [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (merged into main; historical data repair still needed) | A |
-| [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | made safe (branch `fix/AUD-013-march-sweep-idempotent`, pending merge); still must not be applied to production until finance confirms the accounting | A |
 | [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
-| [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | fixed (branch `fix/AUD-017-volume-counter-bigint`, pending merge; the tier approval question remains open) | A |
-| [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | partly fixed: duplicate `settlement.paid` events fixed (branch `fix/AUD-018-paid-notification-unique`, pending merge); duplicate disbursement records (dispatcher, Track B) still open | A |
+| [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | fixed (merged into main; the tier approval question remains open) | A |
+| [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | partly fixed: duplicate `settlement.paid` events fixed (merged into main); duplicate disbursement records (dispatcher, Track B) still open | A |
 | [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | confirmed (trace) | B |
@@ -38,13 +38,13 @@
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
-| [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | fixed (branch `fix/AUD-025-close-at-bahrain-midnight`, pending merge) | A |
+| [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | fixed (merged into main) | A |
 | [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
-| [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) | A |
+| [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
-| [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | fixed (branch `fix/AUD-034-ledger-append-only`, pending merge; TRUNCATE and the application role's privileges still need an ops change) | A |
+| [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | fixed (merged into main; TRUNCATE and the application role's privileges still need an ops change) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
 | [AUD-036](#aud-036) | Adjustment import has no duplicate-submit protection | Medium | BUG (traced) | confirmed (trace) | A |
 | [AUD-038](#aud-038) | Admin API-key rotation never revokes the old key | Medium | BUG (traced) | confirmed (trace) | B |
@@ -539,7 +539,7 @@ _Source file: [findings/AUD-012-csv-adjustment-import-parses-bd-with-2-decimals-
 
 - Severity: **High** · Category: ops script / money · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Second run doubles the posting (170 to 340 fils).
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: made safe (branch `fix/AUD-013-march-sweep-idempotent`, pending merge); still must not be applied to production until finance confirms the accounting · Fix commit: see `git log fix/AUD-013-march-sweep-idempotent`
 
 **Where**
 
@@ -563,7 +563,16 @@ Trace; brief: ran twice on staging and the gap doubled.
 
 **Fix**
 
-Not to be run. If kept: dry-run default, deterministic idempotency (unique description/key), correct legs, Bahrain window. Ask before investing.
+- `scripts/reconcile_march.ts`: **dry run by default** (prints per-merchant residue and `DRY RUN: nothing was posted`); `--apply` posts. Posting is **idempotent**: inside one transaction an advisory lock (`pg_advisory_xact_lock`) serialises concurrent runs and a merchant that already has a ledger leg with the sweep description is skipped. The false comment "re-running is safe, entry_group_id dedupes it" (the group id is a fresh random uuid per call) is replaced by the real mechanism. Totals now say "found" vs "posted by this run".
+- Tests (written first; both failed on the old script: a plain run posted a row, and two applies posted 2 rows / 20 fils instead of 10): `scripts/reconcile_march.rerun.test.ts` runs the REAL script against a throwaway database: dry run posts nothing, `--apply` twice posts once (10 fils, not 20), three simultaneous `--apply` runs post once (3 repeats). The existing `reconcile_march.integration.test.ts` ("2000 ledger entries, zero net residual") never calls the script's posting code or a rerun: it recomputes the residue inside the test itself, so it could never have caught this; left unchanged.
+- **Deliberately NOT changed (needs finance): the accounting itself.** The script debits `merchant_payable` and credits `scheme_rounding_residue`, i.e. it takes the residue out of the merchants' payable. ADR-0002 books residue between `card_scheme_clearing` (credit) and `scheme_rounding_residue` (debit) and does not touch merchants. It also uses the UTC month (ADR-0003; decision Q6 prefers the Bahrain month), computes residue from `transactions.captured_fils` (a running total) rather than per scheme line, and posts with `occurred_at = now()`. Changing any of this would change what gets booked, so the safe state is: idempotent, dry-run, and not to be applied until finance signs off.
+
+**Re-attack and side notes**
+
+- Answer to the brief's question "was it run more than once in production, and is it safe to rerun?": the old script was NOT safe (reproduced on a scratch database: a second run doubled the posting; that proves the mechanism, not what happened in production). Evidence that it WAS run again somewhere: `docs/meetings/2026-07-08-finance-eng.md` says FH "re-ran `scripts/reconcile_march.ts` as a dry run on 3 July: 13 lines, 70 fils, identical to the original run". The old script had no dry-run mode and always applied (it printed "reconciliation applied successfully"), so that "dry run" almost certainly posted the 70 fils a second time; the note does not say which environment (finance separately reports a run twice on staging). The log file the brief mentions (`scripts/out/`) is not in the repo, so a single timestamp in it cannot be checked, and a log cannot prove a single execution anyway. Finance can check each environment with: `SELECT merchant_id, count(DISTINCT entry_group_id) AS sweeps, sum(amount_fils) AS fils FROM ledger_entries WHERE description LIKE 'March 2026 scheme rounding residue sweep%' AND account_id = 'scheme_rounding_residue' GROUP BY 1;` (`sweeps` above 1 for a merchant means the sweep was applied more than once; the extra groups need a reviewed reversing entry, NOT a script).
+- **Idempotent, but not self-correcting (review):** a merchant already swept is skipped even if their March transactions changed afterwards or the earlier sweep (including one made by the OLD script) was a different amount. The script now prints what was swept earlier next to the current residue and a `WARNING` when they differ, but it never adds to or corrects a sweep. The idempotency key is the exact description string plus the account: never edit `SWEEP_DESCRIPTION`. An unknown argument (e.g. the typo `--aply`) now exits non-zero instead of silently dry-running, and the residue rows are re-read inside the advisory lock so they cannot be stale. The simultaneous-run test is probabilistic: with the lock removed it failed once in two trials, so it catches a missing lock only some of the time.
+- `RUNBOOK.md` told finance to copy this script every month and said "a second run is a no-op": that was false for the old script and the copies would have inherited the bug. An audit note was added there.
+- The March "gap" finance still sees (about 4.75 BD) is not explained by this script (its residue was 0.070 BD in the original run); candidates are the CSV import bug (AUD-012, 4.75 posted as 0.475) or the window difference, but the data is not in the repo.
 
 **Related:** AUD-010, ADR-0003
 
@@ -701,7 +710,7 @@ _Source file: [findings/AUD-016-fee-computed-differently-at-capture-vs-settlemen
 
 - Severity: **High** · Category: money / overflow · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Counter wrapped negative; fixed (migration 0074, int64). Whether the tier discount itself is approved is a separate, open business question.
-- Status: fixed (branch `fix/AUD-017-volume-counter-bigint`, pending merge; the tier approval question remains open) · Fix commit: see `git log fix/AUD-017-volume-counter-bigint`
+- Status: fixed (merged into main; the tier approval question remains open) · Fix commit: see `git log fix/AUD-017-volume-counter-bigint`
 
 **Where**
 
@@ -746,7 +755,7 @@ _Source file: [findings/AUD-017-platform-volume-counter-is-int32-go-integer-db-a
 
 - Severity: **High** · Category: race / idempotency · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): 35 to 37 of 40 batches duplicated; the "unique index" in the code comment does not exist.
-- Status: partly fixed: duplicate `settlement.paid` events fixed (branch `fix/AUD-018-paid-notification-unique`, pending merge); duplicate disbursement records (dispatcher, Track B) still open · Fix commit: Track A half: see `git log fix/AUD-018-paid-notification-unique`
+- Status: partly fixed: duplicate `settlement.paid` events fixed (merged into main); duplicate disbursement records (dispatcher, Track B) still open · Fix commit: Track A half: see `git log fix/AUD-018-paid-notification-unique`
 
 **Where**
 
@@ -1068,7 +1077,7 @@ _Source file: [findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md]
 
 - Severity: **Medium** · Category: time · Owner: A
 - Verdict: **BUG (traced)** (confidence high): `time.Now().UTC()` date used as the Bahrain day. Matches ops log (~03:15) and chat. Needs a clock seam to test.
-- Status: fixed (branch `fix/AUD-025-close-at-bahrain-midnight`, pending merge) · Fix commit: see `git log fix/AUD-025-close-at-bahrain-midnight`
+- Status: fixed (merged into main) · Fix commit: see `git log fix/AUD-025-close-at-bahrain-midnight`
 
 **Where**
 
@@ -1212,7 +1221,7 @@ _Source file: [findings/AUD-030-refund-succeeded-produced-but-never-delivered-no
 
 - Severity: **Medium** · Category: data / display · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Reproduced 245 vs 225 with the seed.
-- Status: fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) · Fix commit: see `git log fix/AUD-031-fee-display-effective-from`
+- Status: fixed (merged into main) · Fix commit: see `git log fix/AUD-031-fee-display-effective-from`
 
 **What is wrong**
 
@@ -1293,7 +1302,7 @@ _Source file: [findings/AUD-032-test-merchants-pushed-into-real-settlement-by-an
 
 - Severity: **Medium** · Category: data integrity · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Whole balanced group deleted and committed; fixed by migration 0076 (reject trigger). Needs DB access, not an API path; a superuser/owner can still bypass (see the finding).
-- Status: fixed (branch `fix/AUD-034-ledger-append-only`, pending merge; TRUNCATE and the application role's privileges still need an ops change) · Fix commit: see `git log fix/AUD-034-ledger-append-only`
+- Status: fixed (merged into main; TRUNCATE and the application role's privileges still need an ops change) · Fix commit: see `git log fix/AUD-034-ledger-append-only`
 
 **Where**
 

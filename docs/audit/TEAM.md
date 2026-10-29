@@ -1,5 +1,7 @@
 # Team split (two people, parallel work)
 
+**People:** Track A = the repo owner (GitHub `kohiba4`). Track B = **@The-Tifo** (GitHub `The-Tifo`, write access). When work needs the other person, tag them (`@The-Tifo` / `@kohiba4`) in the PR or issue AND in the tracker row.
+
 Split by **code area** so we rarely touch the same files. Owners are in the
 `Owner` column of [INDEX.md](INDEX.md) and in each finding file.
 

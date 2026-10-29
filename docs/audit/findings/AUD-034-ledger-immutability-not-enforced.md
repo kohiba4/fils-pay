@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Medium** |
 | Category | data integrity |
-| Status | **fixed** (branch `fix/AUD-034-ledger-append-only`, pending merge; TRUNCATE and the application role's privileges still need an ops change) |
+| Status | **fixed** (merged into main; TRUNCATE and the application role's privileges still need an ops change) |
 | Fix commit | see `git log fix/AUD-034-ledger-append-only` |
 
 ## Summary
