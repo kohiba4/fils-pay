@@ -115,3 +115,33 @@ test("AUD-013: two simultaneous --apply runs post the residue exactly once", asy
     assert.equal(Number(legs.rows[0]!.total), 10);
   });
 });
+
+// Review follow-ups (AUD-013).
+test("AUD-013: an unknown flag (e.g. a typo of --apply) is rejected instead of silently dry-running", async () => {
+  await withScratchDb(async (db, url) => {
+    await seedMarch(db);
+    const run = runSweep(url, "--aply");
+    assert.notEqual(run.status, 0, `an unknown flag was accepted:\n${run.output}`);
+    assert.match(run.output, /unknown argument/i);
+    assert.equal(Number((await sweepLegs(db)).rows[0]!.n), 0);
+  });
+});
+
+test("AUD-013: a skipped merchant is reported with the amount swept earlier, and a changed amount is flagged", async () => {
+  await withScratchDb(async (db, url) => {
+    const merchantId = await seedMarch(db);
+    assert.equal(runSweep(url, "--apply").status, 0);
+    // A late March capture with 5 fils of residue arrives AFTER the first sweep.
+    await db.query(
+      `INSERT INTO transactions (merchant_id, status, amount_fils, captured_fils, acquirer_reference, occurred_at)
+       VALUES ($1, 'captured', 10005, 10005, 'acq-late', '2026-03-25T12:00:00Z')`,
+      [merchantId],
+    );
+    const second = runSweep(url, "--apply");
+    assert.equal(second.status, 0, second.output);
+    assert.match(second.output, /already swept/);
+    assert.match(second.output, /10 fils/, "must say what was swept before");
+    assert.match(second.output, /WARNING/, "must flag that the current residue (15) differs from what was swept (10)");
+    assert.equal(Number((await sweepLegs(db)).rows[0]!.n), 1, "still not posted again: a human decides how to correct a changed amount");
+  });
+});

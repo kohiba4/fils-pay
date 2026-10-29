@@ -74,7 +74,8 @@ function groupByMerchant(rows: ResidueRow[]): MerchantResidue[] {
   return [...byMerchant.values()];
 }
 
-/** Marks the legs this script posts; also the idempotency key (with the merchant). */
+/** Marks the legs this script posts; also the idempotency key (with the merchant). NEVER change this string:
+ *  editing it makes already-swept merchants look unswept and the next --apply would post them again. */
 export const SWEEP_DESCRIPTION = "March 2026 scheme rounding residue sweep — manual recon per finance";
 
 async function alreadySwept(client: Client, merchantId: string): Promise<boolean> {
@@ -83,6 +84,15 @@ async function alreadySwept(client: Client, merchantId: string): Promise<boolean
     [merchantId, SWEEP_DESCRIPTION],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+async function sweptFilsBefore(client: Client, merchantId: string): Promise<number> {
+  const result = await client.query<{ total: string }>(
+    `SELECT COALESCE(SUM(amount_fils), 0)::text AS total FROM ledger_entries
+      WHERE merchant_id = $1 AND description = $2 AND account_id = 'scheme_rounding_residue'`,
+    [merchantId, SWEEP_DESCRIPTION],
+  );
+  return Number(result.rows[0]!.total);
 }
 
 // Idempotency is enforced by alreadySwept() inside the locked transaction in main(), NOT by entry_group_id
@@ -100,6 +110,10 @@ async function postResidueCorrection(client: Client, merchant: MerchantResidue, 
 }
 
 async function main(): Promise<void> {
+  const unknown = process.argv.slice(2).filter((a) => a !== "--apply");
+  if (unknown.length > 0) {
+    throw new Error(`reconcile_march: unknown argument(s) ${unknown.join(" ")}; the only option is --apply (default is a dry run)`);
+  }
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("reconcile_march: DATABASE_URL environment variable is not set");
@@ -135,9 +149,15 @@ async function main(): Promise<void> {
       await client.query("BEGIN");
       try {
         await client.query("SELECT pg_advisory_xact_lock(hashtext('reconcile_march_2026'))");
-        for (const merchant of merchantResidues) {
+        // Re-read inside the lock: the rows fetched above may be stale by the time we hold it.
+        const lockedResidues = groupByMerchant(await fetchResidueRows(client, 2026, 3));
+        for (const merchant of lockedResidues) {
           if (await alreadySwept(client, merchant.merchantId)) {
-            console.log(`merchant ${merchant.merchantId}: already swept, skipped`);
+            const before = await sweptFilsBefore(client, merchant.merchantId);
+            console.log(`merchant ${merchant.merchantId}: already swept (${before} fils posted earlier; current residue ${merchant.residueFils} fils), skipped`);
+            if (before !== merchant.residueFils) {
+              console.log(`  WARNING: the current residue differs from what was swept. This script never adds to or corrects a sweep: have finance review a reversing/top-up entry.`);
+            }
             continue;
           }
           await postResidueCorrection(client, merchant, now);
