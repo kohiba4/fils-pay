@@ -5,8 +5,8 @@
 | Owner | A |
 | Severity | **High** |
 | Category | race / idempotency |
-| Status | confirmed (runtime) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **partly fixed**: duplicate `settlement.paid` events fixed (branch `fix/AUD-018-paid-notification-unique`, pending merge); duplicate disbursement records (dispatcher, Track B) still open |
+| Fix commit | Track A half: see `git log fix/AUD-018-paid-notification-unique` |
 
 ## Summary
 Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21).
@@ -27,11 +27,20 @@ Trace; incident review: two deliveries had different outbox event ids.
 ## Impact
 Merchants told twice; two disbursement instructions per batch (possible double payout on the rail).
 
-## Fix (proposed)
-Atomic claim: unique partial index on outbox_events(aggregate_id) where event_type='settlement.paid' + ON CONFLICT DO NOTHING; disbursement unique on settlement_batch_id, written once, not from the webhook path.
+## Fix
+**Track A half (done):**
+- Migration **0075**: partial unique index `uq_outbox_settlement_paid_per_batch ON outbox_events (aggregate_id) WHERE event_type = 'settlement.paid' AND id > <max id at migration time>`. It covers only events created after the migration on purpose: historical duplicates exist (2,163 batches in the disposable DB, created by my own repro runs; real ones in production would be referenced by `webhook_deliveries`, but the production count is unknown), a plain unique index could not be built there, and rewriting history was rejected.
+- `payout_notify.go`: the insert is now the claim (`ON CONFLICT DO NOTHING`, count taken from `RowsAffected`), so the daemon and `run-batch` (or two overlapping ticks) can no longer both enqueue. The false comments ("outbox has a unique index", "daemon and CLI never overlap" in `payout_notify.go`, and "resolved, see FP-260" in `scheduler/daemon.go`) are replaced, plus a stray question about the dispatcher (it does deliver `settlement.paid`).
+- Tests (written first): `TestSettlementPaidEventIsUniquePerBatch` (second insert must raise 23505; failed with `err = <nil>`), `TestOtherOutboxEventsMayRepeatForAnAggregate` (guard: uniqueness is scoped to `settlement.paid`), and the Phase-1 repro `TestRepro_AUD018_ConcurrentPayoutNotificationsEnqueueOnce` (8 scanners x 40 batches: used to duplicate 35-37 batches, now 0; stable over 5 runs). No existing test changed.
+
+**Track B half (still open): duplicate disbursement records.** `apps/api/src/webhooks/dispatcher.ts` runs the `settlement.paid` pre-delivery effect `recordPayoutDisbursementEffect` for every first delivery attempt of every delivery row (one per endpoint, and again for every replay), inserting a new `settlement_payout_disbursements` row with a fresh reference each time. Fix (Track B, migration 0080+): unique `settlement_batch_id` (one disbursement per batch) with `ON CONFLICT DO NOTHING`, and ideally move the effect out of the webhook path. Tracked in `docs/audit/tracker/track-b.md`.
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- Only one producer of `settlement.paid` exists (`payout_notify.go`); the dispatcher only consumes it.
+- The incident write-up in `docs/ADMIN.md` blamed "the reporting worker restarted and replayed NOTIFYs". Its own evidence (two deliveries with different outbox event ids) points at two INSERTs, which is what this race produces; the reproduction shows the race is real and easy to hit, but it does not prove it is what happened on 2026-08-21 (no production data). An audit note was added next to the incident table.
+- Deploy: migration 0075 is safe on a populated database (no table rewrite beyond the index build, no history changes). Duplicates created before it remain; merchants were already asked to dedupe on `Webhook-Delivery-Id`.
+- Limits (from the independent review): the migration is not re-runnable by hand (the runner skips it; a second manual run fails with 42P07); `id > N` is sound while ids come from the sequence (a restore that lowers the sequence fails loudly on the primary key; only gaps left by deleted rows could be silently unenforced); the bare `ON CONFLICT DO NOTHING` would also swallow any other unique violation on `outbox_events`, which is low risk because the primary key comes from a sequence; the index build briefly blocks writes to `outbox_events`; a nullable `dedupe_key` column would be an alternative design. The comment in migration 0030 ("the api is the only writer to outbox_events") is false (settlement writes there too).
+- Not covered: the notification scan still only sees batches with `net_payout_fils > 0` and reads `LIMIT 500` at a time (unchanged).
 
 ## Related
 AUD-040

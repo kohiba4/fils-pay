@@ -40,7 +40,7 @@ None of these is deleted or weakened; each is corrected so it asserts the right 
 5. **AUD-015** admin rebuild reads the ledger (single query, row locks) + ADR-0007
 6. **AUD-010** scheme `amount` from truncated fils
 7. **AUD-009** exact split allocation + weight guard
-8. **AUD-018** unique index + `ON CONFLICT` claim for `settlement.paid` (migration 0073) — see coordination note
+8. **AUD-018** unique index + `ON CONFLICT` claim for `settlement.paid` (migration 0075) — see coordination note
 9. **AUD-014** recalc: never rewrite paid batches
 10. **AUD-016** one fee formula at capture (see coordination note)
 11. **AUD-017** BIGINT counter (migration 0074) / int64

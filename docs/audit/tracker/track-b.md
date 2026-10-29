@@ -40,7 +40,7 @@ Triage verdicts for these items came from reading code; **confirm each with a fa
 
 ## Cross-track dependencies (read before touching these files)
 - **`routes/transactions.ts`**: AUD-046 (you) lands first; Track A's AUD-016 (remove the post-commit discount call) rebases on it.
-- **AUD-018 duplicate payout notifications/disbursements** is joint. Track A adds the unique index (migration 0073) and `ON CONFLICT` claim in the Go daemon; **you** make `apps/api/src/webhooks/dispatcher.ts` / `payoutDisbursement.ts` idempotent (one `settlement_payout_disbursements` row per batch, not per delivery/replay; unique key + `ON CONFLICT DO NOTHING`, migration 0080+). Agree the unique-key name with Track A first.
+- **AUD-018 duplicate payout notifications/disbursements** is joint. Track A adds the unique index (migration **0075**, `uq_outbox_settlement_paid_per_batch`) and `ON CONFLICT` claim in the Go daemon; **you** make `apps/api/src/webhooks/dispatcher.ts` / `payoutDisbursement.ts` idempotent (one `settlement_payout_disbursements` row per batch, not per delivery/replay; unique key + `ON CONFLICT DO NOTHING`, migration 0080+). Agree the unique-key name with Track A first.
 - **FP-300 refunds** (Phase 3, after the queue above): you own the `POST /v1/refunds` route + ownership scope (AUD-003), `refund.succeeded` envelope + dispatcher entry (AUD-030), timeline, and the 0070 reason bug (AUD-027); Track A owns ledger legs, settlement adjustment, cumulative fee reversal (AUD-029), the refund summary view (AUD-028) and the concurrency lock (AUD-004).
 - **Decisions already made that affect you:** DECISIONS.md Q4 (impersonation read-only) and Q11 context. Q10 (Dilmune Cloud) is the user's.
 

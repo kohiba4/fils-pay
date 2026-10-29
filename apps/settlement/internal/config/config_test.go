@@ -42,3 +42,19 @@ func TestLoad_PgconnSettlementOverridesWhenSet(t *testing.T) {
 		t.Fatalf("expected the PGCONN_SETTLEMENT override to win, got %q", cfg.DatabaseURL)
 	}
 }
+
+// AUD-025: an out-of-range close delay used to be accepted and could silently stop the daily close.
+func TestLoad_RejectsOutOfRangeRunDelay(t *testing.T) {
+	for _, bad := range []string{"-1", "1440", "1500"} {
+		withEnv(t, map[string]string{"DATABASE_URL": "postgres://a/db", "SETTLEMENT_DAEMON_RUN_DELAY_MINUTES": bad})
+		if _, err := Load(); err == nil {
+			t.Errorf("SETTLEMENT_DAEMON_RUN_DELAY_MINUTES=%s: expected an error", bad)
+		}
+	}
+	for _, ok := range []string{"0", "15", "1439"} {
+		withEnv(t, map[string]string{"DATABASE_URL": "postgres://a/db", "SETTLEMENT_DAEMON_RUN_DELAY_MINUTES": ok})
+		if _, err := Load(); err != nil {
+			t.Errorf("SETTLEMENT_DAEMON_RUN_DELAY_MINUTES=%s: unexpected error %v", ok, err)
+		}
+	}
+}

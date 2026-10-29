@@ -4,8 +4,8 @@
 
 ## 1. Summary
 
-- Findings: **50** (Critical 5, High 19, Medium 18, Low 8); fixed so far: **10**.
-- By verdict: BUG 35, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
+- Findings: **51** (Critical 5, High 19, Medium 18, Low 9); fixed so far: **11**.
+- By verdict: BUG 36, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
@@ -38,7 +38,7 @@
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
-| [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | confirmed (trace) | A |
+| [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | fixed (branch `fix/AUD-025-close-at-bahrain-midnight`, pending merge) | A |
 | [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
@@ -61,6 +61,7 @@
 | [AUD-045](#aud-045) | Seed prints raw API keys; 'production' seed dump committed | Low | HYGIENE | confirmed (runtime + read) | A |
 | [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
 | [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | confirmed (trace) | A |
+| [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | confirmed (trace) | A |
 
 ## 2. Bugs (by severity)
 
@@ -1053,7 +1054,7 @@ _Source file: [findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md]
 
 - Severity: **Medium** · Category: time · Owner: A
 - Verdict: **BUG (traced)** (confidence high): `time.Now().UTC()` date used as the Bahrain day. Matches ops log (~03:15) and chat. Needs a clock seam to test.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-025-close-at-bahrain-midnight`, pending merge) · Fix commit: see `git log fix/AUD-025-close-at-bahrain-midnight`
 
 **Where**
 
@@ -1077,7 +1078,17 @@ Trace; ops log note '~03:15 local'. Chat claim TRUE.
 
 **Fix**
 
-Convert now to Asia/Bahrain before taking the date.
+- `settlement/window.go`: new `BusinessDateOf(t)` returns the Asia/Bahrain calendar date containing any instant; `BusinessDayWindow`'s doc now says its argument must be a calendar date, not a raw UTC instant.
+- `scheduler/daemon.go`: the decision moved into a pure, clock-injectable `dueBusinessDate(now, delayMinutes)`: "today" is the Bahrain date, due once `delay` minutes have passed since Bahrain midnight, closing yesterday (Bahrain). `runIfDue` calls it. The misleading comments ("MK: UTC here is fine", "am: ... ~03:15 local whatever") are replaced by an accurate explanation.
+- Tests (written first; compile-red because the function did not exist; the old logic was also run through the same instants as a scratch test): `TestDueBusinessDate`, 9 cases: 23:59 Bahrain, 00:05 (grace period), exactly 00:15, 00:20, 01:00, 03:00, month, year and leap-day boundaries. Old logic on the same instants: 00:05 Bahrain was already "due" (ignoring the grace period); 00:20 and 01:00 re-ran 10-28 (a no-op) instead of 10-29; the right day was only closed at 00:00 UTC = 03:00 Bahrain. No existing test changed.
+
+**Re-attack and side notes**
+
+- Other uses of a UTC "now" as a business date in the settlement Go code: none left (`time.Parse` of explicit dates in the CLI and internal API is fine; `CloseBatch` only reads Y/M/D of the date it is given). **The same bug class exists outside Go (found by the independent review, verified):** `apps/admin/src/pages/settlement/SettlementPage.tsx` `yesterdayIso()` (new finding **AUD-051**); `apps/reporting/src/consumer/applyEvent.ts:170` (UTC date in the refund rollup, tracked in AUD-047, Track B); `apps/api/src/payments/capture.ts:20` (dead helper, AUD-047); `apps/api/src/lib/dateUtil.ts` `todayStamp()` (only a log line in `businessProfile.ts`, cosmetic).
+- Behavioural consequence to expect after deploy: the first close after the fix runs at 00:15 Bahrain instead of ~03:00, so `settlement.batch_closed` / `settlement.paid` events, payout postings and notifications move about 2.75 hours earlier. Captures timestamped inside the 15-minute grace period after midnight belong to the next day (unchanged rule). Re-running a day is idempotent, so the first tick after the deploy is harmless.
+- Review follow-ups: `SETTLEMENT_DAEMON_RUN_DELAY_MINUTES` is now validated to 0-1439 at startup (1440 or more would never become due, so the day would silently never close; a negative value would fire before midnight), with `TestLoad_RejectsOutOfRangeRunDelay`; a delay-0 test was added; two comment defects in `daemon.go` and `window.go` (a leftover stale doc line and a spliced sentence) were fixed. Not verified by the reviewer: effects of closing ~2.75 h earlier on the acquirer, holds, the scheme file cut or downstream jobs.
+- The daemon still catches up only yesterday after an outage (documented; use `run-batch --date`).
+- Reporting and the API already bucket by Bahrain date (`bahrainDate.ts`, `AT TIME ZONE 'Asia/Bahrain'`); `capture.ts` `recordCaptureMetric` uses a UTC date but has no callers (noted in AUD-047).
 
 **Related:** —
 
@@ -1567,6 +1578,43 @@ Write the value (same upsert as the full rebuild, restricted to one merchant) or
 **Related:** AUD-015
 
 _Source file: [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md](findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md)_
+
+### AUD-051
+**Admin console default run date is the wrong day for 3 hours after Bahrain midnight**
+
+- Severity: **Low** · Category: time · Owner: A
+- Verdict: **BUG (traced)** (confidence high): `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact.
+- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+
+**What is wrong**
+
+The settlement page pre-fills the "re-run a daily batch" date with a day that is wrong for a Bahrain browser between 00:00 and 03:00.
+
+**Where**
+
+apps/admin/src/pages/settlement/SettlementPage.tsx:19-22 (`yesterdayIso`)
+
+**Sibling locations checked:** same bug class as AUD-025 (Go daemon, fixed), `apps/reporting/src/consumer/applyEvent.ts:170` (AUD-047), `apps/api/src/lib/dateUtil.ts` `todayStamp()` (log only).
+
+**Why it happens (root cause)**
+
+`yesterdayIso()` takes the browser-local date, subtracts a day, then formats it with `toISOString()`, which is UTC. At 02:00 in Bahrain on the 30th the local "yesterday" is the 29th at 02:00, i.e. 23:00 UTC on the 28th, so the field shows 2026-10-28 instead of 2026-10-29.
+
+**What it breaks (impact)**
+
+Only the default value of a manual field changes, but the operator who accepts it re-runs the wrong business day (a no-op because batches are idempotent) and believes yesterday was processed.
+
+**Proof / evidence**
+
+Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Not yet run as a test.
+
+**Fix**
+
+Compute the Bahrain date explicitly (UTC instant + 3 h, like `bahrainDate.ts`), not a browser-local one; add a unit test for 00:00-03:00 Bahrain.
+
+**Related:** AUD-025, AUD-047
+
+_Source file: [findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md](findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md)_
 
 
 ## 3. Fixed bugs: tests that had to change
