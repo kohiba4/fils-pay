@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **High** |
 | Category | money / duplicate logic |
 | Status | confirmed (trace) |

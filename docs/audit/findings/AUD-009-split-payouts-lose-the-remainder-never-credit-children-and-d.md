@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **High** |
 | Category | money |
 | Status | confirmed (trace) |

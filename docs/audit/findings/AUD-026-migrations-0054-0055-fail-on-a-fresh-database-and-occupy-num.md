@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **High** |
 | Category | schema / deploy |
 | Status | confirmed (runtime) |

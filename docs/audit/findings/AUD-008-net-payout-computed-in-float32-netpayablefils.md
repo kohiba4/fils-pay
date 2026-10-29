@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **Critical** |
 | Category | money / float |
 | Status | confirmed (trace) |

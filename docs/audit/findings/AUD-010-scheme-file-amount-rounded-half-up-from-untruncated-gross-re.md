@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **High** |
 | Category | money / rounding |
 | Status | confirmed (trace + exported data) |

@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | B |
 | Severity | **High** |
 | Category | trust boundary |
 | Status | confirmed (trace) |

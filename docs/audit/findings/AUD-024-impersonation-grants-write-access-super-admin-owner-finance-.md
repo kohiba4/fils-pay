@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | B |
 | Severity | **Medium** |
 | Category | authz |
 | Status | confirmed (trace) — doc conflict |

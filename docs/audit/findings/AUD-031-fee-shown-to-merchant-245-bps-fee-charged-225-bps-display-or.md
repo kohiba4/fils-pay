@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **Medium** |
 | Category | data / display |
 | Status | confirmed (trace) |

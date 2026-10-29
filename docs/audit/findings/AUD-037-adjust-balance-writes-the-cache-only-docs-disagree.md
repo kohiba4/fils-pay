@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **Low** |
 | Category | data integrity / docs |
 | Status | confirmed (trace) |

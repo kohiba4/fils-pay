@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | FP-300 (shared) |
 | Severity | **Critical** |
 | Category | race / money |
 | Status | latent (helper only; FP-300 wires it) |

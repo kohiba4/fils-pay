@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | FP-300 (shared) |
 | Severity | **High** |
 | Category | money |
 | Status | latent |

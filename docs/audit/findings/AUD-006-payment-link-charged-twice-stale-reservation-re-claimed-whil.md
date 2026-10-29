@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | B |
 | Severity | **Critical** |
 | Category | race / money |
 | Status | confirmed (trace) |

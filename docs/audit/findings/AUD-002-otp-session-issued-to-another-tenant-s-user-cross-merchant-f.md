@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | B |
 | Severity | **Critical** |
 | Category | authn / tenant isolation |
 | Status | confirmed (trace) |

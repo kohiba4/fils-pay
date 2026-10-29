@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | B |
 | Severity | **Medium** |
 | Category | reporting |
 | Status | suspected (runtime failure, cause not yet traced) |

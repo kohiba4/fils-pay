@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | B |
 | Severity | **High** |
 | Category | authn |
 | Status | confirmed (trace) |

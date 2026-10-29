@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | B |
 | Severity | **Low** |
 | Category | performance |
 | Status | suspected |

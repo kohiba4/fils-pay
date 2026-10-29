@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | A |
 | Severity | **Medium** |
 | Category | idempotency |
 | Status | confirmed (trace) |

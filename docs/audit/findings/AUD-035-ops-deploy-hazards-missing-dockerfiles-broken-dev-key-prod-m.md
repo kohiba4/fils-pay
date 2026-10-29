@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | Deploy (TBD) |
 | Severity | **Medium** |
 | Category | ops / secrets |
 | Status | confirmed (runtime + read) |

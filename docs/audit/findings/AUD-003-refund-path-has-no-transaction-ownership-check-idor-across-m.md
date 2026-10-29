@@ -2,6 +2,7 @@
 
 | Field | Value |
 |---|---|
+| Owner | FP-300 (shared) |
 | Severity | **Critical** |
 | Category | authz / money |
 | Status | latent (route returns 501 today; becomes live with FP-300) |
