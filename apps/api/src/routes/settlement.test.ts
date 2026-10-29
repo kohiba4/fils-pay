@@ -39,6 +39,7 @@ const config = loadConfig({
   ACQUIRER_LATENCY_MIN_MS: "0",
   ACQUIRER_LATENCY_MAX_MS: "1",
   WEBHOOK_SECRET_ENCRYPTION_KEY: "Y1ZTGTcYbe30GZJebys9w7T3OYZNKewuOH3SUCEdRQk=",
+  REFUNDS_ENABLED: "true",
 });
 
 const pool = new Pool({ connectionString: databaseUrl, max: 5 });
@@ -220,14 +221,30 @@ async function closeAndPayoutBatch(merchantId: string, businessDate: string): Pr
     batchFee += feeFils;
     eventIds.push(row.id);
   }
-  const netPayout = batchGross - batchFee;
+  // Refunds (FP-300): mirrors CloseBatch: succeeded refunds no batch has absorbed yet, made before the end of the day.
+  const refundRows = await pool.query<{ id: string; amount_fils: string; fee_reversed_fils: string }>(
+    `SELECT id, amount_fils, fee_reversed_fils FROM refunds
+      WHERE merchant_id = $1 AND status = 'succeeded' AND settlement_batch_id IS NULL AND occurred_at < $2
+      ORDER BY occurred_at, id`,
+    [merchantId, end],
+  );
+  const batchRefund = refundRows.rows.reduce((sum, r) => sum + Number(r.amount_fils), 0);
+  const batchRefundFee = refundRows.rows.reduce((sum, r) => sum + Number(r.fee_reversed_fils), 0);
+  const netPayout = batchGross - batchFee - batchRefund + batchRefundFee;
 
   await pool.query(
     `UPDATE settlement_batches
-        SET status = 'closed', gross_fils = $2, fee_fils = $3, net_payout_fils = $4, closed_at = now()
+        SET status = 'closed', gross_fils = $2, fee_fils = $3, net_payout_fils = $4, closed_at = now(),
+            refund_fils = $5, refund_fee_reversed_fils = $6
       WHERE id = $1`,
-    [batchId, batchGross, batchFee, netPayout],
+    [batchId, batchGross, batchFee, netPayout, batchRefund, batchRefundFee],
   );
+  if (refundRows.rows.length > 0) {
+    await pool.query(`UPDATE refunds SET settlement_batch_id = $2 WHERE id = ANY($1::uuid[])`, [
+      refundRows.rows.map((r) => r.id),
+      batchId,
+    ]);
+  }
 
   if (eventIds.length > 0) {
     await pool.query(`UPDATE transaction_events SET settlement_batch_id = $2 WHERE id = ANY($1::bigint[])`, [
@@ -479,4 +496,103 @@ test("GET /v1/settlement/reconciliation succeeds for a 'finance' session role", 
     headers: cookieHeader(financeToken),
   });
   assert.equal(res.statusCode, 200, res.body);
+});
+
+// ---------------------------------------------------------------- FP-300: refunds in settlement and reconciliation
+
+async function refundViaApi(rawKey: string, transactionId: string, amountFils: number) {
+  const res = await app.inject({
+    method: "POST",
+    url: "/v1/refunds",
+    headers: { ...authHeader(rawKey), "idempotency-key": randomUUID() },
+    payload: { transactionId, amountFils },
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  return res.json() as { feeReversedFils: number };
+}
+
+test("a batch that absorbed a refund reports it, and reconciliation still explains to zero", async () => {
+  const { merchantId, rawKey } = await createApprovedMerchantWithApiKey("recon-refund-batched", 250);
+  const txn = await authorize(rawKey, 10_000);
+  await capture(rawKey, txn.id);
+  const refund = await refundViaApi(rawKey, txn.id, 4_000);
+  assert.equal(refund.feeReversedFils, 100);
+
+  const businessDate = todayBahrainDateString();
+  const batchId = await closeAndPayoutBatch(merchantId, businessDate);
+  const nextDay = addOneCalendarDay(businessDate);
+
+  const detail = await app.inject({ method: "GET", url: `/v1/settlement/batches/${batchId}`, headers: authHeader(rawKey) });
+  assert.equal(detail.statusCode, 200, detail.body);
+  const batch = detail.json() as { grossFils: number; feeFils: number; refundFils: number; refundFeeReversedFils: number; netPayoutFils: number };
+  assert.deepEqual(
+    [batch.grossFils, batch.feeFils, batch.refundFils, batch.refundFeeReversedFils, batch.netPayoutFils],
+    [10_000, 250, 4_000, 100, 5_850],
+  );
+
+  const res = await app.inject({ method: "GET", url: `/v1/settlement/reconciliation?from=${businessDate}&to=${nextDay}`, headers: authHeader(rawKey) });
+  const report = res.json() as { gapFils: number; explained: boolean; settlementNetPayoutFils: number; ledgerMerchantPayableNetFils: number; refundTimingFils: number; pendingUnbatchedFils: number };
+  assert.equal(report.settlementNetPayoutFils, 5_850);
+  assert.equal(report.ledgerMerchantPayableNetFils, 5_850);
+  assert.equal(report.refundTimingFils, 0);
+  assert.equal(report.pendingUnbatchedFils, 0);
+  assert.equal(report.gapFils, 0);
+  assert.equal(report.explained, true);
+});
+
+test("a refund no batch has absorbed yet is pending, not an unexplained gap", async () => {
+  const { rawKey } = await createApprovedMerchantWithApiKey("recon-refund-pending", 250);
+  const txn = await authorize(rawKey, 10_000);
+  await capture(rawKey, txn.id);
+  await refundViaApi(rawKey, txn.id, 4_000); // fee reversed 100; nothing is closed
+
+  const businessDate = todayBahrainDateString();
+  const nextDay = addOneCalendarDay(businessDate);
+  const res = await app.inject({ method: "GET", url: `/v1/settlement/reconciliation?from=${businessDate}&to=${nextDay}`, headers: authHeader(rawKey) });
+  const report = res.json() as { gapFils: number; explained: boolean; refundTimingFils: number; pendingUnbatchedFils: number; ledgerMerchantPayableNetFils: number };
+  assert.equal(report.refundTimingFils, 3_900, "refund 4000 less the 100 fee given back");
+  assert.equal(report.pendingUnbatchedFils, 9_750 - 3_900);
+  assert.equal(report.ledgerMerchantPayableNetFils, 5_850);
+  assert.equal(report.gapFils, 0);
+  assert.equal(report.explained, true);
+});
+
+test("a refund made after its capture's batch lands in the later period; each period still explains to zero", async () => {
+  const { merchantId, rawKey } = await createApprovedMerchantWithApiKey("recon-refund-later", 250);
+  const txn = await authorize(rawKey, 10_000);
+  await capture(rawKey, txn.id);
+  const today = todayBahrainDateString();
+  const tomorrow = addOneCalendarDay(today);
+  await closeAndPayoutBatch(merchantId, today); // captures only, nothing refunded yet
+
+  // the refund happens "tomorrow": move its timestamps there (ledger legs and the row) to model the later day
+  await refundViaApi(rawKey, txn.id, 10_000);
+  const later = new Date(bahrainLocalMidnightUtc(tomorrow).getTime() + 3_600_000);
+  await pool.query(`UPDATE refunds SET occurred_at = $2 WHERE transaction_id = $1`, [txn.id, later]);
+  await pool.query(`ALTER TABLE ledger_entries DISABLE TRIGGER USER`);
+  try {
+    await pool.query(`UPDATE ledger_entries SET occurred_at = $2 WHERE transaction_id = $1 AND description LIKE 'refund:%'`, [txn.id, later]);
+  } finally {
+    await pool.query(`ALTER TABLE ledger_entries ENABLE TRIGGER USER`);
+  }
+  const batchId = await closeAndPayoutBatch(merchantId, tomorrow);
+
+  const detail = await app.inject({ method: "GET", url: `/v1/settlement/batches/${batchId}`, headers: authHeader(rawKey) });
+  const batch = detail.json() as { grossFils: number; refundFils: number; refundFeeReversedFils: number; netPayoutFils: number };
+  assert.deepEqual([batch.grossFils, batch.refundFils, batch.refundFeeReversedFils, batch.netPayoutFils], [0, 10_000, 250, -9_750]);
+
+  const report = async (from: string, to: string) =>
+    (await app.inject({ method: "GET", url: `/v1/settlement/reconciliation?from=${from}&to=${to}`, headers: authHeader(rawKey) })).json() as {
+      gapFils: number; refundTimingFils: number; settlementNetPayoutFils: number; ledgerMerchantPayableNetFils: number;
+    };
+  // day 1: captures only, fully batched
+  assert.equal((await report(today, tomorrow)).gapFils, 0);
+  // day 2: the refund is in the ledger and in that day's batch (refundTiming 0). The only difference left is the payout of
+  // day 1's batch, which the daemon posts on day 2 (this test helper too): a pre-existing property of the ledger side
+  // of the report (a window also sees the previous day's payout), not of refunds.
+  const second = await report(tomorrow, addOneCalendarDay(tomorrow));
+  assert.equal(second.refundTimingFils, 0);
+  assert.equal(second.settlementNetPayoutFils, -9_750);
+  assert.equal(second.ledgerMerchantPayableNetFils, -9_750 - 9_750);
+  assert.equal(second.gapFils, -9_750, "exactly day 1's payout leg");
 });

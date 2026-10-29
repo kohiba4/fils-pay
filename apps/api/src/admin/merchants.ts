@@ -269,10 +269,13 @@ export async function getMerchantDetailForAdmin(
     gross_fils: string;
     fee_fils: string;
     net_payout_fils: string;
+    refund_fils: string;
+    refund_fee_reversed_fils: string;
     closed_at: Date | null;
   }>(
     `SELECT id, batch_date::text AS batch_date, status, gross_fils::text AS gross_fils,
-            fee_fils::text AS fee_fils, net_payout_fils::text AS net_payout_fils, closed_at
+            fee_fils::text AS fee_fils, net_payout_fils::text AS net_payout_fils,
+            refund_fils::text AS refund_fils, refund_fee_reversed_fils::text AS refund_fee_reversed_fils, closed_at
        FROM settlement_batches
       WHERE merchant_id = $1
       ORDER BY batch_date DESC
@@ -316,6 +319,8 @@ export async function getMerchantDetailForAdmin(
       grossFils: Number(row.gross_fils),
       feeFils: Number(row.fee_fils),
       netPayoutFils: Number(row.net_payout_fils),
+      refundFils: Number(row.refund_fils),
+      refundFeeReversedFils: Number(row.refund_fee_reversed_fils),
       closedAt: row.closed_at,
     })),
   };

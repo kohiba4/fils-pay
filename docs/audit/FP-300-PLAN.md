@@ -38,7 +38,7 @@ Every helper was written before the capture discount and volume tier existed (no
 | 5 | Dilmune Cloud deployment | AUD-035 | waits for the user's instructions (Q10) |
 
 **Ordering rule:** refunds must not go live anywhere (including Dilmune) before PR 2 is deployed, otherwise cardholders are
-refunded and the merchant is still paid in full. Enforced by the `REFUNDS_ENABLED` switch (default off, 503); PR 2 flips the default to on.
+refunded and the merchant is still paid in full. Enforced by the `REFUNDS_ENABLED` switch (it was off by default, 503, until PR 2; PR 2 flipped the default to on). Deploy migration 0091 and the settlement daemon together with the API.
 
 ## Design decisions
 - **Concurrency (was Q14, now decided).** Follow capture: one transaction, `SELECT ... FOR UPDATE` on the transaction row,

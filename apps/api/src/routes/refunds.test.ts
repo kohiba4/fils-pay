@@ -262,7 +262,7 @@ test("a 'view as merchant' operator cannot refund, whatever role their grant map
   assert.equal(n.rows[0]!.c, 0);
 });
 
-test("refunds are off unless REFUNDS_ENABLED is true (503), nothing is written", async () => {
+test("refunds can be switched off with REFUNDS_ENABLED=false (503), nothing is written", async () => {
   const offApp = buildApp(loadConfig({ ...process.env, DATABASE_URL: databaseUrl!, NODE_ENV: "test", REFUNDS_ENABLED: "false",
     INTERNAL_API_TOKEN: "test-internal-token", ACQUIRER_FAILURE_RATE: "0", ACQUIRER_LATENCY_MIN_MS: "0", ACQUIRER_LATENCY_MAX_MS: "1",
     WEBHOOK_SECRET_ENCRYPTION_KEY: "Y1ZTGTcYbe30GZJebys9w7T3OYZNKewuOH3SUCEdRQk=" }), pool);

@@ -4,7 +4,7 @@
 
 Sorted by severity. The status text is the first line of each finding's Status field; the verdict is from [TRIAGE.md](TRIAGE.md).
 
-Counts: Critical 5, High 21, Medium 18, Low 10 (54 findings, 24 fixed or partly fixed)
+Counts: Critical 5, High 21, Medium 18, Low 10 (54 findings, 25 fixed or partly fixed)
 
 | ID | Title | Severity | Owner | Verdict | Status | Detail |
 |---|---|---|---|---|---|---|
@@ -33,7 +33,7 @@ Counts: Critical 5, High 21, Medium 18, Low 10 (54 findings, 24 fixed or partly 
 | AUD-027 | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | FP-300 (shared) | BUG (runtime) | fixed (branch feat/FP-300-refund-core) | [findings/AUD-027-refund-inserts-violate-the-0070-reason-constraint-refunds-al.md](findings/AUD-027-refund-inserts-violate-the-0070-reason-constraint-refunds-al.md) |
 | AUD-046 | Capture and void have no role gate: support users and impersonating admins can move money | High | B | BUG (traced) | confirmed (trace) | [findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md](findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md) |
 | AUD-053 | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | B | BUG (runtime) | confirmed (runtime) | [findings/AUD-053-webhook-deliveries-that-cannot-be-attempted-stay-due-forever.md](findings/AUD-053-webhook-deliveries-that-cannot-be-attempted-stay-due-forever.md) |
-| AUD-054 | Refunds never reach a payout: batch close ignores refunds | High | A | BUG (traced) | open (FP-300 PR 2; plan in FP-300-PLAN.md) | [findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md](findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md) |
+| AUD-054 | Refunds never reach a payout: batch close ignores refunds | High | A | BUG (runtime) | fixed (branch feat/FP-300-settlement-refunds; deploy needs migration 0091 + the daemon) | [findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md](findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md) |
 | AUD-019 | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | B | BUG (traced) | confirmed (trace) | [findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md](findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md) |
 | AUD-023 | OTP: Math.random codes and racy attempt limit | Medium | B | BUG (traced) | confirmed (trace) | [findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md](findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md) |
 | AUD-024 | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | B | DESIGN (decided to change) | confirmed (trace) — doc conflict | [findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md](findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md) |

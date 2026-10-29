@@ -215,7 +215,7 @@ export interface ReplayResponse {
 // --- settlement / reconciliation ---
 export type SettlementBatchStatus = "open" | "closed" | "paid";
 
-/** @property netPayoutFils Always exactly grossFils - feeFils. */
+/** @property netPayoutFils Always exactly grossFils - feeFils - refundFils + refundFeeReversedFils; negative when refunds exceed the batch's captures (nothing is paid for it). */
 export interface SettlementBatchDto {
   id: string;
   batchDate: string;
@@ -223,6 +223,8 @@ export interface SettlementBatchDto {
   grossFils: number;
   feeFils: number;
   netPayoutFils: number;
+  refundFils: number;
+  refundFeeReversedFils: number;
   closedAt: string | null;
   paidAt: string | null;
 }
@@ -262,6 +264,8 @@ export interface ReconciliationReport {
   ledgerMerchantPayableNetFils: number;
   settlementNetPayoutFils: number;
   pendingUnbatchedFils: number;
+  /** Net refunds made in the period that no batch of the period absorbed yet; already deducted inside pendingUnbatchedFils. */
+  refundTimingFils: number;
   gapFils: number;
   explained: boolean;
 }

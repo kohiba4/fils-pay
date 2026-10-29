@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **54** (Critical 5, High 21, Medium 18, Low 10); fixed so far: **24**.
+- Findings: **54** (Critical 5, High 21, Medium 18, Low 10); fixed so far: **25**.
 - By verdict: BUG 38, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -36,7 +36,7 @@
 | [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-053](#aud-053) | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | BUG (runtime) | confirmed (runtime) | B |
-| [AUD-054](#aud-054) | Refunds never reach a payout: batch close ignores refunds | High | BUG (traced) | open (FP-300 PR 2; plan in FP-300-PLAN.md) | A |
+| [AUD-054](#aud-054) | Refunds never reach a payout: batch close ignores refunds | High | BUG (runtime) | fixed (branch `feat/FP-300-settlement-refunds`; deploy needs migration 0091 + the daemon) | A |
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
@@ -1071,8 +1071,8 @@ _Source file: [findings/AUD-053-webhook-deliveries-that-cannot-be-attempted-stay
 **Refunds never reach a payout: batch close ignores refunds**
 
 - Severity: **High** · Category: money / settlement · Owner: A
-- Verdict: **BUG (traced)** (confidence high): Batch close selects capture events only; latent until FP-300 PR 1 made refunds possible, real from then on.
-- Status: open (FP-300 PR 2; plan in FP-300-PLAN.md) · Fix commit: —
+- Verdict: **BUG (runtime)** (confidence high): Batch close selected capture events only; latent until FP-300 PR 1 made refunds possible. Reproduced by the settlement tests, fixed in PR 2.
+- Status: fixed (branch `feat/FP-300-settlement-refunds`; deploy needs migration 0091 + the daemon) · Fix commit: see `git log feat/FP-300-settlement-refunds`
 
 **What is wrong**
 
@@ -1096,7 +1096,13 @@ Traced in code (the refund route was a 501 stub until FP-300 PR 1, so this was l
 
 **Fix**
 
-See docs/audit/FP-300-PLAN.md (PR 2): `refund_fils` / `refund_fee_reversed_fils` on `settlement_batches`, pickup of succeeded unbatched refunds with `occurred_at < windowEnd`, RecalculateMDR keeps the refund terms and filters events by type, exact pending refunds for reconciliation, additive API/payload fields. Open finance decision Q13: negative net (no netting vs cap payouts at the balance).
+Migration 0091 adds `settlement_batches.refund_fils` and `refund_fee_reversed_fils` (`NOT NULL DEFAULT 0`, so history is unchanged). `CloseBatch` selects, under `FOR UPDATE`, the merchant's succeeded refunds with no batch and `occurred_at < end of the business day` (no lower bound, so a refund that missed its day is absorbed by the next batch closed), stores them as their own terms and freezes `net_payout_fils = gross - fee - refund_fils + refund_fee_reversed_fils`; the refunds are stamped with the batch id in the same transaction (so a re-close subtracts nothing twice) and `gross_fils` and the scheme export stay captures-only. The net can be **negative** (refunds above the day's captures): `PayoutBatch` and `PayoutSplitBatch` pay nothing for it, post no legs, and do NOT call `ApplyPayout` with the negative amount (that would "pay the debt back" into `merchant_balances`); the cached balance shows the debt, `settlement.paid` is not enqueued. `RecalculateMDR` keeps the refund terms in the recomputed net and prices only capture events. A merchant that is suspended or in test mode is not closed, so its refunds wait (a test-mode merchant is never settled, same as its captures). The `settlement.batch_closed` payload gets `refundFils` / `refundFeeReversedFils`; `SettlementBatchDto`, the admin merchant batch list and the web batch pages show them; the web `bhd()` helper now accepts negative amounts (a refund-only batch or a negative reconciliation figure used to throw and blank the page). Reconciliation: `refundTimingFils` = refunds made in the window (by `occurred_at`) minus refunds absorbed by batches dated in the window, exact integer SQL, deducted inside `pendingUnbatchedFils`, so the gap is 0 whether a refund is batched, pending, or batched on a later day. `REFUNDS_ENABLED` now defaults to on.
+
+Tests: Go `refund_settlement_test.go` (net reduced and refunds stamped, scheme export captures-only, idempotent re-close, selection rules: older/unbatched yes, failed no, next day no, refund-only negative batch pays nothing and keeps the cache, suspended merchant keeps refunds unbatched then absorbs them on reactivation, RecalculateMDR keeps refund terms) + `TestSplitPayout_NegativeNetPaysNothingAndKeepsTheDebtInTheCache`; API `settlement.test.ts` (3 reconciliation tests with refunds, DTO fields; the batch-close helper mirrors the Go pickup); web `bhd` negative test. Tests changed: the TS `closeAndPayoutBatch` test helper (it mirrors CloseBatch, so it now mirrors the refund pickup too); no assertion was edited.
+
+**Re-attack and side notes**
+
+Open points, stated rather than hidden: (1) **Q13 (finance)**: a negative net is recorded and not recovered automatically, a later positive batch is still paid in full; the debt is visible in the cached balance and in `net_payout_fils < 0`, and needs a collection/netting policy before refunds exceed a merchant's sales in practice. (2) `RecalculateMDR` does not re-derive the fee given back on refunds (frozen at what was reversed), so recalculating a capture day at a new rate leaves a small explainable difference in the later refund batch. (3) Burden of a negative or reduced net on a split parent is shared by weight. (4) The cached balance keeps AUD-048's definition. (5) Reconciliation windows still see the previous day's payout leg (pre-existing). (6) Deploy order: migration 0091 and the daemon with the API.
 
 **Related:** AUD-016, AUD-048, FP-300
 
