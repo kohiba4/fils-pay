@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **5**.
+- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **6**.
 - By verdict: BUG 34, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -24,7 +24,7 @@
 | [AUD-011](#aud-011) | `expire_holds` deletes ALL holds when nothing has expired | High | BUG (runtime) | fixed (branch `fix/AUD-011-expire-holds`, pending merge) | A |
 | [AUD-012](#aud-012) | CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped) | High | BUG (runtime) | fixed (branch `fix/AUD-012-csv-bd-parsing`, pending merge; historical data repair still needed) | A |
 | [AUD-013](#aud-013) | March sweep script is not idempotent, posts to the wrong accounts, wrong window | High | BUG (runtime) | confirmed (runtime) | A |
-| [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-014](#aud-014) | Recalculate MDR rewrites closed AND paid batches, at the wrong rate | High | BUG (runtime) | fixed (branch `fix/AUD-014-mdr-recalc-paid-batches`, pending merge) | A |
 | [AUD-015](#aud-015) | Admin "Rebuild cached balances" reads scheme export gross, not the ledger — FP-203 | High | BUG (runtime) | fixed (branch `fix/AUD-015-rebuild-from-ledger`, pending merge) | A |
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
 | [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | confirmed (runtime) | A |
@@ -542,7 +542,7 @@ _Source file: [findings/AUD-013-march-sweep-script-is-not-idempotent-posts-to-th
 
 - Severity: **High** · Category: money / history mutation · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Only the paid-batch rewrite is a bug. Recalculating CLOSED unpaid batches at current terms IS intended (finance flow, existing test).
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-014-mdr-recalc-paid-batches`, pending merge) · Fix commit: see `git log fix/AUD-014-mdr-recalc-paid-batches`
 
 **Where**
 
@@ -566,7 +566,19 @@ Trace + test review: existing tests cover only closed (unpaid) batches; none cov
 
 **Fix**
 
-Closed-unpaid: keep current behaviour (rewrite before payout). Paid: post the ledger adjustment and cache delta only; never update the batch row (decision Q3).
+- `settlement/recalculate_mdr.go`: a **paid** batch's row (`fee_fils`, `net_payout_fils`) is never rewritten any more: the fee difference is posted as a ledger adjustment (dated now) and applied to the cache only. **Closed, unpaid** batches are still rewritten before payout (intended finance flow, covered by the 4 existing tests, untouched).
+- Idempotency (needed because a paid row no longer changes): the cumulative adjustment applied to a paid batch is stored explicitly in a new column `settlement_batches.paid_fee_adjustment_fils` (migration **0073**, default 0, correct for history because the old code rewrote rows). The new fee is measured against `fee_fils + paid_fee_adjustment_fils`. A batch rewritten while still closed has its changes folded into `fee_fils` and keeps 0, so nothing is counted twice. `BatchAdjustment.OldFeeFils` reports that effective fee. (First version inferred the prior adjustments from ledger legs with a description string; the independent review proved that double counts a batch rewritten while closed and later paid, e.g. OldFeeFils 5,500 and a 1,500 over-credit; replaced by the column.)
+- Tests (written first; the repro failed `fee 2500 -> 4000, net 97500 -> 96000`): `TestRecalculateMDR_PaidBatchGetsAnAdjustmentNotARewrite` and `..._PaidBatchAdjustmentIsIdempotentAndCumulative` (rate 250 -> 400 -> rerun -> 300: net adjustment +500 = 3,000 owed - 2,500 paid, one leg group per change) and, from the review, `..._RewrittenWhileClosedThenPaidThenRecalculated` (rewritten while closed 2,500 -> 4,000, paid, then 300: expects 4,000 -> 3,000, total +500; failed before the column with `OldFeeFils: 5500, DiffFils: -2500`). `TestRepro_AUD014_*` now passes. No existing test changed.
+
+**Re-attack and side notes**
+
+- API consumers: the response shape is unchanged (`apps/api/src/admin/settlementClient.ts` reads `status`, `oldFeeFils`, `newFeeFils`, `diffFils`); for paid batches `oldFeeFils` is now the effective (already adjusted) fee.
+- Reconciliation will show a gap equal to the cumulative adjustments on paid batches (ledger payable moves, `net_payout_fils` does not). That is the intended visibility of the correction, not a new bug.
+- **Open question (traced, not changed): how does an adjustment reach the bank?** `PayoutBatch` pays only the batch's own `net_payout_fils`. An adjustment on a paid batch (and manual credits, CSV adjustments) changes `merchant_payable` and the cache, but no payout or collection instruction is generated for it, so a fee increase is never collected and a decrease never paid out. This was already true before the fix (the old code also only posted legs). Needs a finance decision on the settlement path for adjustments (e.g. fold the payable remainder into the next batch's payout).
+- Not covered by tests: concurrent recalculation vs a payout of the same batch (batch rows are locked `FOR UPDATE` and `PayoutBatch`/`PayoutSplitBatch` lock the same row, so they serialise; traced by the reviewer, not run).
+- Removed the stale comment `MK: recalculate_mdr.go selects paid batches too??` in `apps/api/src/routes/admin.ts`. Needs migration 0073 applied (Track A migration range).
+- **Escalate to finance (real gap, pre-existing):** adjustments never reach a payout instruction; `PayoutBatch`, `payout_estimate.go` and `payout_notify.go` only use `net_payout_fils` and nothing sweeps payable adjustments, so a fee increase on a paid batch is never collected and a decrease is never paid out.
+- Recalculation uses the merchant's CURRENT terms and ignores `fee_schedules` and the volume tier, as designed for finance contract changes; if a tier discount was active when the batch closed, a recalculation removes it from the fee (known limitation).
 
 **Related:** AUD-016, AUD-015
 

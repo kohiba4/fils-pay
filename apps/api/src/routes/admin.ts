@@ -261,7 +261,6 @@ export async function adminRoutes(app: FastifyInstance, options: AdminRoutesOpti
    */
   app.post<{ Params: MerchantIdParams; Body: RecalcMdrBody }>(
     // am: safe — only touches open batches. ADMIN.md says so
-    // MK: recalculate_mdr.go selects paid batches too?? line ~70
     // am: those are skipped further down. ignore
     "/merchants/:id/mdr-recalculation",
     { preHandler: [requireAdminSession, requireAdminRole("finance", "super_admin")] },

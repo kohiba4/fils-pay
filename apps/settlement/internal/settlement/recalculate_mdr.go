@@ -17,8 +17,9 @@ import (
 // recalculation pass.
 //
 // DiffFils is NewFeeFils - OldFeeFils. A positive diff means the merchant was
-// undercharged at close; the correcting ledger group lands in the current
-// period's batch, so the original batch's figures stay as they were paid.
+// undercharged at close. For a PAID batch the stored batch row is left exactly as it
+// was paid and OldFeeFils is the fee already adjusted to; the difference is only
+// posted as a ledger group (dated now). For a closed, unpaid batch the row is rewritten.
 type BatchAdjustment struct {
 	BatchID    uuid.UUID
 	BatchDate  time.Time
@@ -42,10 +43,13 @@ type batchRow struct {
 	grossFils     money.Fils
 	feeFils       money.Fils
 	netPayoutFils money.Fils
+	// paidFeeAdjustment is the cumulative recalculation adjustment held OUTSIDE the row of a paid batch.
+	paidFeeAdjustment money.Fils
 }
 
-// RecalculateMDR re-derives the fee on a merchant's closed batches in
-// [from, to) at the merchant's current terms and posts the difference.
+// RecalculateMDR re-derives the fee on a merchant's closed and paid batches in
+// [from, to) at the merchant's current terms and posts the difference. Paid batches
+// are never rewritten (see BatchAdjustment); rerunning is idempotent.
 func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID, from, to time.Time) (RecalcResult, error) {
 	tx, err := db.Begin(ctx)
 	if err != nil {
@@ -61,7 +65,7 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils
+		SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, paid_fee_adjustment_fils
 		  FROM settlement_batches
 		 WHERE merchant_id = $1 AND batch_date >= $2 AND batch_date < $3
 		   AND status <> 'open'
@@ -74,14 +78,15 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 	var batches []batchRow
 	for rows.Next() {
 		var b batchRow
-		var gross, fee, net int64
-		if err := rows.Scan(&b.id, &b.batchDate, &b.status, &gross, &fee, &net); err != nil {
+		var gross, fee, net, paidAdj int64
+		if err := rows.Scan(&b.id, &b.batchDate, &b.status, &gross, &fee, &net, &paidAdj); err != nil {
 			rows.Close()
 			return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: scan batch: %w", err)
 		}
 		b.grossFils = money.Fils(gross)
 		b.feeFils = money.Fils(fee)
 		b.netPayoutFils = money.Fils(net)
+		b.paidFeeAdjustment = money.Fils(paidAdj)
 		batches = append(batches, b)
 	}
 	if err := rows.Err(); err != nil {
@@ -96,19 +101,33 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 		if err != nil {
 			return RecalcResult{}, err
 		}
-		diff := newFee - b.feeFils
+		// A PAID batch's row is frozen (it matches the bank instruction and statement), so earlier
+		// recalculations of it live in paid_fee_adjustment_fils: measure the new fee against the fee
+		// ALREADY adjusted to, otherwise every rerun would post the same difference again (AUD-014).
+		// A batch rewritten while closed has its changes in fee_fils and 0 here, so nothing is counted twice.
+		oldFee := b.feeFils + b.paidFeeAdjustment
+		diff := newFee - oldFee
 		if diff == 0 {
 			continue
 		}
 		newNetPayout := b.grossFils - newFee
-		// am: posts against the OLD batch id so it never lands in a new payout?? fixed in FP-244 i think
 		if err := postMdrAdjustment(ctx, tx, merchantID, b.id, diff); err != nil {
 			return RecalcResult{}, err
 		}
-		if _, err := tx.Exec(ctx, `
-			UPDATE settlement_batches SET fee_fils = $2, net_payout_fils = $3 WHERE id = $1
-		`, b.id, int64(newFee), int64(newNetPayout)); err != nil {
-			return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: update batch %s: %w", b.id, err)
+		// Closed-but-unpaid batches are still rewritten (the payout has not gone out yet, so the
+		// corrected figures are what will be paid). Paid batches are never rewritten.
+		if b.status != "paid" {
+			if _, err := tx.Exec(ctx, `
+				UPDATE settlement_batches SET fee_fils = $2, net_payout_fils = $3 WHERE id = $1
+			`, b.id, int64(newFee), int64(newNetPayout)); err != nil {
+				return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: update batch %s: %w", b.id, err)
+			}
+		} else {
+			if _, err := tx.Exec(ctx, `
+				UPDATE settlement_batches SET paid_fee_adjustment_fils = paid_fee_adjustment_fils + $2 WHERE id = $1
+			`, b.id, int64(diff)); err != nil {
+				return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: record adjustment for paid batch %s: %w", b.id, err)
+			}
 		}
 		// A fee increase (diff > 0) reduces net payout owed, so the cache
 		// moves by -diff — the same signed-delta idiom ApplyBatchClose
@@ -120,7 +139,7 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 			BatchID:    b.id,
 			BatchDate:  b.batchDate,
 			Status:     b.status,
-			OldFeeFils: b.feeFils,
+			OldFeeFils: oldFee,
 			NewFeeFils: newFee,
 			DiffFils:   diff,
 		})
