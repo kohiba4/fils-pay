@@ -5,8 +5,8 @@
 | Owner | FP-300 (shared) |
 | Severity | **High** |
 | Category | schema drift |
-| Status | confirmed (runtime) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **fixed** (branch `feat/FP-300-refund-core`) |
+| Fix commit | see `git log feat/FP-300-refund-core` |
 
 ## Summary
 Refund inserts violate the 0070 reason constraint — refunds always 500.
@@ -25,11 +25,13 @@ Baseline: 11 tests fail with `violates check constraint "chk_refunds_reason_not_
 ## Impact
 Refund feature cannot work (FP-300 blocker).
 
-## Fix (proposed)
-Omit the column / pass a value when absent (part of FP-300).
+## Fix
+The INSERT now uses `COALESCE($6, 'unspecified')` for `reason`, so an omitted reason takes the default 0070 intended instead of an explicit NULL. The route validates `reason` (1-255 characters) and stores it trimmed.
+
+Tests: All 11 previously failing refund tests pass (7 in `processRefund.test.ts`, 4 in `initiateMerchantRefund.test.ts`); `routes/refunds.test.ts` checks the default and a custom reason. Tests changed for FP-300 as a whole: the 501 stub test in `routes/transactions.test.ts` was converted (see AUD-003); none of the 11 was edited.
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+Migration 0070 is untouched (applied). No other writer inserts into `refunds`.
 
 ## Related
 FP-300

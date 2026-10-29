@@ -29,6 +29,7 @@ Triage verdicts for these items came from reading code; **confirm each with a fa
 | 14 | AUD-040 | webhook dispatcher has no row claim (multi-replica double send) | Low | LIMITATION | optional: `FOR UPDATE SKIP LOCKED` | todo |
 | 15 | AUD-047 | `/v1/reporting/export-summary` has no auth hook; UTC date in a Bahrain rollup | Low | BUG (traced) | add the preHandler; use `toBahrainDateString` | todo |
 | 16 | AUD-044 | flaky dispatcher backoff test (real jitter, exact delay) | Low | HYGIENE | inject jitter in the test | todo |
+| 17 | AUD-053 | NEW: an undeliverable webhook row (e.g. undecryptable secret) stays due forever; 100 of them starve every merchant's webhooks; the poison-row test leaks one per run | High | BUG (runtime) | count a pre-transport failure as a failed attempt with backoff and exhaustion; clean up in the test; same file as AUD-018/019/020/021 | todo |
 
 ## Unverified: trace first, then decide if it is a bug
 | ID | Finding | What to establish | Status |
@@ -43,7 +44,7 @@ _Track A (@kohiba4) is waiting on @The-Tifo for: **AUD-046** (blocks Track A's A
 
 - **`routes/transactions.ts`**: AUD-046 (you) lands first; Track A's AUD-016 (remove the post-commit discount call) rebases on it.
 - **AUD-018 duplicate payout notifications/disbursements** is joint. Track A adds the unique index (migration **0075**, `uq_outbox_settlement_paid_per_batch`) and `ON CONFLICT` claim in the Go daemon; **you** make `apps/api/src/webhooks/dispatcher.ts` / `payoutDisbursement.ts` idempotent (one `settlement_payout_disbursements` row per batch, not per delivery/replay; unique key + `ON CONFLICT DO NOTHING`, migration 0080+). Agree the unique-key name with Track A first.
-- **FP-300 refunds** (Phase 3, after the queue above): you own the `POST /v1/refunds` route + ownership scope (AUD-003), `refund.succeeded` envelope + dispatcher entry (AUD-030), timeline, and the 0070 reason bug (AUD-027); Track A owns ledger legs, settlement adjustment, cumulative fee reversal (AUD-029), the refund summary view (AUD-028) and the concurrency lock (AUD-004).
+- **FP-300 refunds** (changed 2026-10-30, see docs/audit/FP-300-PLAN.md): Track A (kohiba4) took the whole refund build because no Track B work had started: the route, ownership, 0070 reason bug, locking, fee reversal (PR 1), settlement (PR 2), `refund.succeeded` envelope + dispatcher entry and timeline (PR 3, a small additive edit in `dispatcher.ts`), web (PR 4). Please keep out of `routes/refunds.ts`, `payments/*refund*` and the refund parts of settlement; your queue is unchanged. Rebase onto `main` before touching `dispatcher.ts`.
 - **Decisions already made that affect you:** DECISIONS.md Q4 (impersonation read-only) and Q11 context. Q10 (Dilmune Cloud) is the user's.
 
 ## Done log (append one line per merged PR)

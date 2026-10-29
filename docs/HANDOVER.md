@@ -9,10 +9,7 @@ Mahmood has the context for most of it.
 
 ## State of things
 
-**Refunds.** `POST /v1/refunds` returns 501. `processRefund.ts` is the
-helper and I'd consider it done: it needs the route and the drawer wired.
-Fee reversal goes through `calculateRefundFee`, which sums back to the
-original fee across partials.
+**Refunds.** *[Audit note 2026-10-30 (FP-300 PR 1): rewritten. The original text said `processRefund.ts` was done and only needed the route and drawer; it was not: it had no ownership check, no lock, a wrong ceiling (authorized, not captured), an explicit NULL `reason` that violates 0070, and a fee reversal that could exceed the fee (AUD-003/004/005/027/029).]* `POST /v1/refunds` is live: it needs an `Idempotency-Key`, the owner or finance role (or an API key), refunds only the authenticated merchant's own captured money, and gives back the proportional share of the fee that was actually kept. Still to do (docs/audit/FP-300-PLAN.md): refunds do not yet reduce the merchant's payout (AUD-054, PR 2), the `refund.succeeded` webhook and reports (PR 3), the dashboard button (PR 4). The route is off unless `REFUNDS_ENABLED=true` (503 `refunds_disabled`); do not enable it in production before PR 2.
 
 **Scheme residue.** I added `0038_scheme_export_lines_amount_3dp.sql` so
 each export line keeps the untruncated three-decimal amount next to the

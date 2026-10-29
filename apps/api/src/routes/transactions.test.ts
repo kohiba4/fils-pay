@@ -31,6 +31,7 @@ const config = loadConfig({
   ACQUIRER_LATENCY_MIN_MS: "0",
   ACQUIRER_LATENCY_MAX_MS: "1",
   WEBHOOK_SECRET_ENCRYPTION_KEY: "Y1ZTGTcYbe30GZJebys9w7T3OYZNKewuOH3SUCEdRQk=",
+  REFUNDS_ENABLED: "true",
 });
 
 const pool = new Pool({ connectionString: databaseUrl, max: 5 });
@@ -286,16 +287,16 @@ test("GET /v1/transactions/:id/events returns the timeline in chronological orde
   assert.equal(events[2]!.amountFils, 4_000);
 });
 
-// delete/replace this when FP-212 lands — am
-// MK: keep it until the route is behind the feature flag (REFUNDS_V2), then flip the assertion
-test("POST /v1/refunds returns 501 not_implemented", async () => {
+// FP-300: the route is live (the 501 stub this test used to assert is gone). Full coverage is in routes/refunds.test.ts;
+// this keeps the same route/auth smoke check with its new answer: an empty body is a 400, not "not implemented".
+test("POST /v1/refunds is implemented: an empty body is a 400", async () => {
   const { rawKey } = await createApprovedMerchantWithApiKey("refund-stub");
   const res = await app.inject({
     method: "POST",
     url: "/v1/refunds",
-    headers: authHeader(rawKey),
+    headers: { ...authHeader(rawKey), "idempotency-key": randomUUID() },
     payload: {},
   });
-  assert.equal(res.statusCode, 501, res.body);
-  assert.equal(res.json().error, "not_implemented");
+  assert.equal(res.statusCode, 400, res.body);
+  assert.equal(res.json().error, "invalid_request");
 });

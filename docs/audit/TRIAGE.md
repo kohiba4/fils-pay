@@ -14,9 +14,9 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 |---|---|---|---|
 | AUD-001 | BUG (traced) | high | `lookupSession` reads the `live_sessions` view and never tests `authenticated`; 0012 states every auth query must. Track B to reproduce. |
 | AUD-002 | BUG (traced) | high | login re-resolves the OTP recipient by email across all merchants; 0003 allows duplicate emails and 0011 says no code resolves a challenge by email. |
-| AUD-003 | LATENT | high | No ownership scope in refund path, but `POST /v1/refunds` is a 501 stub today. Becomes critical when FP-300 wires it. |
-| AUD-004 | LATENT | high | No lock across the acquirer call; capture does lock (ruled-out R-04), so "payments are safe" is true. |
-| AUD-005 | LATENT | high | Ceiling is authorized minus refunded; the brief lists "refund more than charged". |
+| AUD-003 | LATENT (fixed in FP-300 PR 1) | high | No ownership scope in refund path, but `POST /v1/refunds` is a 501 stub today. Becomes critical when FP-300 wires it. |
+| AUD-004 | LATENT (fixed in FP-300 PR 1) | high | No lock across the acquirer call; capture does lock (ruled-out R-04), so "payments are safe" is true. |
+| AUD-005 | LATENT (fixed in FP-300 PR 1) | high | Ceiling is authorized minus refunded; the brief lists "refund more than charged". |
 | AUD-006 | BUG (traced) | high | Matches the incident exactly (>60 s first attempt, finalize answers 200 on 0 rows). The postmortem's callback theory is wrong: callbacks never touch links. |
 | AUD-007 | BUG (traced) | high | ARCHITECTURE documents client-clock expiry as a feature, but the brief (FP-187) calls it untrusted input. Treated as a bug. |
 | AUD-008 | BUG (runtime) | high | float32 net differs from integer subtraction (up to 14 fils at ~1M BD). ADR-0001 forbids it. |
@@ -40,7 +40,7 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-026 | BUG (runtime) | high | Fresh migrate fails at 0054. |
 | AUD-027 | BUG (runtime) | high | 11 refund tests fail on the 0070 check. Latent in product (route is a stub). |
 | AUD-028 | LATENT | high | View joins `t.id = r.id`; refunds are not live yet. |
-| AUD-029 | LATENT | medium | Per-partial rounding can reverse more fee than charged (arithmetic example); refunds not live. |
+| AUD-029 | LATENT (fixed in FP-300 PR 1) | medium | Per-partial rounding can reverse more fee than charged (arithmetic example); refunds not live. |
 | AUD-030 | LATENT | high | Event produced, no envelope or dispatcher entry. |
 | AUD-031 | BUG (runtime) | high | Reproduced 245 vs 225 with the seed. |
 | AUD-032 | BUG (traced) | medium | The code clears `test_mode` deliberately ("tidied"), but a status recompute changing settlement eligibility contradicts 0002. Confirmed by chat. |
@@ -63,4 +63,6 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-049 | BUG (traced) | high | The --merchant path only reads; the comment and RUNBOOK claim it writes. |
 | AUD-050 | BUG (traced) | medium | `calculateCreditFeeReversal(base, merchants.mdr_bps)` ignores `fee_schedules`; the stored default is only the fallback. Not yet reproduced as a test; what a goodwill reversal should mean is a finance call. |
 | AUD-051 | BUG (traced) | high | `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact. |
+| AUD-053 | BUG (runtime) | high | Reproduced: 134 stuck pending deliveries made 6 dispatcher tests fail; Step B orders by next_attempt_at and never advances an unattemptable row. Track B. |
+| AUD-054 | BUG (traced) | high | Batch close selects capture events only; latent until FP-300 PR 1 made refunds possible, real from then on. |
 | AUD-052 | HYGIENE | high | Reproduced: counter above 2e9 turns on the 15 bps tier and three fee tests fail. Test isolation only; fixed by resetting the counter in `mustPool`. |

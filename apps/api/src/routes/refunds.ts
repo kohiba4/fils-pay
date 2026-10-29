@@ -1,26 +1,80 @@
 import type { FastifyInstance } from "fastify";
-import { requireMerchantAuth } from "../auth/requireMerchantAuth.js";
+import { toFils } from "@filspay/money";
+import {
+  requireMerchantAuth,
+  requireMerchantRole,
+  requireMerchantWriterActor,
+} from "../auth/requireMerchantAuth.js";
+import { UUID_RE } from "../admin/merchants.js";
+import { AppError, BadRequestError, ForbiddenError } from "../lib/errors.js";
+import type { FastifyRequest } from "fastify";
+import { initiateMerchantRefund } from "../refunds/initiateMerchantRefund.js";
+
+interface CreateRefundBody {
+  transactionId?: unknown;
+  amountFils?: unknown;
+  reason?: unknown;
+}
+
+const MAX_REASON_LENGTH = 255;
 
 /**
- * Refunds — full and partial, including the settlement adjustment — aren't
- * built yet. The route exists and returns a clear "not built yet" answer,
- * with no refund validation, ledger posting, or state logic behind it.
+ * Registered with prefix '/v1/refunds'.
+ *
+ * `POST /` refunds all or part of a captured transaction of the AUTHENTICATED merchant (session or API key); the
+ * merchant is never taken from the body. Requires an `Idempotency-Key` header, like capture: a retry with the same key
+ * and body replays the first answer and refunds once. Session users need the owner or finance role (a support user and
+ * a "view as merchant" operator cannot move money); an API key has full merchant authority, as for capture.
+ * Omitting `amountFils` refunds everything still refundable (captured minus already refunded).
  */
-// FP-212. stub until refunds land. transactions.test.ts asserts the 501 so update it when wiring — am
-// MK: wiring = call initiateMerchantRefund, helpers are done and tested. half a day yalla
-// FH: Claude drafted the handler for me:
-//   app.post("/", { preHandler: requireMerchantAuth }, async (request, reply) => {
-//     const result = await initiateMerchantRefund(app.db, app.acquirer, {
-//       merchantId: request.merchantAuth.merchantId,
-//       ...(request.body as any),
-//       idempotencyKey: crypto.randomUUID(),
-//     });
-//     reply.code(result.statusCode).send(result.body);
-//   });
-// YA (left a note in Mar): don't just wire it, the helpers were written before the capture
-// discount and tier existed
+async function refuseImpersonation(request: FastifyRequest): Promise<void> {
+  if (request.merchantAuth?.actorType === "admin_impersonation") {
+    throw new ForbiddenError("forbidden", "an impersonation grant is read-only");
+  }
+}
+
+async function requireRefundsLive(request: FastifyRequest): Promise<void> {
+  if (!request.server.config.refundsEnabled) {
+    throw new AppError(503, "refunds_disabled", "refunds are not enabled on this deployment");
+  }
+}
+
 export async function refundRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/", { preHandler: requireMerchantAuth }, async (_request, reply) => {
-    reply.code(501).send({ error: "not_implemented" });
-  });
+  app.post<{ Body: CreateRefundBody }>(
+    "/",
+    { preHandler: [requireRefundsLive, requireMerchantAuth, refuseImpersonation, requireMerchantRole("owner", "finance")] },
+    async (request, reply) => {
+      const header = request.headers["idempotency-key"];
+      const idempotencyKey = Array.isArray(header) ? header[0] : header;
+      if (!idempotencyKey) {
+        throw new BadRequestError("idempotency_key_required", "Idempotency-Key header is required");
+      }
+
+      const { transactionId, amountFils, reason } = request.body ?? {};
+      if (typeof transactionId !== "string" || !UUID_RE.test(transactionId)) {
+        throw new BadRequestError("invalid_request", "transactionId is required and must be a transaction id");
+      }
+      let amount;
+      if (amountFils !== undefined) {
+        try {
+          amount = toFils(amountFils as number);
+        } catch {
+          throw new BadRequestError("invalid_request", "amountFils, if given, must be a whole number of fils");
+        }
+      }
+      if (reason !== undefined && (typeof reason !== "string" || reason.trim() === "" || reason.length > MAX_REASON_LENGTH)) {
+        throw new BadRequestError("invalid_request", `reason, if given, must be 1-${MAX_REASON_LENGTH} characters`);
+      }
+
+      const result = await initiateMerchantRefund(app.db, app.acquirer, {
+        merchantId: request.merchantAuth!.merchantId,
+        transactionId,
+        amountFils: amount,
+        idempotencyKey,
+        actor: requireMerchantWriterActor(request.merchantAuth!),
+        reason: reason === undefined ? undefined : reason.trim(),
+      });
+      reply.code(result.statusCode).send(result.body);
+    },
+  );
 }

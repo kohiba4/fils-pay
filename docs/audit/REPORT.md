@@ -4,8 +4,8 @@
 
 ## 1. Summary
 
-- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **19**.
-- By verdict: BUG 36, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
+- Findings: **54** (Critical 5, High 21, Medium 18, Low 10); fixed so far: **24**.
+- By verdict: BUG 38, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
@@ -13,10 +13,10 @@
 |---|---|---|---|---|---|
 | [AUD-001](#aud-001) | Pre-OTP (pending) session authenticates every merchant route | Critical | BUG (traced) | confirmed (trace) | B |
 | [AUD-002](#aud-002) | OTP/session issued to another tenant's user (cross-merchant `findOtpRecipient`) | Critical | BUG (traced) | confirmed (trace) | B |
-| [AUD-003](#aud-003) | Refund path has no transaction-ownership check (IDOR across merchants) | Critical | LATENT | latent (route returns 501 today; becomes live with FP-300) | FP-300 (shared) |
-| [AUD-004](#aud-004) | Concurrent refunds both succeed (no lock across acquirer call; stale `refunded_fils`) — FP-209 | Critical | LATENT | latent (helper only; FP-300 wires it) | FP-300 (shared) |
+| [AUD-003](#aud-003) | Refund path has no transaction-ownership check (IDOR across merchants) | Critical | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
+| [AUD-004](#aud-004) | Concurrent refunds both succeed (no lock across acquirer call; stale `refunded_fils`) — FP-209 | Critical | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-006](#aud-006) | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | BUG (traced) | confirmed (trace) | B |
-| [AUD-005](#aud-005) | Refund ceiling is authorized − refunded, not captured − refunded | High | LATENT | latent | FP-300 (shared) |
+| [AUD-005](#aud-005) | Refund ceiling is authorized − refunded, not captured − refunded | High | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-007](#aud-007) | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-008](#aud-008) | Net payout computed in float32 (`NetPayableFils`) | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-009](#aud-009) | Split payouts: independent per-child rounding over- or under-allocates the batch net | High | BUG (runtime) | fixed (merged into main; historical stranded fils not repaired) | A |
@@ -33,14 +33,16 @@
 | [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-026](#aud-026) | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | BUG (runtime) | fixed (merged into main) | A |
-| [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | confirmed (runtime) | FP-300 (shared) |
+| [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | confirmed (trace) | B |
+| [AUD-053](#aud-053) | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | BUG (runtime) | confirmed (runtime) | B |
+| [AUD-054](#aud-054) | Refunds never reach a payout: batch close ignores refunds | High | BUG (traced) | open (FP-300 PR 2; plan in FP-300-PLAN.md) | A |
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
 | [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | fixed (merged into main) | A |
 | [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
-| [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
+| [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
@@ -136,8 +138,8 @@ _Source file: [findings/AUD-002-otp-session-issued-to-another-tenant-s-user-cros
 **Refund path has no transaction-ownership check (IDOR across merchants)**
 
 - Severity: **Critical** · Category: authz / money · Owner: FP-300 (shared)
-- Verdict: **LATENT** (confidence high): No ownership scope in refund path, but `POST /v1/refunds` is a 501 stub today. Becomes critical when FP-300 wires it.
-- Status: latent (route returns 501 today; becomes live with FP-300) · Fix commit: — (not fixed; Phase 2)
+- Verdict: **LATENT (fixed in FP-300 PR 1)** (confidence high): No ownership scope in refund path, but `POST /v1/refunds` is a 501 stub today. Becomes critical when FP-300 wires it.
+- Status: fixed (branch `feat/FP-300-refund-core`) · Fix commit: see `git log feat/FP-300-refund-core`
 
 **Where**
 
@@ -159,7 +161,13 @@ Trace only (route is a 501 stub). Unit tests exist for the helper; none for a fo
 
 **Fix**
 
-Part of FP-300 build: scope the SELECT by the authenticated merchant (`WHERE id=$1 AND merchant_id=$2`), 404 otherwise.
+`POST /v1/refunds` is wired (FP-300 PR 1). The authenticated merchant comes only from `request.merchantAuth`; `initiateMerchantRefund` looks the transaction up by id AND that merchant, and `processRefund` locks it with `WHERE id = $1 AND merchant_id = $2`. A foreign transaction answers 404 `transaction_not_found`, indistinguishable from a missing one, and nothing is written. Session users need the owner or finance role (support gets 403). A "view as merchant" operator is refused explicitly by actor type: the impersonation role map turns `super_admin` into `owner` and `finance` into `finance` (AUD-024), so the role check alone would have let them refund, recorded as the merchant's own session. Test: `routes/refunds.test.ts` "a view as merchant operator cannot refund, whatever role their grant maps to".
+
+Tests: `processRefund.test.ts` (AUD-003: another merchant is a 404 and nothing is refunded), `initiateMerchantRefund.test.ts` (same, replacing the old TODO), `routes/refunds.test.ts` (404 for a foreign id; 401/403/200 by role). Tests changed: the stale TODO comment in `initiateMerchantRefund.test.ts` ("currently refunds it") was replaced by the test it asked for.
+
+**Re-attack and side notes**
+
+Both layers are scoped (the pre-check and the locked SELECT), so a bug in one does not open the other. The merchant in the body is not accepted. Idempotency keys are scoped by merchant and endpoint, and the request hash includes the transaction id, so another merchant cannot replay a key to read a response.
 
 **Related:** AUD-004, AUD-005, FP-300
 
@@ -169,8 +177,8 @@ _Source file: [findings/AUD-003-refund-path-has-no-transaction-ownership-check-i
 **Concurrent refunds both succeed (no lock across acquirer call; stale `refunded_fils`) — FP-209**
 
 - Severity: **Critical** · Category: race / money · Owner: FP-300 (shared)
-- Verdict: **LATENT** (confidence high): No lock across the acquirer call; capture does lock (ruled-out R-04), so "payments are safe" is true.
-- Status: latent (helper only; FP-300 wires it) · Fix commit: — (not fixed; Phase 2)
+- Verdict: **LATENT (fixed in FP-300 PR 1)** (confidence high): No lock across the acquirer call; capture does lock (ruled-out R-04), so "payments are safe" is true.
+- Status: fixed (branch `feat/FP-300-refund-core`) · Fix commit: see `git log feat/FP-300-refund-core`
 
 **Where**
 
@@ -192,7 +200,13 @@ Trace. Repro planned: two parallel refunds of the full amount → expect one 200
 
 **Fix**
 
-In FP-300: lock the row (`FOR UPDATE`) in the journal transaction and re-validate against fresh values, increment atomically (`refunded_fils = refunded_fils + $n`), plus a DB CHECK/trigger backstop `refunded_fils <= captured_fils` via new migration.
+`processRefund` is now one transaction that takes `SELECT ... FOR UPDATE` on the transaction row before validating and holds it across the acquirer call to COMMIT, exactly like capture (R-04). The second of two simultaneous refunds waits, then validates against the first one's final `refunded_fils`. The update is `refunded_fils = refunded_fils + $n` (an increment, not a write of a stale total). Migration 0090 adds the backstop `CHECK (refunded_fils <= captured_fils)`.
+
+Tests: `processRefund.test.ts` "AUD-004: two simultaneous refunds cannot both succeed past the captured amount" (6000 + 6000 on 10000 with a slow acquirer: exactly one 200 and one 422, refunded 6000). Tests changed: none.
+
+**Re-attack and side notes**
+
+A refund also serialises against capture and void of the same transaction (same row lock). Known limit shared with capture: a database connection is held during the acquirer call. A crash after the acquirer approved but before COMMIT leaves a refund at the acquirer with no record; the retry (same idempotency key) reuses the acquirer idempotency key `claimId:attempt`, the same behaviour capture has.
 
 **Related:** AUD-003, AUD-005
 
@@ -235,8 +249,8 @@ _Source file: [findings/AUD-006-payment-link-charged-twice-stale-reservation-re-
 **Refund ceiling is authorized − refunded, not captured − refunded**
 
 - Severity: **High** · Category: money · Owner: FP-300 (shared)
-- Verdict: **LATENT** (confidence high): Ceiling is authorized minus refunded; the brief lists "refund more than charged".
-- Status: latent · Fix commit: — (not fixed; Phase 2)
+- Verdict: **LATENT (fixed in FP-300 PR 1)** (confidence high): Ceiling is authorized minus refunded; the brief lists "refund more than charged".
+- Status: fixed (branch `feat/FP-300-refund-core`) · Fix commit: see `git log feat/FP-300-refund-core`
 
 **Where**
 
@@ -258,7 +272,13 @@ Trace. YA's comment (refundState.ts) claims validation stops it — it doesn't, 
 
 **Fix**
 
-`captured - refunded` (FP-300).
+The ceiling is `captured - refunded` (was `authorized - refunded`), computed from the locked row. A partial capture can only be refunded up to what was captured.
+
+Tests: `processRefund.test.ts` "AUD-005" (authorize 10.000, capture 4.000: refunding 5.000 is 422 with `refundableFils` 4000; omitting the amount refunds 4000), `routes/refunds.test.ts` ceiling test. Tests changed: none (`refundValidation.test.ts` already tests the validator with `refundableFils` as input).
+
+**Re-attack and side notes**
+
+The status rule that keeps `partially_captured` after a full refund of a partial capture (finance rule, headroom stays open) is unchanged and cannot re-open refunds, because the ceiling is captured - refunded. Migration 0090 refuses `refunded_fils > captured_fils` at the database too.
 
 **Related:** AUD-004
 
@@ -945,7 +965,7 @@ _Source file: [findings/AUD-026-migrations-0054-0055-fail-on-a-fresh-database-an
 
 - Severity: **High** · Category: schema drift · Owner: FP-300 (shared)
 - Verdict: **BUG (runtime)** (confidence high): 11 refund tests fail on the 0070 check. Latent in product (route is a stub).
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `feat/FP-300-refund-core`) · Fix commit: see `git log feat/FP-300-refund-core`
 
 **Where**
 
@@ -967,7 +987,13 @@ Baseline: 11 tests fail with `violates check constraint "chk_refunds_reason_not_
 
 **Fix**
 
-Omit the column / pass a value when absent (part of FP-300).
+The INSERT now uses `COALESCE($6, 'unspecified')` for `reason`, so an omitted reason takes the default 0070 intended instead of an explicit NULL. The route validates `reason` (1-255 characters) and stores it trimmed.
+
+Tests: All 11 previously failing refund tests pass (7 in `processRefund.test.ts`, 4 in `initiateMerchantRefund.test.ts`); `routes/refunds.test.ts` checks the default and a custom reason. Tests changed for FP-300 as a whole: the 501 stub test in `routes/transactions.test.ts` was converted (see AUD-003); none of the 11 was edited.
+
+**Re-attack and side notes**
+
+Migration 0070 is untouched (applied). No other writer inserts into `refunds`.
 
 **Related:** FP-300
 
@@ -1005,6 +1031,76 @@ Add `requireMerchantRole('owner','finance')` to capture, void (and the refund ro
 **Related:** AUD-024, AUD-003
 
 _Source file: [findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md](findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md)_
+
+### AUD-053
+**Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher**
+
+- Severity: **High** · Category: reliability / availability · Owner: B
+- Verdict: **BUG (runtime)** (confidence high): Reproduced: 134 stuck pending deliveries made 6 dispatcher tests fail; Step B orders by next_attempt_at and never advances an unattemptable row. Track B.
+- Status: confirmed (runtime) · Fix commit: —
+
+**What is wrong**
+
+A delivery row that throws before the HTTP call (for example an endpoint secret that cannot be decrypted) is deliberately left untouched, so it is "due" on every pass forever. Step B reads the 100 oldest due rows; once 100 such rows exist, no later delivery for any merchant is ever attempted.
+
+**Where**
+
+apps/api/src/webhooks/dispatcher.ts `attemptDueDeliveries` (`ORDER BY wd.next_attempt_at ASC LIMIT 100`, catch block that leaves the row unchanged); apps/api/src/webhooks/dispatcher.test.ts "per-row isolation" test (leaks one stuck row per run).
+
+**Why it happens (root cause)**
+
+The catch block comment says the row "degrades to this one row never progresses rather than webhook delivery silently stops platform-wide", but the query orders by `next_attempt_at` and the stuck rows keep the oldest `next_attempt_at`, so many stuck rows DO stop delivery platform-wide.
+
+**What it breaks (impact)**
+
+A rotated or mis-set `WEBHOOK_SECRET_ENCRYPTION_KEY` (every existing endpoint becomes undecryptable) or any other persistent per-row failure silently stops all merchants' webhooks (captures, voids, payouts, and refunds) after 100 rows, with only console errors. Merchants stop receiving payout and refund notifications with no retry state to see.
+
+**Proof / evidence**
+
+Found while verifying FP-300: after many local test runs the disposable DB held 134 stuck `pending` deliveries (the poison-row test leaves about 4 per run). Result: 6 dispatcher tests failed with "expected 1 delivery, got 0" even though nothing in the code under test had changed. Closing the stuck rows made them pass again.
+
+**Fix**
+
+Count a pre-transport failure as a failed attempt: increment `attempt_count`, set a backoff `next_attempt_at`, and exhaust at `webhookMaxAttempts` like any other failure (store the error in the response excerpt), so stuck rows leave the head of the queue. Make the poison-row test clean up after itself. Track B owns the dispatcher; related to AUD-018/019/020/021 which also edit this file.
+
+**Related:** AUD-044, AUD-018, FP-300 (refund.succeeded webhook, PR 3)
+
+_Source file: [findings/AUD-053-webhook-deliveries-that-cannot-be-attempted-stay-due-forever.md](findings/AUD-053-webhook-deliveries-that-cannot-be-attempted-stay-due-forever.md)_
+
+### AUD-054
+**Refunds never reach a payout: batch close ignores refunds**
+
+- Severity: **High** · Category: money / settlement · Owner: A
+- Verdict: **BUG (traced)** (confidence high): Batch close selects capture events only; latent until FP-300 PR 1 made refunds possible, real from then on.
+- Status: open (FP-300 PR 2; plan in FP-300-PLAN.md) · Fix commit: —
+
+**What is wrong**
+
+`CloseBatch` selects only `captured`/`partially_captured` events. A refund reverses the merchant's ledger balance at refund time but never reduces any batch's `net_payout_fils`, the cached balance, the scheme/payout reports or the reconciliation pending figure.
+
+**Where**
+
+apps/settlement/internal/settlement/batch.go (`CloseBatch` event selection, net = gross - fee), recalculate_mdr.go (`newNetPayout := gross - newFee`, event sum without a type filter), apps/api/src/settlement/query.ts (pending query selects captures only; the comment claiming refund legs are included in pending is false).
+
+**Why it happens (root cause)**
+
+Refunds were designed with a `refunds.settlement_batch_id` column and an "unbatched refunds" index (0042) but the batch close never reads them; the 2026-06-02 sync planned to "subtract refunds in the report and leave the batch alone", which pays merchants for refunded sales.
+
+**What it breaks (impact)**
+
+The platform refunds the cardholder and still pays the merchant in full: direct financial loss, and the ledger (merchant_payable reduced) and the payout (not reduced) disagree, so reconciliation cannot tie out. Refunds must not go live anywhere before this is fixed: `POST /v1/refunds` is therefore off by default (`REFUNDS_ENABLED`, 503 `refunds_disabled`) until PR 2 flips the default.
+
+**Proof / evidence**
+
+Traced in code (the refund route was a 501 stub until FP-300 PR 1, so this was latent). Becomes real the moment refunds work: capture 10.000, refund 4.000, close the batch: net payout is still 10.000 less fee.
+
+**Fix**
+
+See docs/audit/FP-300-PLAN.md (PR 2): `refund_fils` / `refund_fee_reversed_fils` on `settlement_batches`, pickup of succeeded unbatched refunds with `occurred_at < windowEnd`, RecalculateMDR keeps the refund terms and filters events by type, exact pending refunds for reconciliation, additive API/payload fields. Open finance decision Q13: negative net (no netting vs cap payouts at the balance).
+
+**Related:** AUD-016, AUD-048, FP-300
+
+_Source file: [findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md](findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md)_
 
 ### AUD-019
 **Acquirer callbacks are not deduplicated — FP-201 (reopened)**
@@ -1154,14 +1250,14 @@ _Source file: [findings/AUD-028-0072-refund-summary-view-joins-t-id-r-id-always-
 **Refund fee reversal can exceed the fee charged**
 
 - Severity: **Medium** · Category: money / rounding · Owner: FP-300 (shared)
-- Verdict: **LATENT** (confidence medium): Per-partial rounding can reverse more fee than charged (arithmetic example); refunds not live.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Verdict: **LATENT (fixed in FP-300 PR 1)** (confidence medium): Per-partial rounding can reverse more fee than charged (arithmetic example); refunds not live.
+- Status: fixed (branch `feat/FP-300-refund-core`) · Fix commit: see `git log feat/FP-300-refund-core`
 
 **Where**
 
 packages/money/src/fils.ts `calculateRefundFee`, processRefund.ts:113-121
 
-**Sibling locations checked:** Fee 'charged' is read as SUM of platform_fee_revenue credits, ignoring discount debits (AUD-016).
+**Sibling locations checked (the old code ignored the discount debit; the new query includes it):** Fee 'charged' is read as SUM of platform_fee_revenue credits, ignoring discount debits (AUD-016).
 
 **Why it happens (root cause)**
 
@@ -1177,7 +1273,13 @@ Arithmetic trace.
 
 **Fix**
 
-Reverse cumulatively: reversal = round(fee × refundedTotal / captured) − already reversed (FP-300).
+Kept the finance-approved per-refund rule (`calculateRefundFee`, banker's rounding, meeting 2026-07-08) and added the missing guarantee: the reversal is clamped to the fee still kept (`feeKept - sum(refunds.fee_reversed_fils)`), and the refund that brings the refunded total up to the captured amount reverses exactly the remainder. The fee "kept" is read from the ledger as capture's fee credit minus the negotiated-discount debit (the old code summed only the credits, so a discounted merchant got back more fee than the platform had kept).
+
+Tests: `processRefund.test.ts` "AUD-029" (captured 3 fils at 66.67%: three refunds of 1 reverse 2 in total, not 3; captured 7 fils at 25%: seven refunds of 1 end at exactly the fee, never above it at any step), "a negotiated discount lowers the fee a refund gives back" (full refund of a 20%-discounted 10.000: 200 reversed, fee revenue on the transaction ends at 0, never negative). Tests changed: none (the converted 501 test belongs to AUD-003).
+
+**Re-attack and side notes**
+
+Known gap (recorded in AUD-016): capture applies the negotiated discount in a second transaction after it commits (`applyCaptureDiscountAdjustment`), so a refund that lands between the two reverses the undiscounted share. Review follow-up: if the late discount then makes "kept" smaller than "already reversed", the remaining fee would have been negative and the INSERT would have violated `CHECK fee_reversed_fils >= 0` AFTER the acquirer had refunded; now the remaining fee is floored at 0 and the whole reversal is computed before the acquirer call (test "a negotiated discount that lands after an earlier refund ..."). It closes when AUD-016 moves the discount into capture. Pay-link captures never get the discount (AUD-016), so their ledger fee is the undiscounted one and the refund follows the ledger.
 
 **Related:** AUD-016
 

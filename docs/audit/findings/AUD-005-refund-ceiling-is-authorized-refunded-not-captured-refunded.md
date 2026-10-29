@@ -5,8 +5,8 @@
 | Owner | FP-300 (shared) |
 | Severity | **High** |
 | Category | money |
-| Status | latent |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **fixed** (branch `feat/FP-300-refund-core`) |
+| Fix commit | see `git log feat/FP-300-refund-core` |
 
 ## Summary
 Refund ceiling is authorized − refunded, not captured − refunded.
@@ -25,11 +25,13 @@ Trace. YA's comment (refundState.ts) claims validation stops it — it doesn't, 
 ## Impact
 Refund more than was charged (brief list item 1) → direct loss.
 
-## Fix (proposed)
-`captured - refunded` (FP-300).
+## Fix
+The ceiling is `captured - refunded` (was `authorized - refunded`), computed from the locked row. A partial capture can only be refunded up to what was captured.
+
+Tests: `processRefund.test.ts` "AUD-005" (authorize 10.000, capture 4.000: refunding 5.000 is 422 with `refundableFils` 4000; omitting the amount refunds 4000), `routes/refunds.test.ts` ceiling test. Tests changed: none (`refundValidation.test.ts` already tests the validator with `refundableFils` as input).
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+The status rule that keeps `partially_captured` after a full refund of a partial capture (finance rule, headroom stays open) is unchanged and cannot re-open refunds, because the ceiling is captured - refunded. Migration 0090 refuses `refunded_fils > captured_fils` at the database too.
 
 ## Related
 AUD-004

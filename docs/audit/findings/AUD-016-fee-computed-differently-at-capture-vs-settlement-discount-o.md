@@ -29,7 +29,9 @@ Ledger merchant_payable and batch net disagree per transaction; reconciliation n
 One shared formula, decided with you (Go is called 'reference' by CLAUDE.md — untrusted); apply at capture for all paths.
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+_To be filled after the fix._
+
+Note from FP-300 (refunds): `applyCaptureDiscountAdjustment` runs after the capture commits, in its own transaction. A refund that locks the transaction between the two reads the undiscounted fee and would reverse too much; the fix for this finding (discount computed inside capture) also closes that window.
 
 ## Related
 AUD-008, AUD-014, AUD-031

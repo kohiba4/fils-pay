@@ -15,7 +15,7 @@ capture (api/payments/capture.ts)   ← POST /v1/transactions/:id/capture  | pay
   └─ outbox transaction.captured ─┬─> webhook dispatcher → merchant
                                   └─> reporting → merchant_daily_volume
 void (api/payments/void.ts) → outbox transaction.voided
-refund (api/payments/processRefund.ts)  — route is a 501 stub (FP-300)
+refund (api/payments/processRefund.ts)  — POST /v1/refunds live since FP-300 PR 1, behind REFUNDS_ENABLED (default off until PR 2)
   └─ ledger: payable DR / clearing CR (gross), fee_revenue DR / payable CR (fee reversal),
      refunds row, transactions.refunded_fils, transaction_events(refund_*), outbox refund.succeeded (undelivered)
 acquirer callbacks (api/acquirer/callbacks.ts) → acquirer_callback_notes only (no state change)
