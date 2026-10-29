@@ -249,10 +249,14 @@ func CloseBatch(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID, bus
 
 	for i, line := range lines {
 		truncated := TruncateToSchemeAmount(line.grossFils)
+		// `amount` (what the scheme file carries) is derived in SQL from the SAME truncated fils as
+		// amount_fils: exact decimal division, never the untruncated gross through a float, which
+		// NUMERIC(10,2) would round half-up (93.279 -> 93.28 while amount_fils says 93270; AUD-010).
 		_, err = tx.Exec(ctx, `
 			INSERT INTO scheme_export_lines (settlement_batch_id, transaction_id, amount_fils, amount, line_sequence)
-			VALUES ($1, $2, $3, $4, $5)
-		`, batchID, line.transactionID, int64(truncated), SchemeAmountBD(line.grossFils), i+1)
+			SELECT $1, $2, v.fils, v.fils::numeric / 1000, $4
+			  FROM (SELECT $3::bigint AS fils) v
+		`, batchID, line.transactionID, int64(truncated), i+1)
 		if err != nil {
 			return BatchResult{}, fmt.Errorf("settlement: CloseBatch: insert scheme export line: %w", err)
 		}
