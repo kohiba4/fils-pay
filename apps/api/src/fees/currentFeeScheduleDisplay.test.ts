@@ -68,8 +68,10 @@ test("returns the most recently entered schedule when rows were entered as they 
   assert.equal(current?.createdAt.toISOString(), "2026-07-01T00:00:00.000Z");
 });
 
-// am: this test is the reason i asked above. it asserts the backfilled row wins
-test("returns the most recently entered schedule even when an older period was backfilled later", async () => {
+// AUD-031: the display must show the rate IN FORCE (newest effective_from that has arrived, ties by
+// created_at), the same rule capture and settlement bill with. This test used to assert the opposite
+// (the backfilled 245 bps row "wins"), which is how the dashboard showed 245 while payments were charged 225.
+test("a backfilled older period never displaces the rate in force", async () => {
   const merchantId = await insertMerchant(250);
   // A renegotiation entered on the day it took effect, then a backdated
   // correction to an earlier period entered two weeks afterwards.
@@ -77,7 +79,30 @@ test("returns the most recently entered schedule even when an older period was b
   await insertSchedule(merchantId, 245, "2026-03-01T00:00:00Z", "2026-08-15T00:00:00Z");
 
   const current = await getCurrentFeeScheduleForDisplay(pool, merchantId);
-  assert.equal(current?.mdrBps, 245);
-  assert.equal(current?.effectiveFrom.toISOString(), "2026-03-01T00:00:00.000Z");
-  assert.equal(current?.createdAt.toISOString(), "2026-08-15T00:00:00.000Z");
+  assert.equal(current?.mdrBps, 225);
+  assert.equal(current?.effectiveFrom.toISOString(), "2026-08-01T00:00:00.000Z");
+  assert.equal(current?.createdAt.toISOString(), "2026-08-01T00:00:00.000Z");
+});
+
+test("a future-dated schedule is not shown as current until it takes effect", async () => {
+  const merchantId = await insertMerchant(250);
+  await insertSchedule(merchantId, 200, "2026-03-01T00:00:00Z", "2026-03-01T00:00:00Z");
+  await insertSchedule(merchantId, 150, "2099-01-01T00:00:00Z", "2026-09-01T00:00:00Z");
+
+  const current = await getCurrentFeeScheduleForDisplay(pool, merchantId);
+  assert.equal(current?.mdrBps, 200);
+});
+
+test("only future-dated schedules on file: nothing is in force yet, so none is displayed", async () => {
+  const merchantId = await insertMerchant(250);
+  await insertSchedule(merchantId, 150, "2099-01-01T00:00:00Z", "2026-09-01T00:00:00Z");
+  assert.equal(await getCurrentFeeScheduleForDisplay(pool, merchantId), null);
+});
+
+test("two rows with the same effective_from: the later-entered correction wins (same tie-break as capture)", async () => {
+  const merchantId = await insertMerchant(250);
+  await insertSchedule(merchantId, 210, "2026-06-01T00:00:00Z", "2026-06-01T00:00:00Z");
+  await insertSchedule(merchantId, 205, "2026-06-01T00:00:00Z", "2026-06-02T00:00:00Z");
+  const current = await getCurrentFeeScheduleForDisplay(pool, merchantId);
+  assert.equal(current?.mdrBps, 205);
 });

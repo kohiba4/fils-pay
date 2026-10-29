@@ -4,8 +4,8 @@
 
 ## 1. Summary
 
-- Findings: **49** (Critical 5, High 19, Medium 17, Low 8); fixed so far: **8**.
-- By verdict: BUG 34, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
+- Findings: **50** (Critical 5, High 19, Medium 18, Low 8); fixed so far: **9**.
+- By verdict: BUG 35, DESIGN 2, HYGIENE 2, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
@@ -42,7 +42,7 @@
 | [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
-| [AUD-031](#aud-031) | Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at | Medium | BUG (runtime) | confirmed (runtime) | A |
+| [AUD-031](#aud-031) | Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at | Medium | BUG (runtime) | fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) | A |
 | [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
@@ -52,6 +52,7 @@
 | [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | UNVERIFIED | suspected (runtime failure, cause not yet traced) | B |
 | [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | suspected | B |
 | [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
+| [AUD-050](#aud-050) | Manual credit MDR reversal uses the fallback rate, not the rate that was charged | Medium | BUG (traced) | confirmed (trace) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | confirmed (trace) | A |
 | [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation mismatch only, not a code bug | A |
 | [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | suspected | B |
@@ -1176,7 +1177,7 @@ _Source file: [findings/AUD-030-refund-succeeded-produced-but-never-delivered-no
 
 - Severity: **Medium** · Category: data / display · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Reproduced 245 vs 225 with the seed.
-- Status: confirmed (runtime) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) · Fix commit: see `git log fix/AUD-031-fee-display-effective-from`
 
 **Where**
 
@@ -1200,7 +1201,15 @@ REPRODUCED from the seed: Alpha Retail has fee_schedules rows (245 bps, effectiv
 
 **Fix**
 
-Reuse the effective-dated query.
+- `getCurrentFeeScheduleForDisplay` now uses the same rule as capture and settlement: `WHERE effective_from <= now() ORDER BY effective_from DESC, created_at DESC LIMIT 1`. A future-dated schedule is not shown until it takes effect; none in force returns null. The justification comments ("asked Claude, created_at is right", "display only, nobody bills off this") were removed: the second is exactly why support saw a rate that was never charged.
+- Tests (written first; 4 failed on the old code): corrected `a backfilled older period never displaces the rate in force`, new `a future-dated schedule is not shown as current...`, `only future-dated schedules on file...`, a same-day tie-break test (already passed, kept as a guard), and the Phase-1 repro renamed to `currentFeeScheduleDisplay.parity.test.ts` (display must equal what `getEffectiveMdrBps` bills).
+- **Test changed (justified):** `returns the most recently entered schedule even when an older period was backfilled later` asserted 245 bps / effective 2026-03-01 / created 2026-08-15 (a comment on it said "it asserts the backfilled row wins"). It now asserts the row actually in force: 225 bps / 2026-08-01 / 2026-08-01. No assertion was removed.
+
+**Re-attack and side notes**
+
+- Full API suite: only the 12 known baseline failures (11 refund tests, 1 flaky jitter test).
+- The admin merchant page shows TWO rates side by side: `merchants.mdr_bps` (the default/fallback rate) and `currentFeeSchedule` (now the rate in force). They legitimately differ when a schedule exists; the label should keep saying which is which.
+- Siblings checked: capture (`fees/feeSchedule.ts`) and Go (`fee_schedule.go`) already order by `effective_from`; dead `v1/` code ignored. Two siblings that still use the fallback `merchants.mdr_bps` and ignore the schedule are recorded separately: manual credits' MDR reversal (**AUD-050**) and the reconciliation's pending-fee estimate (`settlement/query.ts:312-327`, whose comment cites a "0046 trigger" that does not exist; part of AUD-016).
 
 **Related:** AUD-016
 
@@ -1407,6 +1416,43 @@ Decision needed on the definition (propose: balance = ledger payable). Options: 
 **Related:** AUD-015, AUD-016, AUD-037, AUD-049
 
 _Source file: [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md)_
+
+### AUD-050
+**Manual credit MDR reversal uses the fallback rate, not the rate that was charged**
+
+- Severity: **Medium** · Category: money / duplicate logic · Owner: A
+- Verdict: **BUG (traced)** (confidence medium): `calculateCreditFeeReversal(base, merchants.mdr_bps)` ignores `fee_schedules`; the stored default is only the fallback. Not yet reproduced as a test; what a goodwill reversal should mean is a finance call.
+- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+
+**What is wrong**
+
+Manual credits reverse the MDR using `merchants.mdr_bps` (the default rate) instead of the rate in force when the fee was charged.
+
+**Where**
+
+apps/api/src/admin/credits.ts:212-224 (`createCreditRequest`), apps/api/src/admin/creditThreshold.ts:19-21 (`calculateCreditFeeReversal`)
+
+**Sibling locations checked:** capture resolves the rate with `getEffectiveMdrBps` (effective-dated, minus the tier bonus) and the Go close adds the negotiated discount; `processRefund` reads the fee actually charged from the ledger (correct); `settlement/query.ts` pending-fee estimate also uses `merchants.mdr_bps` (AUD-016).
+
+**Why it happens (root cause)**
+
+`createCreditRequest` selects only `merchants.mdr_bps` and applies it to the credited amount. The platform's real fee for a merchant with a `fee_schedules` history (and possibly a negotiated discount and the volume tier) is a different number; `merchants.mdr_bps` is only the fallback, "shown at onboarding" per migration 0048.
+
+**What it breaks (impact)**
+
+Platform fee revenue is debited and the merchant credited with more fee than was ever charged for every merchant whose schedule differs from the default rate; the approval threshold ignores the reversal by design (ADMIN.md), so this is not gated.
+
+**Proof / evidence**
+
+Trace of the code. With the seed's Alpha Retail (`merchants.mdr_bps` 250, schedule row 225 in force since 2026-08-01), a 10,000.000 BD credit with "reverse the MDR" returns 250.000 BD of fee although payments were charged 225 bps (225.000 BD), over-reversing 25.000 BD. Not yet run as a test.
+
+**Fix**
+
+Resolve the reversal rate with the same function/formula as capture and settlement (decision Q5, AUD-016), or reverse the fee actually charged on the original transactions. Decide with finance which one a "goodwill MDR reversal" means.
+
+**Related:** AUD-016, AUD-031
+
+_Source file: [findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md](findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md)_
 
 ### AUD-033
 **Lifetime payout estimate is float32/REAL (drifts)**
