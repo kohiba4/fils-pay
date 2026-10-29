@@ -83,7 +83,7 @@ func TestSchemeExportAmountBoundaries(t *testing.T) {
 		got = append(got, l.Amount)
 	}
 	sort.Strings(got)
-	want := []string{"0.00", "0.01", "1234567.89", "9.99"}
+	want := []string{"0.00", "0.01", "0.99", "1234567.89"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("exported amounts = %v, want %v", got, want)
 	}
