@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **16**.
+- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **17**.
 - By verdict: BUG 36, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -60,7 +60,7 @@
 | [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | suspected | B |
 | [AUD-045](#aud-045) | Seed prints raw API keys; 'production' seed dump committed | Low | HYGIENE | confirmed (runtime + read) | A |
 | [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
-| [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | confirmed (trace) | A |
+| [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | fixed (branch `fix/AUD-049-rebuild-one-merchant`) | A |
 | [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | fixed (branch `fix/AUD-051-admin-default-date`) | A |
 | [AUD-052](#aud-052) | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | HYGIENE | fixed (merged into main) | A |
 
@@ -1585,7 +1585,7 @@ _Source file: [findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-cra
 
 - Severity: **Low** · Category: ops tooling · Owner: A
 - Verdict: **BUG (traced)** (confidence high): The --merchant path only reads; the comment and RUNBOOK claim it writes.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-049-rebuild-one-merchant`) · Fix commit: see `git log fix/AUD-049-rebuild-one-merchant`
 
 **Where**
 
@@ -1603,11 +1603,15 @@ An operator following the RUNBOOK for a single wrong balance sees a correct-look
 
 **Proof / evidence**
 
-Read of main.go and rebuild.go: no UPDATE/INSERT on the --merchant path.
+Read of main.go and rebuild.go: no UPDATE/INSERT on the --merchant path. Reproduced by `TestRebuildOneMerchantBalance_WritesOnlyThatMerchant` (a drifted cache of 999999 stays 999999 when only the read-only function is used; it needs the new write path to become 10000).
 
 **Fix**
 
-Write the value (same upsert as the full rebuild, restricted to one merchant) or rename the flag to make it read-only.
+`RebuildAllBalances` is now a thin wrapper over one private `rebuildBalances(ctx, db, only *uuid.UUID)`; the new `RebuildOneMerchantBalance` passes a merchant id, so the single-merchant path uses the same ledger query, the same `FOR UPDATE` lock, `lock_timeout` and upsert as the full rebuild, restricted to that merchant (other merchants' cache rows are not read or locked). A merchant with neither a cache row nor ledger activity gets a zero row (a non-existent merchant fails on the foreign key). The CLI now prints `before=<n> after=<n> (CHANGED)` like the full rebuild. `RebuildMerchantBalance` is kept as a read-only helper (its doc now says so). Tests: `TestRebuildOneMerchantBalance_WritesOnlyThatMerchant`, `TestRebuildOneMerchantBalance_CreatesMissingCacheRow`. Tests changed: none. ADR-0007 consequence line updated.
+
+**Re-attack and side notes**
+
+The admin button still calls the all-merchants function. The same AUD-048 caveat applies to the single-merchant rebuild (unbatched captures are double counted at the next close), because it uses the same ledger definition; that is tracked separately. A bad UUID is rejected before any DB call.
 
 **Related:** AUD-015
 

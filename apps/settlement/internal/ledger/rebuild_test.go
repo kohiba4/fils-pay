@@ -215,3 +215,81 @@ func TestRebuildAllBalances_NegativeBalanceIsPreserved(t *testing.T) {
 		t.Fatalf("persisted = %d (err %v), want -700", persisted, err)
 	}
 }
+
+// AUD-049: `rebuild-balances --merchant` used to print the ledger sum and write nothing.
+func TestRebuildOneMerchantBalance_WritesOnlyThatMerchant(t *testing.T) {
+	pool := mustPool(t)
+	target := insertActiveMerchant(t, pool)
+	other := insertActiveMerchant(t, pool)
+
+	postLedgerLeg(t, pool, target, "credit", 12000)
+	postLedgerLeg(t, pool, target, "debit", 2000)
+	postLedgerLeg(t, pool, other, "credit", 7000)
+	for _, id := range []uuid.UUID{target, other} {
+		if _, err := pool.Exec(context.Background(), `INSERT INTO merchant_balances (merchant_id, cached_payable_fils, updated_at) VALUES ($1, 999999, now())`, id); err != nil {
+			t.Fatalf("seed drifted cache: %v", err)
+		}
+	}
+
+	diff, err := RebuildOneMerchantBalance(context.Background(), pool, target)
+	if err != nil {
+		t.Fatalf("RebuildOneMerchantBalance: %v", err)
+	}
+	if diff.CachedBefore != 999999 || diff.Rebuilt != 10000 || !diff.Changed() {
+		t.Errorf("diff = %+v, want before 999999, rebuilt 10000, changed", diff)
+	}
+
+	cache := func(id uuid.UUID) int64 {
+		var v int64
+		if err := pool.QueryRow(context.Background(), `SELECT cached_payable_fils FROM merchant_balances WHERE merchant_id = $1`, id).Scan(&v); err != nil {
+			t.Fatalf("read cache: %v", err)
+		}
+		return v
+	}
+	if got := cache(target); got != 10000 {
+		t.Errorf("target cache = %d, want 10000 (the --merchant rebuild must write it)", got)
+	}
+	if got := cache(other); got != 999999 {
+		t.Errorf("other merchant cache = %d, want 999999 (must be untouched)", got)
+	}
+}
+
+func TestRebuildOneMerchantBalance_CreatesMissingCacheRow(t *testing.T) {
+	pool := mustPool(t)
+	id := insertActiveMerchant(t, pool)
+	postLedgerLeg(t, pool, id, "credit", 4200)
+
+	diff, err := RebuildOneMerchantBalance(context.Background(), pool, id)
+	if err != nil {
+		t.Fatalf("RebuildOneMerchantBalance: %v", err)
+	}
+	if diff.CachedBefore != 0 || diff.Rebuilt != 4200 {
+		t.Errorf("diff = %+v, want before 0, rebuilt 4200", diff)
+	}
+	var v int64
+	if err := pool.QueryRow(context.Background(), `SELECT cached_payable_fils FROM merchant_balances WHERE merchant_id = $1`, id).Scan(&v); err != nil || v != 4200 {
+		t.Errorf("cache row = %d (err %v), want 4200", v, err)
+	}
+}
+
+func TestRebuildOneMerchantBalance_NoActivityGetsZeroRow_UnknownMerchantFails(t *testing.T) {
+	pool := mustPool(t)
+	id := insertActiveMerchant(t, pool)
+
+	diff, err := RebuildOneMerchantBalance(context.Background(), pool, id)
+	if err != nil {
+		t.Fatalf("RebuildOneMerchantBalance: %v", err)
+	}
+	if diff.CachedBefore != 0 || diff.Rebuilt != 0 {
+		t.Errorf("diff = %+v, want zero", diff)
+	}
+	var n int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM merchant_balances WHERE merchant_id = $1`, id).Scan(&n); err != nil || n != 1 {
+		t.Errorf("cache rows = %d (err %v), want exactly 1", n, err)
+	}
+
+	// A merchant id that does not exist is an error (foreign key), not a silent success.
+	if _, err := RebuildOneMerchantBalance(context.Background(), pool, uuid.New()); err == nil {
+		t.Error("unknown merchant: want an error, got nil")
+	}
+}

@@ -16,8 +16,9 @@ import (
 	"github.com/filspay/settlement/internal/money"
 )
 
-// RebuildMerchantBalance recomputes merchantID's cached balance from
-// ledger_entries. CLI-only; the incremental path is in internal/balances.
+// RebuildMerchantBalance READS merchantID's balance from ledger_entries and
+// writes nothing. To refresh the cache for one merchant use
+// RebuildOneMerchantBalance (AUD-049).
 func RebuildMerchantBalance(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID) (money.Fils, error) {
 	var balance int64
 	err := db.QueryRow(ctx, `
@@ -61,9 +62,26 @@ func (d RebuildDiff) Changed() bool {
 // keeps the HTTP-triggered rebuild fast on a large ledger. Returns the full
 // before/after map so callers can print exactly what changed.
 func RebuildAllBalances(ctx context.Context, db *pgxpool.Pool) (map[uuid.UUID]RebuildDiff, error) {
+	return rebuildBalances(ctx, db, nil)
+}
+
+// RebuildOneMerchantBalance is RebuildAllBalances restricted to one merchant
+// (`rebuild-balances --merchant`): same ledger source, same locking, and it
+// writes the cache row (AUD-049: it used to print the ledger sum and write
+// nothing). Other merchants' cache rows are not read or touched.
+func RebuildOneMerchantBalance(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID) (RebuildDiff, error) {
+	diffs, err := rebuildBalances(ctx, db, &merchantID)
+	if err != nil {
+		return RebuildDiff{}, err
+	}
+	return diffs[merchantID], nil
+}
+
+// rebuildBalances is the one implementation behind both entry points; only == nil rebuilds every merchant.
+func rebuildBalances(ctx context.Context, db *pgxpool.Pool, only *uuid.UUID) (map[uuid.UUID]RebuildDiff, error) {
 	tx, err := db.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ledger: RebuildAllBalances: begin: %w", err)
+		return nil, fmt.Errorf("ledger: rebuildBalances: begin: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
@@ -71,27 +89,28 @@ func RebuildAllBalances(ctx context.Context, db *pgxpool.Pool) (map[uuid.UUID]Re
 	// holding rows in another order) must fail fast with an error the admin can retry, not hang the
 	// console or deadlock-abort the other writer unpredictably.
 	if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '10s'`); err != nil {
-		return nil, fmt.Errorf("ledger: RebuildAllBalances: set lock_timeout: %w", err)
+		return nil, fmt.Errorf("ledger: rebuildBalances: set lock_timeout: %w", err)
 	}
 
 	before := make(map[uuid.UUID]int64)
 	rows, err := tx.Query(ctx, `
-		SELECT merchant_id, cached_payable_fils FROM merchant_balances ORDER BY merchant_id FOR UPDATE
-	`)
+		SELECT merchant_id, cached_payable_fils FROM merchant_balances
+		 WHERE ($1::uuid IS NULL OR merchant_id = $1) ORDER BY merchant_id FOR UPDATE
+	`, only)
 	if err != nil {
-		return nil, fmt.Errorf("ledger: RebuildAllBalances: lock cached balances: %w", err)
+		return nil, fmt.Errorf("ledger: rebuildBalances: lock cached balances: %w", err)
 	}
 	for rows.Next() {
 		var id uuid.UUID
 		var cached int64
 		if err := rows.Scan(&id, &cached); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("ledger: RebuildAllBalances: scan cached balance: %w", err)
+			return nil, fmt.Errorf("ledger: rebuildBalances: scan cached balance: %w", err)
 		}
 		before[id] = cached
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("ledger: RebuildAllBalances: iterate cached balances: %w", err)
+		return nil, fmt.Errorf("ledger: rebuildBalances: iterate cached balances: %w", err)
 	}
 	rows.Close()
 
@@ -99,23 +118,23 @@ func RebuildAllBalances(ctx context.Context, db *pgxpool.Pool) (map[uuid.UUID]Re
 	rows, err = tx.Query(ctx, `
 		SELECT merchant_id, SUM(CASE WHEN direction = 'credit' THEN amount_fils ELSE -amount_fils END)
 		  FROM ledger_entries
-		 WHERE account_id = 'merchant_payable'
+		 WHERE account_id = 'merchant_payable' AND ($1::uuid IS NULL OR merchant_id = $1)
 		 GROUP BY merchant_id
-	`)
+	`, only)
 	if err != nil {
-		return nil, fmt.Errorf("ledger: RebuildAllBalances: aggregate ledger: %w", err)
+		return nil, fmt.Errorf("ledger: rebuildBalances: aggregate ledger: %w", err)
 	}
 	for rows.Next() {
 		var id uuid.UUID
 		var net int64
 		if err := rows.Scan(&id, &net); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("ledger: RebuildAllBalances: scan ledger total: %w", err)
+			return nil, fmt.Errorf("ledger: rebuildBalances: scan ledger total: %w", err)
 		}
 		rebuilt[id] = net
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("ledger: RebuildAllBalances: iterate ledger totals: %w", err)
+		return nil, fmt.Errorf("ledger: rebuildBalances: iterate ledger totals: %w", err)
 	}
 	rows.Close()
 
@@ -128,6 +147,13 @@ func RebuildAllBalances(ctx context.Context, db *pgxpool.Pool) (map[uuid.UUID]Re
 	for id, net := range rebuilt {
 		if _, seen := before[id]; !seen {
 			diffs[id] = RebuildDiff{MerchantID: id, CachedBefore: 0, Rebuilt: money.Fils(net)}
+		}
+	}
+
+	if only != nil {
+		// A merchant with neither a cache row nor ledger activity still gets its (zero) row.
+		if _, ok := diffs[*only]; !ok {
+			diffs[*only] = RebuildDiff{MerchantID: *only}
 		}
 	}
 
@@ -151,12 +177,12 @@ func RebuildAllBalances(ctx context.Context, db *pgxpool.Pool) (map[uuid.UUID]Re
 			  SET cached_payable_fils = EXCLUDED.cached_payable_fils, updated_at = now()
 		`, ids, amounts)
 		if err != nil {
-			return nil, fmt.Errorf("ledger: RebuildAllBalances: write rebuilt balances: %w", err)
+			return nil, fmt.Errorf("ledger: rebuildBalances: write rebuilt balances: %w", err)
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("ledger: RebuildAllBalances: commit: %w", err)
+		return nil, fmt.Errorf("ledger: rebuildBalances: commit: %w", err)
 	}
 	return diffs, nil
 }

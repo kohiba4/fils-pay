@@ -23,6 +23,7 @@ Owner: the user + their agent. Updated with each fix; Track B does not edit this
 | 16 | AUD-013 | March sweep dry-run + idempotent | merged (PR #12); accounting still needs finance sign-off before anyone applies it |
 | 17 | AUD-052 | fee tests independent of the volume counter | merged (PR #13) |
 | 18 | AUD-037 | ADMIN.md corrections (docs only) | PR #17 |
-| 19 | AUD-051 | admin default run date is the Bahrain day | in review (branch `fix/AUD-051-admin-default-date`) |
-| 20 | AUD-033, 036, 045, 049, 050 | remaining small Track A items | todo |
+| 19 | AUD-051 | admin default run date is the Bahrain day | merged (PR #18) |
+| 20 | AUD-049 | `rebuild-balances --merchant` writes the cache | in review (branch `fix/AUD-049-rebuild-one-merchant`) |
+| 21 | AUD-033, 036, 045, 050 | remaining small Track A items | todo |
 | - | open question | adjustments (MDR recalc on paid batches, credits, imports) never reach a payout instruction | needs a finance decision |

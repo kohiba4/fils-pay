@@ -141,7 +141,6 @@ func main() {
 		fmt.Printf("run-batch: enqueued %d settlement.paid event(s)\n", enqueued)
 
 	// The CLI and the admin console button now share ledger.RebuildAllBalances (ADR-0007, AUD-015).
-	// NOTE: the --merchant path below only READS and prints; it does not write the cache (AUD-049).
 	case "rebuild-balances":
 		fs := flag.NewFlagSet("rebuild-balances", flag.ExitOnError)
 		merchantFlag := fs.String("merchant", "", "merchant UUID (optional; omit to rebuild every merchant)")
@@ -154,12 +153,16 @@ func main() {
 			if err != nil {
 				log.Fatalf("settlement rebuild-balances: invalid --merchant: %v", err)
 			}
-			// am: --merchant writes the cache for that one merchant, same as the full rebuild
-			before, err := ledger.RebuildMerchantBalance(ctx, pool, id)
+			// --merchant writes the cache for that one merchant, same as the full rebuild (AUD-049)
+			diff, err := ledger.RebuildOneMerchantBalance(ctx, pool, id)
 			if err != nil {
 				log.Fatalf("settlement rebuild-balances: %v", err)
 			}
-			fmt.Printf("rebuild-balances: merchant=%s rebuilt=%d\n", id, before)
+			changed := ""
+			if diff.Changed() {
+				changed = " (CHANGED)"
+			}
+			fmt.Printf("rebuild-balances: merchant=%s before=%d after=%d%s\n", id, diff.CachedBefore, diff.Rebuilt, changed)
 			return
 		}
 
