@@ -93,7 +93,8 @@ func TestRecalculateMDR_RecomputesAtCurrentRate(t *testing.T) {
 	}
 }
 
-// YA: the 0007 trigger also rejects UPDATE/DELETE on ledger_entries, so these groups can't be edited afterwards
+// Ledger rows can't be edited afterwards: migration 0076 (ledger_entries_append_only) rejects UPDATE/DELETE. (The 0007
+// balance trigger alone did NOT, contrary to the old comment here: deleting a whole balanced group committed, AUD-034.)
 func TestRecalculateMDR_AdjustmentLedgerGroupBalances(t *testing.T) {
 	pool := mustPool(t)
 	ctx := context.Background()

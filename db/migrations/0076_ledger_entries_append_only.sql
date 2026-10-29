@@ -8,7 +8,8 @@
 -- Nothing in the application updates or deletes ledger rows (corrections are new balanced groups), so any
 -- UPDATE or DELETE is rejected. TRUNCATE is deliberately NOT blocked here: the dev seed resets tables
 -- with TRUNCATE ... CASCADE; production should additionally REVOKE TRUNCATE (and UPDATE/DELETE) from the
--- application role. A deliberate repair must be done by the table owner with
+-- application role. NOT a defence against a database superuser or the table owner: they can still
+-- `DISABLE TRIGGER`, `SET session_replication_role = replica`, or TRUNCATE. A deliberate repair must be done by the table owner with
 -- `ALTER TABLE ledger_entries DISABLE TRIGGER ledger_entries_append_only` inside a reviewed change.
 CREATE FUNCTION reject_ledger_entries_mutation() RETURNS TRIGGER AS $$
 BEGIN
