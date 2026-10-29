@@ -26,5 +26,10 @@ export function buildDelete(
   filters: Record<string, unknown>,
 ): { text: string; values: unknown[] } {
   const { clause, values } = buildWhere(filters);
+  // buildWhere skips null/undefined/empty-array filters, so a caller whose filters
+  // are all empty would otherwise get an unconditional DELETE (AUD-011).
+  if (clause === "") {
+    throw new Error(`buildDelete: refusing an unfiltered DELETE FROM ${table}`);
+  }
   return { text: `DELETE FROM ${table} ${clause}`.trim(), values };
 }
