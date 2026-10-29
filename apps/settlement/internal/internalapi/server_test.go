@@ -33,6 +33,12 @@ func mustPool(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("failed to connect to DATABASE_URL: %v", err)
 	}
 	t.Cleanup(pool.Close)
+	// The fee-asserting tests assume the platform volume tier is OFF, but every CloseBatch adds to the shared
+	// platform_stats counter and the tier turns on at 2,000,000,000 fils: after a few runs the tests failed
+	// intermittently (fees 15 bps lower than expected). Start every DB test from a zeroed counter (AUD-052).
+	if _, err := pool.Exec(context.Background(), `UPDATE platform_stats SET total_processed_fils = 0 WHERE id = 1`); err != nil {
+		t.Fatalf("reset platform_stats: %v", err)
+	}
 	return pool
 }
 
