@@ -5,8 +5,8 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / rounding |
-| Status | confirmed (runtime) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **fixed** (branch `fix/AUD-010-scheme-amount-truncate`, pending merge; historical files already sent are not corrected) |
+| Fix commit | see `git log fix/AUD-010-scheme-amount-truncate` |
 
 ## Summary
 Scheme file `amount` rounded half-up from untruncated gross; residue never journaled.
@@ -27,11 +27,22 @@ docs/exports/scheme/…2026-09-14: amount_fils 93,270 vs file 93.28; day total f
 ## Impact
 Scheme statement higher than our ledger every day; residue account never reconciles; finance books against the wrong figure.
 
-## Fix (proposed)
-Write `amount` from the truncated fils (exact decimal, no float). Residue journaling per ADR-0002 is a separate, larger item — ask before building.
+## Fix (applied)
+- `batch.go` (CloseBatch step 12): `scheme_export_lines.amount` is now derived in SQL from the SAME truncated fils as `amount_fils` (`fils::numeric / 1000`, exact decimal), instead of the UNtruncated gross divided as a float64 and rounded half-up by NUMERIC(10,2). Result: file `amount` always equals `amount_fils / 1000`, as ADR-0002 requires.
+- `scheme_export.go`: removed the now-unused float helper `SchemeAmountBD`.
+- Tests: `TestRepro_AUD010_SchemeLineAmountIsTruncatedNotRounded` (written first, failed `93.28 want 93.27`, passes). **Test strengthened (not weakened):** `TestSchemeExportAmountHasTwoDecimals` only matched the regex `^\d+\.\d{2}$`, so 4747 fils exporting as "4.75" passed (its comment even said "it rounds. whatever"); it now asserts the exact truncated values {1.00, 12.34, 4.74, 4.74} and was shown to fail on the old code (`[1.01 12.34 4.74 4.75]`).
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- `amount_fils % 10 = 0` is enforced by a CHECK (0008), so `amount_fils/1000` is always exactly 2 decimals; negative or zero amounts also stay exact.
+- Other writers of the column: migration 0050's backfill (`amount_fils::numeric / 1000`, exact) and the seed (`floor(x/10)*10/1000`, already truncated). The reader (`LoadSchemeExportLines`) and the file writer pass the column through unchanged.
+- Direction of the original bias confirmed: a line rounded up by 0.01 BD on every capture whose third decimal is 5-9 (about half of all captures), always upward, never down: exactly finance's "always over, never under". It was our own file, not Visa rounding, so the BIN-range explanation in #fp-finance was wrong.
+- NOT fixed here (separate, larger): ADR-0002's residue journaling in CloseBatch was never implemented, so the 0-9 fils truncated per line still never reaches `scheme_rounding_residue`.
+- **Historical data (finance decision, nothing run):** files already sent to the scheme contained the rounded-up amounts. Read-only check of affected lines:
+```sql
+SELECT settlement_batch_id, transaction_id, amount_fils, amount,
+       amount * 1000 - amount_fils AS overstated_fils
+FROM scheme_export_lines WHERE amount * 1000 <> amount_fils;
+```
 
 ## Related
 AUD-013, ADR-0002
