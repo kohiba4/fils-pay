@@ -51,6 +51,20 @@ suites (baseline below) → re-attack (bypass, race, retry, other tenant/route) 
 finding file (fix commit, re-attack notes, tests changed) and the table row below → report.
 Report to the user: what was wrong / why / what it breaks, plus any test changed and why.
 
+## Docs are part of the work — ALWAYS keep them current
+Every change that alters code, a finding, a decision, a test or the plan updates the docs in the SAME session
+(a task is not done until the docs match the code):
+- **In the fix branch, same commit:** the finding file `docs/audit/findings/AUD-0xx-*.md` (status, fix commit/branch,
+  root cause if it changed, tests added, tests changed + why, re-attack notes, siblings found, data-repair notes).
+- **New or changed facts:** new finding → new finding file + INDEX row (ID = next free AUD-0xx, owner set);
+  false/true claim learned → docs/audit/CLAIMS.md; ruled out → docs/audit/ruled-out/; AI-targeted text →
+  docs/audit/suspicious/; decision → docs/audit/DECISIONS.md; invariant/arch change → INVARIANTS.md / ARCHITECTURE-MAP.md.
+- **After merges (not inside fix branches, they conflict):** refresh the status table in this file and the
+  INDEX.md rows, counts and "Phase / status" in one docs commit; never commit with conflict markers
+  (`git grep -n '^<<<<<<<'` before every commit).
+- **Before ending any prompt:** say what docs were updated. If a doc is now wrong and you did not fix it, say so.
+- Keep this file short (< ~100 lines): details belong in the finding files, not here.
+
 ## Phase / status
 **Phase 2 (fixing), Track A.** Fix order approved by the user. Decisions Q1–Q9: docs/audit/DECISIONS.md
 (Q10 Dilmune Cloud info still due from the user; Phase 3 FP-300 refunds comes after Phase 2).
