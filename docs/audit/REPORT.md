@@ -4,7 +4,7 @@
 
 ## 1. Summary
 
-- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **15**.
+- Findings: **52** (Critical 5, High 19, Medium 18, Low 10); fixed so far: **16**.
 - By verdict: BUG 36, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
@@ -61,7 +61,7 @@
 | [AUD-045](#aud-045) | Seed prints raw API keys; 'production' seed dump committed | Low | HYGIENE | confirmed (runtime + read) | A |
 | [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
 | [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | confirmed (trace) | A |
-| [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | confirmed (trace) | A |
+| [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | fixed (branch `fix/AUD-051-admin-default-date`) | A |
 | [AUD-052](#aud-052) | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | HYGIENE | fixed (merged into main) | A |
 
 ## 2. Bugs (by severity)
@@ -1618,7 +1618,7 @@ _Source file: [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-re
 
 - Severity: **Low** · Category: time · Owner: A
 - Verdict: **BUG (traced)** (confidence high): `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (branch `fix/AUD-051-admin-default-date`) · Fix commit: see `git log fix/AUD-051-admin-default-date`
 
 **What is wrong**
 
@@ -1640,11 +1640,17 @@ Only the default value of a manual field changes, but the operator who accepts i
 
 **Proof / evidence**
 
-Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Not yet run as a test.
+Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Reproduced by `apps/admin/src/lib/bahrainDate.test.ts`: at 23:00 UTC on the 29th (02:00 Bahrain on the 30th) the old logic gives 2026-10-28 (browser in Bahrain), the correct default is 2026-10-29.
 
 **Fix**
 
-Compute the Bahrain date explicitly (UTC instant + 3 h, like `bahrainDate.ts`), not a browser-local one; add a unit test for 00:00-03:00 Bahrain.
+`bahrainYesterday()` in `apps/admin/src/lib/bahrainDate.ts` computes the previous Asia/Bahrain day from the UTC instant + 3 h (same technique as `apps/reporting/src/bahrainDate.ts`), independent of the browser timezone. `SettlementPage` uses it. The admin package had no test runner: added the same `tsx --test` script as `apps/web` (no new dependency) and `node` to its tsconfig `types` so the test typechecks. Tests: `apps/admin/src/lib/bahrainDate.test.ts` (3 tests: 02:00 Bahrain, either side of midnight, month and year boundaries).
+
+Tests changed: none (new tests only).
+
+**Re-attack and side notes**
+
+Browser timezone no longer matters (the old code was wrong for UTC browsers too, in the opposite window). No other `yesterdayIso`/`toISOString` use of a local date in apps/admin or apps/web (grep). AUD-047 (reporting `applyEvent.ts:170`) is the same bug class and stays with Track B.
 
 **Related:** AUD-025, AUD-047
 

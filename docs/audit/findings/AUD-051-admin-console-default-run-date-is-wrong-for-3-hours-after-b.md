@@ -5,8 +5,8 @@
 | Owner | A |
 | Severity | **Low** |
 | Category | time |
-| Status | confirmed (trace) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **fixed** (branch `fix/AUD-051-admin-default-date`) |
+| Fix commit | see `git log fix/AUD-051-admin-default-date` |
 
 ## Summary
 The settlement page pre-fills the "re-run a daily batch" date with a day that is wrong for a Bahrain browser between 00:00 and 03:00.
@@ -20,16 +20,18 @@ apps/admin/src/pages/settlement/SettlementPage.tsx:19-22 (`yesterdayIso`)
 `yesterdayIso()` takes the browser-local date, subtracts a day, then formats it with `toISOString()`, which is UTC. At 02:00 in Bahrain on the 30th the local "yesterday" is the 29th at 02:00, i.e. 23:00 UTC on the 28th, so the field shows 2026-10-28 instead of 2026-10-29.
 
 ## Reproduction / evidence
-Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Not yet run as a test.
+Trace of the code (`new Date(); setDate(getDate()-1); toISOString().slice(0,10)`). Reproduced by `apps/admin/src/lib/bahrainDate.test.ts`: at 23:00 UTC on the 29th (02:00 Bahrain on the 30th) the old logic gives 2026-10-28 (browser in Bahrain), the correct default is 2026-10-29.
 
 ## Impact
 Only the default value of a manual field changes, but the operator who accepts it re-runs the wrong business day (a no-op because batches are idempotent) and believes yesterday was processed.
 
-## Fix (proposed)
-Compute the Bahrain date explicitly (UTC instant + 3 h, like `bahrainDate.ts`), not a browser-local one; add a unit test for 00:00-03:00 Bahrain.
+## Fix
+`bahrainYesterday()` in `apps/admin/src/lib/bahrainDate.ts` computes the previous Asia/Bahrain day from the UTC instant + 3 h (same technique as `apps/reporting/src/bahrainDate.ts`), independent of the browser timezone. `SettlementPage` uses it. The admin package had no test runner: added the same `tsx --test` script as `apps/web` (no new dependency) and `node` to its tsconfig `types` so the test typechecks. Tests: `apps/admin/src/lib/bahrainDate.test.ts` (3 tests: 02:00 Bahrain, either side of midnight, month and year boundaries).
+
+Tests changed: none (new tests only).
 
 ## Re-attack notes
-_To be filled after the fix._
+Browser timezone no longer matters (the old code was wrong for UTC browsers too, in the opposite window). No other `yesterdayIso`/`toISOString` use of a local date in apps/admin or apps/web (grep). AUD-047 (reporting `applyEvent.ts:170`) is the same bug class and stays with Track B.
 
 ## Related
 AUD-025, AUD-047

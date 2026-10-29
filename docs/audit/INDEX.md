@@ -4,7 +4,7 @@
 
 Sorted by severity. The status text is the first line of each finding's Status field; the verdict is from [TRIAGE.md](TRIAGE.md).
 
-Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 15 fixed or partly fixed)
+Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 16 fixed or partly fixed)
 
 | ID | Title | Severity | Owner | Verdict | Status | Detail |
 |---|---|---|---|---|---|---|
@@ -58,7 +58,7 @@ Counts: Critical 5, High 19, Medium 18, Low 10 (52 findings, 15 fixed or partly 
 | AUD-045 | Seed prints raw API keys; 'production' seed dump committed | Low | A | HYGIENE | confirmed (runtime + read) | [findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md](findings/AUD-045-seed-prints-raw-api-keys-production-seed-dump-committed.md) |
 | AUD-047 | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | B | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | [findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md](findings/AUD-047-v1-reporting-export-summary-has-no-auth-hook-crashes-with-50.md) |
 | AUD-049 | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | A | BUG (traced) | confirmed (trace) | [findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md](findings/AUD-049-settlement-rebuild-balances-merchant-prints-a-rebuilt-value-but.md) |
-| AUD-051 | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | A | BUG (traced) | confirmed (trace) | [findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md](findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md) |
+| AUD-051 | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | A | BUG (traced) | fixed (branch fix/AUD-051-admin-default-date) | [findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md](findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md) |
 | AUD-052 | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | A | HYGIENE | fixed (merged into main) | [findings/AUD-052-settlement-fee-tests-depend-on-the-global-volume-tier-coun.md](findings/AUD-052-settlement-fee-tests-depend-on-the-global-volume-tier-coun.md) |
 
 See also: [REPORT.md](REPORT.md), [TRIAGE.md](TRIAGE.md), [ruled-out/](ruled-out/), [suspicious/](suspicious/), [CLAIMS.md](CLAIMS.md), [INVARIANTS.md](INVARIANTS.md), [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md), [BASELINE.md](BASELINE.md), [PLAN.md](PLAN.md), [TEAM.md](TEAM.md), [DECISIONS.md](DECISIONS.md), [tracker/](tracker/).
