@@ -23,7 +23,7 @@ apps/api/src/admin/credits.ts:212-224 (`createCreditRequest`), apps/api/src/admi
 Trace of the code. With the seed's Alpha Retail (`merchants.mdr_bps` 250, schedule row 225 in force since 2026-08-01), a 10,000.000 BD credit with "reverse the MDR" returns 250.000 BD of fee although payments were charged 225 bps (225.000 BD), over-reversing 25.000 BD. Not yet run as a test.
 
 ## Impact
-Platform fee revenue is debited and the merchant credited with more fee than was ever charged for every merchant whose schedule differs from the default rate; the approval threshold ignores the reversal by design (ADMIN.md), so this is not gated.
+The admin UI shows the same wrong rate next to the checkbox (`apps/admin/src/pages/merchants/MerchantDetailPage.tsx:407`, "Also reverse the MDR on this amount (2.50%)", from `merchants.mdrBps`). The 225 vs 250 example is the schedule rate only; the fee really charged also reflects the tier bonus and discount, so the true over-reversal may be larger or smaller than 25 BD. Platform fee revenue is debited and the merchant credited with more fee than was ever charged for every merchant whose schedule differs from the default rate; the approval threshold looks at the base amount only (by design, ADMIN.md), so the REVERSAL amount is never part of the approval decision (a 10,000 BD base credit exceeds the 50 BD threshold anyway and needs a second approver, but the over-reversal inside it is not checked).
 
 ## Fix (proposed)
 Resolve the reversal rate with the same function/formula as capture and settlement (decision Q5, AUD-016), or reverse the fee actually charged on the original transactions. Decide with finance which one a "goodwill MDR reversal" means.

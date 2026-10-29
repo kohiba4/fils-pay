@@ -42,7 +42,7 @@
 | [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
 | [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
-| [AUD-031](#aud-031) | Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at | Medium | BUG (runtime) | fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) | A |
+| [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) | A |
 | [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | confirmed (runtime) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
@@ -1173,11 +1173,15 @@ FP-300.
 _Source file: [findings/AUD-030-refund-succeeded-produced-but-never-delivered-no-dispatcher-.md](findings/AUD-030-refund-succeeded-produced-but-never-delivered-no-dispatcher-.md)_
 
 ### AUD-031
-**Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at**
+**Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at**
 
 - Severity: **Medium** · Category: data / display · Owner: A
 - Verdict: **BUG (runtime)** (confidence high): Reproduced 245 vs 225 with the seed.
 - Status: fixed (branch `fix/AUD-031-fee-display-effective-from`, pending merge) · Fix commit: see `git log fix/AUD-031-fee-display-effective-from`
+
+**What is wrong**
+
+Fee shown to merchant (245 bps) ≠ fee charged (225 bps): display orders by created_at.
 
 **Where**
 
@@ -1191,7 +1195,7 @@ Display picks the most recently **entered** row (a backfill/future-dated row) in
 
 **What it breaks (impact)**
 
-Merchant sees wrong rate; support confusion. Authoritative table: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).
+The ADMIN merchant page (the only consumer: `apps/api/src/admin/merchants.ts` -> `MerchantDetailPage.tsx`) showed support a rate that was never billed, which is what the finance email reports as "the dashboard shows 245". No merchant-facing screen or API route exposes a fee rate (reviewer grep of apps/web and apps/api/src/routes). Authoritative table: `fee_schedules` resolved by effective_from (fallback merchants.mdr_bps).
 
 **Proof / evidence**
 
@@ -1208,6 +1212,7 @@ REPRODUCED from the seed: Alpha Retail has fee_schedules rows (245 bps, effectiv
 **Re-attack and side notes**
 
 - Full API suite: only the 12 known baseline failures (11 refund tests, 1 flaky jitter test).
+- "225" is the schedule rate; the fee actually charged also subtracts the volume-tier bonus (capture) and, at settlement, applies the negotiated discount (AUD-016/AUD-017), so 225 is the right comparison for the DISPLAYED schedule, not the final fee.
 - The admin merchant page shows TWO rates side by side: `merchants.mdr_bps` (the default/fallback rate) and `currentFeeSchedule` (now the rate in force). They legitimately differ when a schedule exists; the label should keep saying which is which.
 - Siblings checked: capture (`fees/feeSchedule.ts`) and Go (`fee_schedule.go`) already order by `effective_from`; dead `v1/` code ignored. Two siblings that still use the fallback `merchants.mdr_bps` and ignore the schedule are recorded separately: manual credits' MDR reversal (**AUD-050**) and the reconciliation's pending-fee estimate (`settlement/query.ts:312-327`, whose comment cites a "0046 trigger" that does not exist; part of AUD-016).
 
@@ -1440,7 +1445,7 @@ apps/api/src/admin/credits.ts:212-224 (`createCreditRequest`), apps/api/src/admi
 
 **What it breaks (impact)**
 
-Platform fee revenue is debited and the merchant credited with more fee than was ever charged for every merchant whose schedule differs from the default rate; the approval threshold ignores the reversal by design (ADMIN.md), so this is not gated.
+The admin UI shows the same wrong rate next to the checkbox (`apps/admin/src/pages/merchants/MerchantDetailPage.tsx:407`, "Also reverse the MDR on this amount (2.50%)", from `merchants.mdrBps`). The 225 vs 250 example is the schedule rate only; the fee really charged also reflects the tier bonus and discount, so the true over-reversal may be larger or smaller than 25 BD. Platform fee revenue is debited and the merchant credited with more fee than was ever charged for every merchant whose schedule differs from the default rate; the approval threshold looks at the base amount only (by design, ADMIN.md), so the REVERSAL amount is never part of the approval decision (a 10,000 BD base credit exceeds the 50 BD threshold anyway and needs a second approver, but the over-reversal inside it is not checked).
 
 **Proof / evidence**
 
