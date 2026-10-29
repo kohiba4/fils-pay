@@ -60,7 +60,7 @@ Report to the user: what was wrong / why / what it breaks, plus any test changed
 | 1 | AUD-026 broken migrations 0054/0055 | in progress |
 | 2 | AUD-008 float32 net payout | queued |
 | 3 | AUD-011 expire_holds deletes all | queued |
-| 4 | AUD-012 CSV import (+036) | queued |
+| 4 | AUD-012 CSV import (+036) | next |
 | 5 | AUD-015 rebuild button source | queued |
 | 6 | AUD-010 scheme amount rounding | queued |
 | 7 | AUD-009 split allocation | queued |
