@@ -83,10 +83,15 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	// MK: 15 min after Bahrain midnight is the intent. whether runIfDue really computes Bahrain midnight, ask FH
+	// The close is due this many minutes after Asia/Bahrain midnight (default 15; scheduler.dueBusinessDate
+	// computes Bahrain midnight, AUD-025). It must stay inside one day: a value of 1440 or more would never
+	// become due (the day would silently never close) and a negative value would fire before midnight.
 	runDelay, err := parseIntEnv("SETTLEMENT_DAEMON_RUN_DELAY_MINUTES", 15)
 	if err != nil {
 		return Config{}, err
+	}
+	if runDelay < 0 || runDelay > 1439 {
+		return Config{}, fmt.Errorf("config: SETTLEMENT_DAEMON_RUN_DELAY_MINUTES must be between 0 and 1439, got %d", runDelay)
 	}
 
 	pollIntervalSeconds, err := parseIntEnv("SETTLEMENT_DAEMON_POLL_INTERVAL_SECONDS", 60)

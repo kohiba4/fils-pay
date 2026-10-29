@@ -61,8 +61,6 @@ func Run(ctx context.Context, db *pgxpool.Pool, cfg config.Config) {
 	}
 }
 
-// runIfDue takes the business date from the Asia/Bahrain calendar date of
-// now, so the daily close starts DaemonRunDelayMinutes after Bahrain midnight.
 // dueBusinessDate decides whether the daily close is due at `now` and, if so, which business day to close:
 // yesterday in Asia/Bahrain, once `runDelayMinutes` have passed since Bahrain midnight. "Today" is the
 // BAHRAIN calendar date of `now`, not its UTC date: taking the UTC date made the daemon think it was still

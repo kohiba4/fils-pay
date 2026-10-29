@@ -37,7 +37,7 @@ func mustLoadLocation(name string) *time.Location {
 // BusinessDayWindow returns the [start, end) UTC instants bounding the
 // given calendar date's Asia/Bahrain business day. The argument must be a CALENDAR DATE (only its
 // Y/M/D in its own location are used); never pass a raw UTC instant for "now" (use BusinessDateOf),
-// or the 3 hours after Bahrain midnight belong to the wrong day (AUD-025). It returns i.e. Asia/Bahrain
+// or the 3 hours after Bahrain midnight belong to the wrong day (AUD-025). The window is Asia/Bahrain
 // 00:00:00 on `date` through Asia/Bahrain 00:00:00 on `date`+1.
 // am (oct 2): pretty sure this is an hour off in summer, bahrain does DST? we saw a gap in sept
 // nvm. no DST since 1972, see above

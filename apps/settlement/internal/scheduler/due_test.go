@@ -40,3 +40,15 @@ func TestDueBusinessDate(t *testing.T) {
 		})
 	}
 }
+
+// delay 0: due exactly at Bahrain midnight, still closing the day that just ended.
+func TestDueBusinessDate_ZeroDelay(t *testing.T) {
+	justBefore := time.Date(2026, 10, 29, 20, 59, 59, 0, time.UTC) // 23:59:59 Bahrain on the 29th
+	if d, due := dueBusinessDate(justBefore, 0); !due || d.Format("2006-01-02") != "2026-10-28" {
+		t.Errorf("23:59:59 Bahrain: due=%v date=%s, want due and the 28th (catch-up of the previous day)", due, d.Format("2006-01-02"))
+	}
+	midnight := time.Date(2026, 10, 29, 21, 0, 0, 0, time.UTC) // 00:00:00 Bahrain on the 30th
+	if d, due := dueBusinessDate(midnight, 0); !due || d.Format("2006-01-02") != "2026-10-29" {
+		t.Errorf("00:00:00 Bahrain: due=%v date=%s, want due and the 29th", due, d.Format("2006-01-02"))
+	}
+}
