@@ -44,7 +44,7 @@ None of these is deleted or weakened; each is corrected so it asserts the right 
 9. **AUD-014** recalc: never rewrite paid batches
 10. **AUD-016** one fee formula at capture (see coordination note)
 11. **AUD-017** BIGINT counter (migration 0074) / int64
-12. **AUD-025**, **AUD-031**, **AUD-034** (immutability trigger, migration 0075), **AUD-013** (script: dry-run default, idempotent key, correct legs, Bahrain window), **AUD-033/037/045**
+12. **AUD-025**, **AUD-031**, **AUD-034** (immutability trigger, migration 0076), **AUD-013** (script: dry-run default, idempotent key, correct legs, Bahrain window), **AUD-033/037/045**
 
 Migrations reserved for A: 0073–0079.
 

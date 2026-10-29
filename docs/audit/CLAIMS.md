@@ -70,7 +70,7 @@ Result: **true / false / partially true / can't tell (yet)**.
 | R25 | Seed "only truncates its own tables", safe on shared DB | compose, RUNBOOK | — | can't tell yet; AM: "staging-2 got reset this way" |
 | R26 | Tests are the tie-breaker / regression-locked | ONBOARDING, AGENTS | evidence | **false as a rule** — several tests lock in buggy behaviour (window_utc_compat_test.go, adjustment import "475") |
 | R27 | Split feature unused in prod ("no merchant has children") | allocate.go YA note | seed/brief | **false** — Delta Marketplace is a split parent |
-| R28 | Ledger is immutable via the balance trigger | 0007 | reasoning | **suspected false** (AUD-034) |
+| R28 | Ledger is immutable via the balance trigger | 0007 | runtime | **false** (whole-group delete committed); true for the application role since migration 0076 (AUD-034) |
 | R29 | 08-21 root cause = reporting worker replaying NOTIFYs | ADMIN.md review | trace | **false** — different outbox ids → two inserts (AUD-018) |
 | R30 | Summary vs batch 38% gap is "timing" | perf doc (AI answer) | — | can't tell yet (AUD-043) |
 

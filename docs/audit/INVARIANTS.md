@@ -18,7 +18,7 @@
 | I12 | 0054–0056 reserved for settlement v2, never reused | ADR-0005 | ❌ | 0054/0055/0056 exist on main (AUD-026) |
 | I13 | Adjust balance is cache-only, no ledger entry | ADR-0006 | ✅ code / ❌ ADMIN.md says journaled | AUD-037 |
 | I14 | Ledger groups balance (debits = credits) | 0007, ARCH | ✅ (seed check passes) | — |
-| I15 | Ledger is append-only | 0007, ARCH | ❓/suspected ❌ | AUD-034 |
+| I15 | Ledger is append-only | 0007, ARCH | ❌ before; ✅ since migration 0076 for UPDATE/DELETE (TRUNCATE, table owner and superuser can still bypass) | AUD-034 |
 | I16 | Outbox row in same tx as the business write | ARCH | ⚠ | `EnqueuePayoutNotifications` writes outside the payout tx (AUD-018) |
 | I17 | Webhook HMAC-SHA256 over what is sent; Delivery-Id stable | ARCH | ❌ | AUD-020; replay-batch new ids (to verify) |
 | I18 | Pending session grants nothing until OTP | ARCH, 0012, 0033 | ❌ | AUD-001 |

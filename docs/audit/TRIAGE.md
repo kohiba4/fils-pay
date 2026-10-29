@@ -45,7 +45,7 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-031 | BUG (runtime) | high | Reproduced 245 vs 225 with the seed. |
 | AUD-032 | BUG (traced) | medium | The code clears `test_mode` deliberately ("tidied"), but a status recompute changing settlement eligibility contradicts 0002. Confirmed by chat. |
 | AUD-033 | BUG (low impact) | high | Real float32 accumulation, but monitoring-only: grep shows nothing reads the column. No money effect. |
-| AUD-034 | BUG (runtime) | high | Whole balanced group deleted and committed. Needs DB access, not an API path. |
+| AUD-034 | BUG (runtime) | high | Whole balanced group deleted and committed; fixed by migration 0076 (reject trigger). Needs DB access, not an API path; a superuser/owner can still bypass (see the finding). |
 | AUD-035 | BUG (runtime/ops) | high | Dockerfiles missing, dev webhook key invalid, compose never loads `.env.docker`. |
 | AUD-036 | BUG (traced) | high | Slack shows a double import. The "unique filename" claim is false (no such constraint). |
 | AUD-037 | DESIGN | high | **Not a code bug.** `applyBalanceCorrection` is cache-only exactly as ADR-0006 says; the journaled variant exists but is not wired. Only ADMIN.md ("journaled to the ledger") is wrong. |
