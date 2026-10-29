@@ -63,3 +63,4 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-049 | BUG (traced) | high | The --merchant path only reads; the comment and RUNBOOK claim it writes. |
 | AUD-050 | BUG (traced) | medium | `calculateCreditFeeReversal(base, merchants.mdr_bps)` ignores `fee_schedules`; the stored default is only the fallback. Not yet reproduced as a test; what a goodwill reversal should mean is a finance call. |
 | AUD-051 | BUG (traced) | high | `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact. |
+| AUD-052 | HYGIENE | high | Reproduced: counter above 2e9 turns on the 15 bps tier and three fee tests fail. Test isolation only; fixed by resetting the counter in `mustPool`. |

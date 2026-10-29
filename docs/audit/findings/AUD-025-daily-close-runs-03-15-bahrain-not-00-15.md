@@ -5,7 +5,7 @@
 | Owner | A |
 | Severity | **Medium** |
 | Category | time |
-| Status | **fixed** (branch `fix/AUD-025-close-at-bahrain-midnight`, pending merge) |
+| Status | **fixed** (merged into main) |
 | Fix commit | see `git log fix/AUD-025-close-at-bahrain-midnight` |
 
 ## Summary

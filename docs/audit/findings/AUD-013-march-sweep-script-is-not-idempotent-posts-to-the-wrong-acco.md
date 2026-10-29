@@ -5,8 +5,8 @@
 | Owner | A |
 | Severity | **High** |
 | Category | ops script / money |
-| Status | confirmed (runtime) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **made safe** (merged into main); **still must not be applied to production until finance confirms the accounting** |
+| Fix commit | see `git log fix/AUD-013-march-sweep-idempotent` |
 
 ## Summary
 March sweep script is not idempotent, posts to the wrong accounts, wrong window.
@@ -27,11 +27,16 @@ Trace; brief: ran twice on staging and the gap doubled.
 ## Impact
 Each run doubles the correction; merchant payables reduced by residue they never owed. Not safe to rerun.
 
-## Fix (proposed)
-Not to be run. If kept: dry-run default, deterministic idempotency (unique description/key), correct legs, Bahrain window. Ask before investing.
+## Fix (applied: safety only; the accounting question is left to finance)
+- `scripts/reconcile_march.ts`: **dry run by default** (prints per-merchant residue and `DRY RUN: nothing was posted`); `--apply` posts. Posting is **idempotent**: inside one transaction an advisory lock (`pg_advisory_xact_lock`) serialises concurrent runs and a merchant that already has a ledger leg with the sweep description is skipped. The false comment "re-running is safe, entry_group_id dedupes it" (the group id is a fresh random uuid per call) is replaced by the real mechanism. Totals now say "found" vs "posted by this run".
+- Tests (written first; both failed on the old script: a plain run posted a row, and two applies posted 2 rows / 20 fils instead of 10): `scripts/reconcile_march.rerun.test.ts` runs the REAL script against a throwaway database: dry run posts nothing, `--apply` twice posts once (10 fils, not 20), three simultaneous `--apply` runs post once (3 repeats). The existing `reconcile_march.integration.test.ts` ("2000 ledger entries, zero net residual") never calls the script's posting code or a rerun: it recomputes the residue inside the test itself, so it could never have caught this; left unchanged.
+- **Deliberately NOT changed (needs finance): the accounting itself.** The script debits `merchant_payable` and credits `scheme_rounding_residue`, i.e. it takes the residue out of the merchants' payable. ADR-0002 books residue between `card_scheme_clearing` (credit) and `scheme_rounding_residue` (debit) and does not touch merchants. It also uses the UTC month (ADR-0003; decision Q6 prefers the Bahrain month), computes residue from `transactions.captured_fils` (a running total) rather than per scheme line, and posts with `occurred_at = now()`. Changing any of this would change what gets booked, so the safe state is: idempotent, dry-run, and not to be applied until finance signs off.
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- Answer to the brief's question "was it run more than once in production, and is it safe to rerun?": the old script was NOT safe (reproduced on a scratch database: a second run doubled the posting; that proves the mechanism, not what happened in production). Evidence that it WAS run again somewhere: `docs/meetings/2026-07-08-finance-eng.md` says FH "re-ran `scripts/reconcile_march.ts` as a dry run on 3 July: 13 lines, 70 fils, identical to the original run". The old script had no dry-run mode and always applied (it printed "reconciliation applied successfully"), so that "dry run" almost certainly posted the 70 fils a second time; the note does not say which environment (finance separately reports a run twice on staging). The log file the brief mentions (`scripts/out/`) is not in the repo, so a single timestamp in it cannot be checked, and a log cannot prove a single execution anyway. Finance can check each environment with: `SELECT merchant_id, count(DISTINCT entry_group_id) AS sweeps, sum(amount_fils) AS fils FROM ledger_entries WHERE description LIKE 'March 2026 scheme rounding residue sweep%' AND account_id = 'scheme_rounding_residue' GROUP BY 1;` (`sweeps` above 1 for a merchant means the sweep was applied more than once; the extra groups need a reviewed reversing entry, NOT a script).
+- **Idempotent, but not self-correcting (review):** a merchant already swept is skipped even if their March transactions changed afterwards or the earlier sweep (including one made by the OLD script) was a different amount. The script now prints what was swept earlier next to the current residue and a `WARNING` when they differ, but it never adds to or corrects a sweep. The idempotency key is the exact description string plus the account: never edit `SWEEP_DESCRIPTION`. An unknown argument (e.g. the typo `--aply`) now exits non-zero instead of silently dry-running, and the residue rows are re-read inside the advisory lock so they cannot be stale. The simultaneous-run test is probabilistic: with the lock removed it failed once in two trials, so it catches a missing lock only some of the time.
+- `RUNBOOK.md` told finance to copy this script every month and said "a second run is a no-op": that was false for the old script and the copies would have inherited the bug. An audit note was added there.
+- The March "gap" finance still sees (about 4.75 BD) is not explained by this script (its residue was 0.070 BD in the original run); candidates are the CSV import bug (AUD-012, 4.75 posted as 0.475) or the window difference, but the data is not in the repo.
 
 ## Related
 AUD-010, ADR-0003

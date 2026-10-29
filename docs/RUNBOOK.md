@@ -121,7 +121,7 @@ boundary"), finance runs a month-end script modelled on
 3. Attach the log from `scripts/out/` to the month-end ticket.
 
 The script checks for an existing posting with the same description, so a
-second run is a no-op.
+second run is a no-op. *[Audit note 2026-10-29: that was FALSE for the original script (a second run doubled the posting, AUD-013). The script is now a dry run unless `--apply` is given and is idempotent, but its accounting is unconfirmed: do not apply it, or a copy of it, without finance sign-off.]*
 
 > **Huda** (#fp-finance): please don't run anything for April onwards until March (FP-187) is resolved
 
