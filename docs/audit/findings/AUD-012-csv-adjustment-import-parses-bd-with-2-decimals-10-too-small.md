@@ -5,8 +5,8 @@
 | Owner | A |
 | Severity | **High** |
 | Category | money / parsing |
-| Status | confirmed (runtime) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | **fixed** (branch `fix/AUD-012-csv-bd-parsing`, pending merge; historical data repair still needed) |
+| Fix commit | see `git log fix/AUD-012-csv-bd-parsing` |
 
 ## Summary
 CSV adjustment import parses BD with 2 decimals (10× too small, 3rd decimal dropped).
@@ -27,11 +27,30 @@ Trace. Finance: 4.75 → 0.475 (matches). Their '4.755 → 4.750' figure does no
 ## Impact
 Every adjustment posted to the ledger at 1/10th; August imports affected; March 4.75-ish gap may be one of these rows.
 
-## Fix (proposed)
-Use `parseBhdToFils` (rejects >3 decimals, junk, '1e3'); decide policy for thousands separators (reject).
+## Fix (applied)
+- `adjustmentCsvParsing.ts`: `parseAdjustmentAmountFils` now calls `parseBhdToFils` from `packages/money` (string-based, ≤3 decimals, rejects junk/1e3/thousands separators/locale commas, handles whitespace and negatives, `-0.000` → 0). Failures still map to the same `400 invalid_amount` (error code and message unchanged).
+- Removed `apps/api/src/lib/decimal.ts` (`parseDecimalMinor`, default `decimals = 2`): its only caller was the importer, and it is a trap for the next person.
+- Repro tests (written first, failed): `adjustmentCsvParsing.repro.test.ts` (4.75, 4.755, 12, 4.7555, commas).
+- **Tests changed (justified, expected values only, no assertion removed):** they asserted the 10x-too-small figures.
+  - `admin/adjustmentImport.test.ts`: totalPostedFils 600→6000, parsedAmountFils 475→4750 and 125→1250, negative row 350→3500 (`-3.50` BD), cache 500→5000.
+  - `routes/adminAdjustmentImport.test.ts`: totalPostedFils 600→6000; replaced the false comment ("4.75 -> 475 … 1250 fils = 12.50 BD"; 1250 fils is 1.250 BD).
 
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- Inputs tried by the tests: `4.75`, `4.755`, `12`, ` -4.750 `, `0.005`, `4.7555` (rejected), `1,234.500` and `4,75` (rejected), existing `abc` (400, rolled back).
+- Sibling money parsers: `parsePromotionalDiscountFils` in `payments/discountAdjustment.ts` (`parseFloat * 100`, i.e. cents) is exported but has **no callers**; it is deleted with the discount rework in AUD-016. `apps/web/.../SettlementBatchDetailPage.tsx:84` uses `parseFloat((grossFils/10000).toFixed(2))` for a progress ratio (display only, not BD formatting; noted, low). The admin UI credit form already uses `parseBhdToFils`.
+- Remaining gap (separate finding AUD-036): importing the same file twice still posts it twice.
+
+## HISTORICAL DATA REPAIR (finance decision; nothing was run)
+Every adjustment imported before this fix was posted at 1/10th (and the third decimal dropped). `adjustment_import_rows` keeps the original text, so the shortfall is exact. Read-only check:
+```sql
+SELECT r.adjustment_import_id, r.row_number, r.merchant_id, r.raw_amount_text,
+       r.parsed_amount_fils AS posted,
+       round(replace(r.raw_amount_text,' ','')::numeric * 1000)::bigint AS correct,
+       round(replace(r.raw_amount_text,' ','')::numeric * 1000)::bigint - r.parsed_amount_fils AS missing_fils
+FROM adjustment_import_rows r
+WHERE r.parsed_amount_fils <> round(replace(r.raw_amount_text,' ','')::numeric * 1000)::bigint;
+```
+Correction must be a new, reviewed, idempotent adjustment (finance sign-off), not an edit of ledger history. Slack shows at least the two August imports (33 and 31 rows) were affected; the March 4.75 BD gap may be related but cannot be proven from the repo.
 
 ## Related
 AUD-036
