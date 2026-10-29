@@ -64,5 +64,5 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-050 | BUG (traced) | medium | `calculateCreditFeeReversal(base, merchants.mdr_bps)` ignores `fee_schedules`; the stored default is only the fallback. Not yet reproduced as a test; what a goodwill reversal should mean is a finance call. |
 | AUD-051 | BUG (traced) | high | `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact. |
 | AUD-053 | BUG (runtime) | high | Reproduced: 134 stuck pending deliveries made 6 dispatcher tests fail; Step B orders by next_attempt_at and never advances an unattemptable row. Track B. |
-| AUD-054 | BUG (traced) | high | Batch close selects capture events only; latent until FP-300 PR 1 made refunds possible, real from then on. |
+| AUD-054 | BUG (runtime) | high | Batch close selected capture events only; latent until FP-300 PR 1 made refunds possible. Reproduced by the settlement tests, fixed in PR 2. |
 | AUD-052 | HYGIENE | high | Reproduced: counter above 2e9 turns on the 15 bps tier and three fee tests fail. Test isolation only; fixed by resetting the counter in `mustPool`. |

@@ -126,7 +126,11 @@ export function ReconciliationPage() {
             <dt>Settlement net payout</dt>
             <dd>{bhd(report.settlementNetPayoutFils)}</dd>
             <dt>Pending, not yet batched</dt>
-            <dd>{bhd(report.pendingUnbatchedFils)}</dd>
+            <dd>
+              {bhd(report.pendingUnbatchedFils)}
+              {report.refundTimingFils > 0 ? ` (includes refunds made in this period that no batch of the period has absorbed yet: ${bhd(report.refundTimingFils)})` : ""}
+              {report.refundTimingFils < 0 ? ` (includes refunds made earlier that a batch of this period absorbed: ${bhd(-report.refundTimingFils)})` : ""}
+            </dd>
             <dt>Gap</dt>
             <dd>{bhd(report.gapFils)}</dd>
           </dl>

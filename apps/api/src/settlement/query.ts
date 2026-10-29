@@ -11,6 +11,9 @@ export interface SettlementBatchDto {
   grossFils: number;
   feeFils: number;
   netPayoutFils: number;
+  /** Refunds this batch absorbed (FP-300): netPayoutFils = grossFils - feeFils - refundFils + refundFeeReversedFils. */
+  refundFils: number;
+  refundFeeReversedFils: number;
   closedAt: string | null;
   paidAt: string | null;
 }
@@ -23,6 +26,8 @@ interface SettlementBatchRow {
   gross_fils: string | number;
   fee_fils: string | number;
   net_payout_fils: string | number;
+  refund_fils: string | number;
+  refund_fee_reversed_fils: string | number;
   closed_at: Date | null;
   paid_at: Date | null;
 }
@@ -48,8 +53,9 @@ function toBatchDateString(d: Date): string {
 }
 
 /**
- * Maps a settlement_batches row to its DTO. Invariant (enforced by the Go
- * worker at close): netPayoutFils === grossFils - feeFils for every batch.
+ * Maps a settlement_batches row to its DTO. Invariant (enforced by the Go worker at close):
+ * netPayoutFils === grossFils - feeFils - refundFils + refundFeeReversedFils for every batch. It can be negative
+ * for a batch whose refunds exceed its captures (nothing is paid for it).
  */
 function serializeBatch(row: SettlementBatchRow): SettlementBatchDto {
   return {
@@ -59,6 +65,8 @@ function serializeBatch(row: SettlementBatchRow): SettlementBatchDto {
     grossFils: Number(row.gross_fils),
     feeFils: Number(row.fee_fils),
     netPayoutFils: Number(row.net_payout_fils),
+    refundFils: Number(row.refund_fils),
+    refundFeeReversedFils: Number(row.refund_fee_reversed_fils),
     closedAt: row.closed_at ? row.closed_at.toISOString() : null,
     paidAt: row.paid_at ? row.paid_at.toISOString() : null,
   };
@@ -117,7 +125,7 @@ export async function listSettlementBatches(
   const decodedCursor = decodeCursor(filters.cursor);
 
   const result = await pool.query<SettlementBatchRow>(
-    `SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, closed_at, paid_at
+    `SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, refund_fils, refund_fee_reversed_fils, closed_at, paid_at
        FROM settlement_batches
       WHERE merchant_id = $1
         AND ($2::date IS NULL OR batch_date >= $2)
@@ -166,7 +174,7 @@ export async function getSettlementBatch(
   input: { merchantId: string; batchId: string },
 ): Promise<SettlementBatchDetailDto | null> {
   const batchResult = await pool.query<SettlementBatchRow>(
-    `SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, closed_at, paid_at
+    `SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, refund_fils, refund_fee_reversed_fils, closed_at, paid_at
        FROM settlement_batches WHERE id = $1 AND merchant_id = $2`,
     [input.batchId, input.merchantId],
   );
@@ -247,9 +255,12 @@ export async function listBatchTransactions(
 }
 
 /**
- * gapFils = ledgerMerchantPayableNetFils - settlementNetPayoutFils -
- * pendingUnbatchedFils. Refund legs are included both in the ledger figure
- * and in pending, so a period with refunds still explains to zero.
+ * gapFils = ledgerMerchantPayableNetFils - settlementNetPayoutFils - pendingUnbatchedFils.
+ * Refunds (FP-300): the ledger side contains every refund made in the window (by occurred_at); the settlement side
+ * contains the refunds that batches dated in the window absorbed (net_payout_fils includes them). The difference is
+ * `refundTimingFils` (positive: refunds made in the window that no batch of the window has absorbed yet), and it is
+ * subtracted inside pendingUnbatchedFils, so a period with refunds still explains to zero. It is computed exactly
+ * from the refunds table, in integer fils.
  */
 export interface ReconciliationReport {
   periodFrom: string;
@@ -257,6 +268,8 @@ export interface ReconciliationReport {
   ledgerMerchantPayableNetFils: number;
   settlementNetPayoutFils: number;
   pendingUnbatchedFils: number;
+  /** Net refund amount (refund minus fee reversed) made in the window minus the net refund amount absorbed by batches dated in the window. Positive: refunds not yet absorbed. Negative: refunds from earlier periods absorbed by a batch of this period. Already deducted inside pendingUnbatchedFils. */
+  refundTimingFils: number;
   gapFils: number;
   explained: boolean;
 }
@@ -285,7 +298,7 @@ export async function getReconciliationReport(
   const windowStart = bahrainLocalMidnightUtc(input.from);
   const windowEnd = bahrainLocalMidnightUtc(input.to);
 
-  const [ledgerResult, settlementResult, pendingResult, merchantResult] = await Promise.all([
+  const [ledgerResult, settlementResult, pendingResult, merchantResult, refundTimingResult] = await Promise.all([
     pool.query<{ net: string }>(
       `SELECT COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount_fils ELSE -amount_fils END), 0) AS net
          FROM ledger_entries
@@ -313,6 +326,21 @@ export async function getReconciliationReport(
       `SELECT mdr_bps, negotiated_discount_bps FROM merchants WHERE id = $1`,
       [input.merchantId],
     ),
+    // R_L - R_S: refunds the ledger saw in the window minus refunds the window's batches absorbed.
+    pool.query<{ timing: string }>(
+      `SELECT (
+          COALESCE((SELECT SUM(amount_fils - fee_reversed_fils) FROM refunds
+                     WHERE merchant_id = $1 AND status = 'succeeded'
+                       AND occurred_at >= $2 AND occurred_at < $3), 0)
+          -
+          COALESCE((SELECT SUM(r.amount_fils - r.fee_reversed_fils) FROM refunds r
+                      JOIN settlement_batches sb ON sb.id = r.settlement_batch_id
+                     WHERE r.merchant_id = $1 AND r.status = 'succeeded'
+                       AND sb.status IN ('closed', 'paid')
+                       AND sb.batch_date >= $4 AND sb.batch_date < $5), 0)
+        )::text AS timing`,
+      [input.merchantId, windowStart, windowEnd, input.from, input.to],
+    ),
   ]);
 
   // MK: merchants.mdr_bps is kept in sync with the current fee_schedules row by the 0046 trigger,
@@ -328,6 +356,9 @@ export async function getReconciliationReport(
     pendingUnbatchedFils += amountFils - feeFils;
   }
 
+  const refundTimingFils = Number(refundTimingResult.rows[0]?.timing ?? 0);
+  pendingUnbatchedFils -= refundTimingFils;
+
   const ledgerMerchantPayableNetFils = Number(ledgerResult.rows[0]?.net ?? 0);
   const settlementNetPayoutFils = Number(settlementResult.rows[0]?.total ?? 0);
   const gapFils = ledgerMerchantPayableNetFils - settlementNetPayoutFils - pendingUnbatchedFils;
@@ -338,6 +369,7 @@ export async function getReconciliationReport(
     ledgerMerchantPayableNetFils,
     settlementNetPayoutFils,
     pendingUnbatchedFils,
+    refundTimingFils,
     gapFils,
     explained: gapFils === 0,
   };

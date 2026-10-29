@@ -35,3 +35,6 @@ _To be filled after the fix (bypass via other route / tenant / retry / concurren
 
 ## Related
 AUD-015, AUD-016, AUD-037, AUD-049
+
+
+> **Update 2026-10-30 (FP-300 PR 2 review):** refunds now enter the batch net at close (`refund_fils`), so they are one more amount the incremental cache applies at close while the ledger counted it at refund time: a rebuild with an unbatched refund and then a close double counts it exactly like a capture. This makes AUD-048 more visible; re-assess its severity when the definition decision is taken.

@@ -23,7 +23,7 @@ export interface Config {
   otpCodeLength: number;
   otpMaxAttempts: number;
   otpDevExpose: boolean;
-  /** Global switch for POST /v1/refunds (REFUNDS_ENABLED). Off by default until refunds reduce payouts (FP-300 PR 2, AUD-054). */
+  /** Global switch for POST /v1/refunds (REFUNDS_ENABLED). OFF by default: refunds reduce payouts since FP-300 PR 2, but a negative batch net is not yet recovered from later payouts (decision Q13, finance); set REFUNDS_ENABLED=true only after that decision and after migration 0091 and the settlement daemon are deployed. */
   refundsEnabled: boolean;
 
   argon2MemoryKib: number;

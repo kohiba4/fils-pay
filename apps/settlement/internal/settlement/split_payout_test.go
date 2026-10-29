@@ -104,3 +104,27 @@ func TestSplitPayout_ZeroShareChildKeepsAnAuditRow(t *testing.T) {
 		t.Errorf("settlement_batch_splits rows = %d (want 2), allocated total = %d (want 1)", rows, total)
 	}
 }
+
+// FP-300 / AUD-054: a split parent whose refunds exceed its captures has a NEGATIVE net. Nothing is allocated or posted,
+// and the debt in the cached balance must not be "paid back" by the payout.
+func TestSplitPayout_NegativeNetPaysNothingAndKeepsTheDebtInTheCache(t *testing.T) {
+	pool := mustPool(t)
+	ctx := context.Background()
+	parent := splitParent(t, []int64{5000, 5000})
+	batchID := insertBatch(t, pool, parent, time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC), "closed", -3_000)
+	if _, err := pool.Exec(ctx, `INSERT INTO merchant_balances (merchant_id, cached_payable_fils, updated_at) VALUES ($1, -3000, now())`, parent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := splits.PayoutSplitBatch(ctx, pool, batchID); err != nil {
+		t.Fatal(err)
+	}
+	var legs, allocated, cache int64
+	var status string
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM ledger_entries WHERE settlement_batch_id=$1`, batchID).Scan(&legs)
+	_ = pool.QueryRow(ctx, `SELECT COALESCE(SUM(allocated_fils),0) FROM settlement_batch_splits WHERE settlement_batch_id=$1`, batchID).Scan(&allocated)
+	_ = pool.QueryRow(ctx, `SELECT cached_payable_fils FROM merchant_balances WHERE merchant_id=$1`, parent).Scan(&cache)
+	_ = pool.QueryRow(ctx, `SELECT status FROM settlement_batches WHERE id=$1`, batchID).Scan(&status)
+	if legs != 0 || allocated != 0 || cache != -3_000 || status != "paid" {
+		t.Errorf("legs=%d allocated=%d cache=%d status=%s; want 0, 0, -3000 (debt stays visible), paid", legs, allocated, cache, status)
+	}
+}

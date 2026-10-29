@@ -43,6 +43,9 @@ type batchRow struct {
 	grossFils     money.Fils
 	feeFils       money.Fils
 	netPayoutFils money.Fils
+	// refund terms absorbed by the batch (FP-300): net = gross - fee - refundFils + refundFeeReversedFils
+	refundFils            money.Fils
+	refundFeeReversedFils money.Fils
 	// paidFeeAdjustment is the cumulative recalculation adjustment held OUTSIDE the row of a paid batch.
 	paidFeeAdjustment money.Fils
 }
@@ -65,7 +68,8 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, paid_fee_adjustment_fils
+		SELECT id, batch_date, status, gross_fils, fee_fils, net_payout_fils, paid_fee_adjustment_fils,
+		       refund_fils, refund_fee_reversed_fils
 		  FROM settlement_batches
 		 WHERE merchant_id = $1 AND batch_date >= $2 AND batch_date < $3
 		   AND status <> 'open'
@@ -78,8 +82,8 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 	var batches []batchRow
 	for rows.Next() {
 		var b batchRow
-		var gross, fee, net, paidAdj int64
-		if err := rows.Scan(&b.id, &b.batchDate, &b.status, &gross, &fee, &net, &paidAdj); err != nil {
+		var gross, fee, net, paidAdj, refund, refundFee int64
+		if err := rows.Scan(&b.id, &b.batchDate, &b.status, &gross, &fee, &net, &paidAdj, &refund, &refundFee); err != nil {
 			rows.Close()
 			return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: scan batch: %w", err)
 		}
@@ -87,6 +91,8 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 		b.feeFils = money.Fils(fee)
 		b.netPayoutFils = money.Fils(net)
 		b.paidFeeAdjustment = money.Fils(paidAdj)
+		b.refundFils = money.Fils(refund)
+		b.refundFeeReversedFils = money.Fils(refundFee)
 		batches = append(batches, b)
 	}
 	if err := rows.Err(); err != nil {
@@ -110,7 +116,9 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 		if diff == 0 {
 			continue
 		}
-		newNetPayout := b.grossFils - newFee
+		// The refund terms stay in the net (the fee reversal of a refund is frozen at what was reversed; recalculation
+		// does not re-derive it): dropping them here would pay the merchant for refunded sales.
+		newNetPayout := NetPayableFils(b.grossFils, newFee) - b.refundFils + b.refundFeeReversedFils
 		if err := postMdrAdjustment(ctx, tx, merchantID, b.id, diff); err != nil {
 			return RecalcResult{}, err
 		}
@@ -158,7 +166,8 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 // CloseBatch would have produced at today's rate.
 func recomputeBatchFee(ctx context.Context, tx pgx.Tx, batchID uuid.UUID, mdrBps, discountBps int64) (money.Fils, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT amount_fils FROM transaction_events WHERE settlement_batch_id = $1 ORDER BY id
+		SELECT amount_fils FROM transaction_events
+		 WHERE settlement_batch_id = $1 AND event_type IN ('captured', 'partially_captured') ORDER BY id
 	`, batchID)
 	if err != nil {
 		return 0, fmt.Errorf("settlement: RecalculateMDR: select batch events for %s: %w", batchID, err)
@@ -171,8 +180,8 @@ func recomputeBatchFee(ctx context.Context, tx pgx.Tx, batchID uuid.UUID, mdrBps
 		if err := rows.Scan(&amountFils); err != nil {
 			return 0, fmt.Errorf("settlement: RecalculateMDR: scan batch event for %s: %w", batchID, err)
 		}
-		// FH: sums every event with this batch id -- incl. refund events once FP-212 lands? need an event_type filter?
-		// MK: refunds won't carry settlement_batch_id on transaction_events, they live in their own table. non-issue
+		// Only capture events carry a settlement_batch_id (refunds are absorbed through refunds.settlement_batch_id),
+		// and the query above filters by event type anyway so a refund event can never be priced as a capture.
 		fee += ComputeSettlementFee(money.Fils(amountFils), mdrBps, discountBps)
 	}
 	if err := rows.Err(); err != nil {

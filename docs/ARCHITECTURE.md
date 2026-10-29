@@ -51,6 +51,11 @@ and computes gross/fee/net; **pay** posts payout legs and records
 disbursement; **notify** enqueues `settlement.paid`. Re-running a day is
 safe; closed and paid batches are left alone.
 
+Refunds (FP-300) reach the payout through the batch: **close** also absorbs the merchant's succeeded refunds that no
+batch has taken yet (made before the end of that business day), as separate terms:
+`net = gross - fee - refunds + fee given back`. `gross` and the scheme export stay captures-only. A batch whose
+refunds exceed its captures has a negative net: nothing is paid for it and the cached balance shows the debt.
+
 Fees are computed per capture event, not per batch total. Rates come from
 `fee_schedules`, falling back to `merchants.mdr_bps`. Discounts reduce the
 amount the MDR is charged on.

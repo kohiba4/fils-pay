@@ -36,7 +36,7 @@
 | [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | confirmed (trace) | B |
 | [AUD-053](#aud-053) | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | BUG (runtime) | confirmed (runtime) | B |
-| [AUD-054](#aud-054) | Refunds never reach a payout: batch close ignores refunds | High | BUG (traced) | open (FP-300 PR 2; plan in FP-300-PLAN.md) | A |
+| [AUD-054](#aud-054) | Refunds never reach a payout: batch close ignores refunds | High | BUG (runtime) | partially fixed (branch `feat/FP-300-settlement-refunds`): refunds now reduce the payout; recovery of a negative net is open (Q13, finance); the route stays OFF by default until then | A |
 | [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
 | [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
@@ -1071,8 +1071,8 @@ _Source file: [findings/AUD-053-webhook-deliveries-that-cannot-be-attempted-stay
 **Refunds never reach a payout: batch close ignores refunds**
 
 - Severity: **High** · Category: money / settlement · Owner: A
-- Verdict: **BUG (traced)** (confidence high): Batch close selects capture events only; latent until FP-300 PR 1 made refunds possible, real from then on.
-- Status: open (FP-300 PR 2; plan in FP-300-PLAN.md) · Fix commit: —
+- Verdict: **BUG (runtime)** (confidence high): Batch close selected capture events only; latent until FP-300 PR 1 made refunds possible. Reproduced by the settlement tests, fixed in PR 2.
+- Status: partially fixed (branch `feat/FP-300-settlement-refunds`): refunds now reduce the payout; recovery of a negative net is open (Q13, finance); the route stays OFF by default until then · Fix commit: see `git log feat/FP-300-settlement-refunds`
 
 **What is wrong**
 
@@ -1088,7 +1088,7 @@ Refunds were designed with a `refunds.settlement_batch_id` column and an "unbatc
 
 **What it breaks (impact)**
 
-The platform refunds the cardholder and still pays the merchant in full: direct financial loss, and the ledger (merchant_payable reduced) and the payout (not reduced) disagree, so reconciliation cannot tie out. Refunds must not go live anywhere before this is fixed: `POST /v1/refunds` is therefore off by default (`REFUNDS_ENABLED`, 503 `refunds_disabled`) until PR 2 flips the default.
+The platform refunds the cardholder and still pays the merchant in full: direct financial loss, and the ledger (merchant_payable reduced) and the payout (not reduced) disagree, so reconciliation cannot tie out. Refunds must not go live anywhere before this is fixed: `POST /v1/refunds` is therefore off by default (`REFUNDS_ENABLED`, 503 `refunds_disabled`); PR 2 does not flip the default because a negative net is not yet recovered (Q13).
 
 **Proof / evidence**
 
@@ -1096,7 +1096,13 @@ Traced in code (the refund route was a 501 stub until FP-300 PR 1, so this was l
 
 **Fix**
 
-See docs/audit/FP-300-PLAN.md (PR 2): `refund_fils` / `refund_fee_reversed_fils` on `settlement_batches`, pickup of succeeded unbatched refunds with `occurred_at < windowEnd`, RecalculateMDR keeps the refund terms and filters events by type, exact pending refunds for reconciliation, additive API/payload fields. Open finance decision Q13: negative net (no netting vs cap payouts at the balance).
+Migration 0091 adds `settlement_batches.refund_fils` and `refund_fee_reversed_fils` (`NOT NULL DEFAULT 0`, so history is unchanged). `CloseBatch` selects, under `FOR UPDATE`, the merchant's succeeded refunds with no batch and `occurred_at < end of the business day` (no lower bound, so a refund that missed its day is absorbed by the next batch closed), stores them as their own terms and freezes `net_payout_fils = gross - fee - refund_fils + refund_fee_reversed_fils`; the refunds are stamped with the batch id in the same transaction (so a re-close subtracts nothing twice) and `gross_fils` and the scheme export stay captures-only. The net can be **negative** (refunds above the day's captures): `PayoutBatch` and `PayoutSplitBatch` pay nothing for it, post no legs, and do NOT call `ApplyPayout` with the negative amount (that would "pay the debt back" into `merchant_balances`); the cached balance shows the debt, `settlement.paid` is not enqueued. `RecalculateMDR` keeps the refund terms in the recomputed net and prices only capture events. A merchant that is suspended or in test mode is not closed, so its refunds wait (a test-mode merchant is never settled, same as its captures). The `settlement.batch_closed` payload gets `refundFils` / `refundFeeReversedFils`; `SettlementBatchDto`, the admin merchant detail API (`admin/merchants.ts`) and the web batch pages show them (the admin console UI and the reporting payout-trend rows do not yet carry the refund columns, so a trend row no longer satisfies gross - fee = net); the web `bhd()` helper now accepts negative amounts (a refund-only batch or a negative reconciliation figure used to throw and blank the page). Reconciliation: `refundTimingFils` = refunds made in the window (by `occurred_at`) minus refunds absorbed by batches dated in the window, exact integer SQL, deducted inside `pendingUnbatchedFils`. Proven by tests: refund batched the same day, refund pending, and refund made on day D and absorbed by the batch of D+1 (timing +3.900 for D, -3.900 for D+1, both gaps 0). Not claimed: windows after a paid day still see that day's payout leg on the ledger side (pre-existing), so "explained to zero" holds for single-day windows that do not include a previous day's payout. `REFUNDS_ENABLED` stays OFF by default (the review showed that a negative net is otherwise forgiven).
+
+Tests: Go `refund_settlement_test.go` (net reduced and refunds stamped, scheme export captures-only, idempotent re-close, selection rules: older/unbatched yes, failed no, next day no, refund-only negative batch pays nothing and keeps the cache, suspended merchant keeps refunds unbatched then absorbs them on reactivation, RecalculateMDR keeps refund terms) + `TestSplitPayout_NegativeNetPaysNothingAndKeepsTheDebtInTheCache`; API `settlement.test.ts` (3 reconciliation tests with refunds, DTO fields; the batch-close helper mirrors the Go pickup); web `bhd` negative test. Tests changed: the TS `closeAndPayoutBatch` test helper (it mirrors CloseBatch, so it now mirrors the refund pickup too); no assertion was edited.
+
+**Re-attack and side notes**
+
+Open points, stated rather than hidden: (1) **Q13 (finance)**: a negative net is recorded and not recovered automatically, a later positive batch is still paid in full; the debt is visible in the cached balance and in `net_payout_fils < 0`, and needs a collection/netting policy before refunds exceed a merchant's sales in practice. (2) `RecalculateMDR` does not re-derive the fee given back on refunds (frozen at what was reversed), so recalculating a capture day at a new rate leaves a small explainable difference in the later refund batch. (3) Burden of a negative or reduced net on a split parent is shared by weight. (4) The cached balance keeps AUD-048's definition. (5) Reconciliation windows still see the previous day's payout leg (pre-existing). (6) Deploy order: migration 0091 and the daemon with the API. (7) From the review: a refund that starts before midnight and commits after the daily close (it holds the transaction lock across the acquirer call, `occurred_at` is the start time) is not seen by that close; the next close absorbs it (no lower bound), one day later, never lost and never counted twice. (8) A new DB CHECK for the net identity was not added. (9) The platform volume tier ignores refunds (finance question). (10) Reporting trends and the admin UI do not show refund columns yet; the batch detail transaction list does not list absorbed refunds.
 
 **Related:** AUD-016, AUD-048, FP-300
 
@@ -1580,6 +1586,9 @@ Scratch Go test (not committed; becomes a regression test with the fix): capture
 Decision needed on the definition (propose: balance = ledger payable). Options: (A) rebuild subtracts the net of capture events with `settlement_batch_id IS NULL` so it matches the incremental meaning (depends on AUD-016 so close and capture compute the same fee); (B) move the cache increment to capture time and drop it at close (cache == ledger always; touches api capture.ts and the Go close). Recommend (B) after AUD-016.
 
 **Related:** AUD-015, AUD-016, AUD-037, AUD-049
+
+
+> **Update 2026-10-30 (FP-300 PR 2 review):** refunds now enter the batch net at close (`refund_fils`), so they are one more amount the incremental cache applies at close while the ledger counted it at refund time: a rebuild with an unbatched refund and then a close double counts it exactly like a capture. This makes AUD-048 more visible; re-assess its severity when the definition decision is taken.
 
 _Source file: [findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md](findings/AUD-048-cache-and-ledger-define-the-balance-differently-a-rebuild-is-d.md)_
 
@@ -2240,7 +2249,7 @@ advisory lock so two concurrent submits cannot both pass. Alternative rejected: 
 (arbitrary window). Needs finance to confirm that a repeat should require the explicit override.
 
 ## Q13-Q15 (FP-300 refunds) — see docs/audit/FP-300-PLAN.md
-Q13 (how a refund reaches a payout, negative net) **needs finance** before go-live; Q14 (concurrency) decided: row lock held across the acquirer call, like capture; Q15 (summary view) decided: plain view. Fee reversal keeps the finance-approved per-refund rounding and adds a clamp so the total never exceeds the fee charged.
+Q13 (how a refund reaches a payout, negative net) **needs finance** before go-live (PR 2 implements the batch terms; a negative net is recorded and pays nothing but is NOT recovered from later payouts, so `REFUNDS_ENABLED` stays off by default; options: carry the debt into the next batches by capping payouts at max(0, net + carried debt), or collect from the merchant); Q14 (concurrency) decided: row lock held across the acquirer call, like capture; Q15 (summary view) decided: plain view. Fee reversal keeps the finance-approved per-refund rounding and adds a clamp so the total never exceeds the fee charged.
 
 
 ## 6. Ruled out (checked and found fine)

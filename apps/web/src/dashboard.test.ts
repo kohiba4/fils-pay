@@ -42,6 +42,9 @@ test("bhd formats integer fils via @filspay/money, never float arithmetic", () =
   assert.equal(bhd(1), "0.001 BHD");
   assert.equal(bhd(1000), "1.000 BHD");
   assert.equal(bhd(1234567), "1234.567 BHD");
+  // negative amounts (refund-only batch net, reconciliation pending/gap) render instead of throwing
+  assert.equal(bhd(-1250), "-1.250 BHD");
+  assert.equal(bhd(-1), "-0.001 BHD");
 });
 
 test("dash renders absent values as an em dash but keeps zero", () => {

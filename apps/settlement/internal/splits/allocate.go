@@ -153,7 +153,11 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 
 	// Bring the parent's cached balance down by the batch net, exactly as PayoutBatch does for a
 	// non-split merchant. The shares sum to the net, so this equals the ledger debit above.
-	if err := balances.ApplyPayout(ctx, tx, parentMerchantID, batchID, money.Fils(netPayout)); err != nil {
+	paidOut := netPayout
+	if paidOut < 0 {
+		paidOut = 0 // a negative net (refunds above captures) pays nothing and must not be paid back into the cache
+	}
+	if err := balances.ApplyPayout(ctx, tx, parentMerchantID, batchID, money.Fils(paidOut)); err != nil {
 		return SplitPayoutResult{}, err
 	}
 

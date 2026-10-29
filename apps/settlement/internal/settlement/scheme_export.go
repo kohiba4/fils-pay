@@ -31,7 +31,7 @@ func TruncateToSchemeAmount(grossFils money.Fils) money.Fils {
 func buildBatchClosedPayload(
 	merchantID, batchID uuid.UUID,
 	batchDate time.Time,
-	grossFils, feeFils, netPayoutFils money.Fils,
+	grossFils, feeFils, netPayoutFils, refundFils, refundFeeReversedFils money.Fils,
 ) ([]byte, error) {
 	payload := map[string]any{
 		"merchantId":    merchantID.String(),
@@ -40,6 +40,9 @@ func buildBatchClosedPayload(
 		"grossFils":     int64(grossFils),
 		"feeFils":       int64(feeFils),
 		"netPayoutFils": int64(netPayoutFils),
+		// additive (FP-300): refunds absorbed by this batch; netPayoutFils = gross - fee - refunds + feeReversed
+		"refundFils":            int64(refundFils),
+		"refundFeeReversedFils": int64(refundFeeReversedFils),
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
