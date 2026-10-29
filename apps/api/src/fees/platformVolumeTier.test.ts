@@ -48,7 +48,7 @@ test("no bonus just below the volume tier threshold", async () => {
   assert.equal(await withClient(getVolumeTierBonusBps), 0);
 });
 
-// am: should test right at int32 max too? nvm its bigint
+// (the int32-max case is covered at the bottom of this file; the column was INTEGER until migration 0074)
 test("15bps once lifetime processed volume reaches the threshold", async () => {
   await setTotal(2_000_000_000);
   assert.equal(await withClient(getVolumeTierBonusBps), 15);
@@ -56,5 +56,12 @@ test("15bps once lifetime processed volume reaches the threshold", async () => {
 
 test("the tier stays granted above the threshold", async () => {
   await setTotal(2_100_000_000);
+  assert.equal(await withClient(getVolumeTierBonusBps), 15);
+});
+
+// AUD-017: the counter is a BIGINT number of fils. A value above int32 max (2,147,483,647) must be
+// storable and keep the tier on (the column was INTEGER, so this write used to fail).
+test("a lifetime volume above int32 max (3,000,000,000 fils) keeps the tier bonus on", async () => {
+  await setTotal(3_000_000_000);
   assert.equal(await withClient(getVolumeTierBonusBps), 15);
 });

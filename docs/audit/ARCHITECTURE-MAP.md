@@ -25,7 +25,7 @@ CloseBatch (settlement/batch.go) — daemon ~03:15 Bahrain, run-batch CLI, admin
   │    applyRate(amount − applyRate(amount, discount), mdr_at(event) − tier)      [≠ capture fee]
   ├─ net = float32(gross − fee)                                                    [AUD-008]
   ├─ settlement_batches(closed), scheme_export_lines(amount_fils=trunc10, amount=round2(gross))
-  ├─ platform_stats counter (int32)                                               [AUD-017]
+  ├─ platform_stats counter (BIGINT since migration 0074)                                               [AUD-017]
   ├─ outbox settlement.batch_closed → reporting merchant_payout_trends
   └─ merchant_balances += net                                         [cache]
   (NO ledger legs at close; NO residue legs — ADR-0002 not implemented)
