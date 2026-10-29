@@ -33,6 +33,12 @@ Agree the interface first, then split:
 7. **Context resets:** read `CLAUDE.md`, then `docs/audit/INDEX.md`, then your finding files.
 8. **Remotes:** `mine` = private team repo (`kohiba4/fils-pay-hackathon`). `origin` = challenge repo — do not push there.
 
+## Live trackers (read these first)
+- Track A: [tracker/track-a.md](tracker/track-a.md) · Track B: [tracker/track-b.md](tracker/track-b.md) (priority queue, first steps,
+  cross-track dependencies, done log). Each track edits only its own tracker; statuses are updated in the same PR as the fix.
+- **Track B pending right now (16 findings + 4 to trace):** AUD-046, 001, 002, 006, 007, 022, 019, 020, 021, 038, 023, 024, 032, 040, 047, 044;
+  unverified: 039, 041, 042, 043. Top blockers for Track A: **AUD-046** (before AUD-016) and the **dispatcher half of AUD-018**.
+
 ## Known shared-file hot spots (see PHASE1-TRACK-A.md)
 - `routes/transactions.ts` (B: role gates AUD-046; A: discount call AUD-016) — A goes second.
 - `webhooks/dispatcher.ts`/`payoutDisbursement.ts` (B owns; AUD-018 needs a joint change).
