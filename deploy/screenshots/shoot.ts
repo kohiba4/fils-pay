@@ -47,7 +47,7 @@ async function shot(name: string) {
   console.log("saved", name);
 }
 // React-controlled inputs need the native setter + an input event
-const fill = (label: string, value: string) => js(`(() => { const l=[...document.querySelectorAll('label')].find(x=>x.textContent.trim().startsWith(${JSON.stringify(label)})); const i=l&&l.querySelector('input,textarea'); if(!i) return false; const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(i),'value').set; s.call(i,${JSON.stringify(value)}); i.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`);
+const fill = (label: string, value: string) => js(`(() => { const l=[...document.querySelectorAll('label')].find(x=>x.textContent.trim().startsWith(${JSON.stringify(label)})); const i=l&&(l.control||l.querySelector('input,textarea')); if(!i) return false; const s=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(i),'value').set; s.call(i,${JSON.stringify(value)}); i.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`);
 const click = (text: string) => js(`(() => { const b=[...document.querySelectorAll('button,a')].find(x=>x.textContent.trim().startsWith(${JSON.stringify(text)})); if(!b) return false; b.click(); return true; })()`);
 const text = () => js<string>("document.body.innerText");
 
@@ -88,13 +88,19 @@ await shot(`${MODE}-dashboard-transactions`);
   }
   if (href && MODE === "after") {
     await click("Refund");
-    await sleep(500);
+    await sleep(600);
     await fill("Amount", "10.000");
     await shot("after-refund-drawer");
-    await js(`(() => { window.confirm = () => true; })()`);
-    await click("Refund");
+    await click("Review refund");
+    await sleep(700);
+    await shot("after-refund-confirm");
+    // the confirmation dialog's primary button is labelled "Refund" (the page also has a "Refund" heading, so click the dialog's button)
+    await js(`(() => { const d=document.querySelector('[role=dialog],dialog,[aria-modal=true]'); const b=d&&[...d.querySelectorAll('button')].find(x=>x.textContent.trim()==='Refund'); if(b){b.click();return true;} return false; })()`);
     await sleep(2500);
     await shot("after-refund-timeline");
+    await js(`window.scrollTo(0, document.body.scrollHeight)`);
+    await sleep(400);
+    await shot("after-refund-timeline-bottom");
   }
   await goto(WEB + "/dashboard/settlement");
   await shot(`${MODE}-settlement-batches`);
