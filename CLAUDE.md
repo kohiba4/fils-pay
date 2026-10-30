@@ -97,6 +97,6 @@ TEAM.md · SUBMISSION.md (guidelines + judging criteria, DEADLINE Fri 23:00) · 
 
 ## Environment / baseline
 Env: `. /tmp/claude-1000/-home-weed/8fde90f5-7b75-4a51-a99f-1b20c2a21d51/scratchpad/env.sh`
-(DATABASE_URL + throwaway WEBHOOK_SECRET_ENCRYPTION_KEY). Remotes: `mine` = team repo, `origin` = challenge repo.
+(DATABASE_URL + throwaway WEBHOOK_SECRET_ENCRYPTION_KEY). Remotes: `fork` = **kohiba4/fils-pay, the PUBLIC fork that is submitted and judged (primary from 2026-10-30 21:25)**, `mine` = old private team repo (kept in sync), `origin` = challenge repo (never push).
 Baseline before fixes: api 350/362 (11 refund + 1 jitter, not ours), reporting 7/11 (B), money 40/40,
 events 4/4, web 8/8, scripts 5/5, Go all ok; plus 8 intentional repro failures from a/phase1-repros.
