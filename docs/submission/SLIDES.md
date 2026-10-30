@@ -42,9 +42,9 @@
 
 ## Live demo: full and partial refund, end to end
 
-<div class="two"><img src="shots/after-refund-drawer.png"><img src="shots/after-refund-timeline.png"></div>
+<div class="two"><img src="shots/after-refund-confirm.png"><img src="shots/after-refund-timeline-bottom.png"></div>
 
-- Partial refund 10.000 BD of 426.987 BD → `partially_refunded`, `refund_partial` −10.000, fee given back proportional and capped
+- Redesigned UI (The-Tifo) + refund form, confirm dialog. Partial refund 10.000 BD of 426.987 BD → `partially_refunded`, `refund_partial` −10.000, fee given back proportional and capped
 - Batch close: payout = gross − fee − refunds + fee given back; reconciliation still **0.000 BD gap**
 - Webhook `refund.succeeded`, reporting totals, timeline: all driven by the same ledger rows
 
