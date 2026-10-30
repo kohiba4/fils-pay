@@ -10,7 +10,7 @@ LOADPID=$!
 sleep 9
 T0=$(date +%s.%N)
 echo "SIGKILL filspay-api at +9 s (restart policy: Restart=always, RestartSec=2)"
-systemctl kill -s SIGKILL filspay-api
+kill -9 "$(systemctl show -p MainPID --value filspay-api)"
 until curl -fsS -m 1 http://127.0.0.1:3000/readyz >/dev/null 2>&1; do sleep 0.1; done
 T1=$(date +%s.%N)
 printf "API ready again after %.1f s (new pid %s)\n" "$(echo "$T1 - $T0" | bc)" "$(systemctl show -p MainPID --value filspay-api)"
