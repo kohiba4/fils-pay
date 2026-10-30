@@ -66,6 +66,8 @@ if [ "${SEED:-0}" = "1" ] && [ "$(sudo -u postgres psql -tAc 'SELECT count(*) FR
   sudo -u filspay -H bash -o pipefail -c "set -a; . '$ENVF'; set +a; cd '$REL' && npm run seed" > /etc/filspay/seed-output.txt 2>&1
   chmod 600 /etc/filspay/seed-output.txt
   tail -2 /etc/filspay/seed-output.txt | sed -E 's/fp_[a-z]+_[A-Za-z0-9_-]+/<key redacted>/g'
+  echo "== the seed's passwords are public in the repo: replacing them with random ones (file: /var/lib/filspay/demo-credentials.txt, mode 600)"
+  sudo -u filspay -H bash -o pipefail -c "set -a; . '$ENVF'; set +a; cd '$REL' && ./node_modules/.bin/tsx deploy/remote/set-demo-passwords.ts /var/lib/filspay/demo-credentials.txt"
 fi
 
 echo "== services (units, nginx), then switch the release"
