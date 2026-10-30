@@ -69,8 +69,8 @@ a `Webhook-Delivery-Id` and is signed with HMAC-SHA256.
 
 ## Security
 
-- Merchant login is password then OTP. The pending session grants nothing
-  until the OTP is verified.
+- Merchant and admin login are password then a second factor: an authenticator-app code (TOTP, RFC 6238; Q16) in production, the original
+  emailed/dev OTP only outside production (`SECOND_FACTOR`). The pending session grants nothing until the code is verified.
 - Merchant-scoped queries take the merchant from the authenticated context.
 - Outbound webhook signatures are HMAC-SHA256 compared in constant time.
 - KYC uploads are validated by detected content type (magic bytes).

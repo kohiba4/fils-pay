@@ -54,7 +54,12 @@ export type MerchantRole = "owner" | "finance" | "support";
 
 export interface DashboardLoginResponse {
   otpRequired: boolean;
-  otpExpiresAt: string;
+  /** OTP mode only. Absent when `method` is "totp". */
+  otpExpiresAt?: string;
+  /** "totp" = authenticator-app second factor (production default); absent = emailed/dev OTP. */
+  method?: "totp";
+  /** TOTP mode, first login only: the secret to enter into the authenticator app. Never shown again once confirmed. */
+  totpEnrollment?: { secret: string; otpauthUri: string };
   /** Present only when config.otpDevExpose is on — never in production. */
   devOtpCode?: string;
 }

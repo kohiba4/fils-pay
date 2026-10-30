@@ -33,13 +33,16 @@ ACQUIRER_CALLBACK_SIGNING_SECRET=$(openssl rand -hex 32)
 WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
 CHECKOUT_BASE_URL=https://${PUBLIC_HOST}
 COOKIE_SECURE=true
-OTP_DEV_EXPOSE=true
+SECOND_FACTOR=totp
 REFUNDS_ENABLED=true
 KYC_UPLOAD_DIR=/var/lib/filspay/kyc
 NODE_OPTIONS=--max-old-space-size=384
 ENV
   chown root:filspay "$ENVF"; chmod 640 "$ENVF"
 fi
+# the second factor is an authenticator app (TOTP): no code is ever returned by the API, so drop the old dev switch
+sed -i '/^OTP_DEV_EXPOSE=/d' "$ENVF"
+grep -q '^SECOND_FACTOR=' "$ENVF" || echo 'SECOND_FACTOR=totp' >> "$ENVF"
 
 echo "== dependencies (only the workspaces the server runs)"
 sudo -u filspay -H bash -o pipefail -c "cd '$REL' && npm ci -w apps/api -w apps/reporting -w packages/money -w packages/events --include-workspace-root --no-audit --no-fund 2>&1 | tail -3"

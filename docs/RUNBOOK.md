@@ -137,3 +137,12 @@ come out as expected — don't ignore them. It won't touch other tables, so
 it's safe against a shared staging database.
 
 > **AM (Sept):** check DATABASE_URL before seeding. staging-2 got reset this way
+
+## Authenticator app (TOTP) second factor: enrolment and reset
+- Production uses `SECOND_FACTOR=totp`. The first login of an account that has not confirmed a code shows its setup key once (and an `otpauth://` link);
+  add it in Google Authenticator / Microsoft Authenticator / Authy (*Enter a setup key*, time-based), then type the 6-digit code.
+- **Lost phone / re-enrol** (support, with identity verification; run on the server as the postgres user, one account at a time):
+  `UPDATE merchant_users SET totp_secret_ciphertext=NULL, totp_confirmed_at=NULL, totp_last_step=NULL, totp_failed_count=0, totp_locked_until=NULL WHERE id='<uuid>';`
+  (`admin_users` for the console). The next login shows a new key. Revoke their sessions in the same change.
+- **Locked account** (10 wrong codes): wait 15 minutes, or clear `totp_locked_until` / `totp_failed_count`.
+- Open risk: an account that has never enrolled is protected only by its password until first login. Provision real merchants' secrets yourself and hand them over securely.

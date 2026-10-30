@@ -116,3 +116,20 @@ advisory lock so two concurrent submits cannot both pass. Alternative rejected: 
 
 ## Q13-Q15 (FP-300 refunds) — see docs/audit/FP-300-PLAN.md
 Q13 (how a refund reaches a payout, negative net) **needs finance** before go-live (PR 2 implements the batch terms; a negative net is recorded and pays nothing but is NOT recovered from later payouts, so `REFUNDS_ENABLED` stays off by default; options: carry the debt into the next batches by capping payouts at max(0, net + carried debt), or collect from the merchant); Q14 (concurrency) decided: row lock held across the acquirer call, like capture; Q15 (summary view) decided: plain view. Fee reversal keeps the finance-approved per-refund rounding and adds a clamp so the total never exceeds the fee charged.
+
+## Q16 — Second login factor: authenticator app (TOTP) instead of an emailed code (decided with the user, 2026-10-30)
+Problem: the emailed/dev-exposed OTP had no delivery channel in production (`sendOtpCode` is a logging stub), so the live server
+either showed the code in the login response (second factor protects nothing) or nobody could log in. Resend (free: 100 mails/day)
+only delivers to the account owner's own address until a domain is verified; we have no domain, and judges cannot read our mailbox.
+Chosen: **TOTP, RFC 6238** (Google Authenticator and every compatible app), implemented with `node:crypto` only (no dependency, no
+third-party service, works offline). `SECOND_FACTOR=totp` is the production default; outside production the original OTP stays the
+default so local development and the existing tests need nothing installed (`SECOND_FACTOR` overrides).
+- Secret: 160 random bits, stored AES-256-GCM encrypted on `merchant_users` / `admin_users` (same key as webhook secrets).
+- First login of an account that has never confirmed a code returns the secret once (`totpEnrollment`); the first correct code confirms it.
+  **Open risk:** until then the account is only as safe as its password (anyone with the password can enrol first). Safeguard: provision
+  secrets out of band for real merchants (reset procedure in RUNBOOK) or require an admin-issued enrolment link.
+- Limits (AUD-023 residual: the old resend reset the guess budget): 5 wrong codes per pending session, then the session is revoked; 10 wrong
+  codes per ACCOUNT lock it for 15 minutes whatever session they came from; an accepted code's 30 s step can never be reused (replay);
+  clock drift of one step either way is accepted. No resend exists.
+- Judges/demo: the demo accounts are NOT pre-enrolled; whoever logs in first scans the key into an authenticator app.
+Tests: RFC 6238 vectors, replay, drift window, session budget, account lock, enrolment shown once, both planes (`auth/totp.test.ts`, `routes/totpLogin.test.ts`).

@@ -23,6 +23,14 @@ export interface Config {
   otpCodeLength: number;
   otpMaxAttempts: number;
   otpDevExpose: boolean;
+  /**
+   * Second login factor. "totp" (RFC 6238 authenticator app) is the default in production: no delivery channel, no codes in
+   * responses or logs. "otp" is the original emailed/dev-exposed code, kept as the default outside production so local
+   * development and the existing tests need nothing installed. SECOND_FACTOR overrides.
+   */
+  secondFactor: "otp" | "totp";
+  /** Issuer shown in the authenticator app. */
+  totpIssuer: string;
   /** Global switch for POST /v1/refunds (REFUNDS_ENABLED). OFF by default: refunds reduce payouts since FP-300 PR 2, but a negative batch net is not yet recovered from later payouts (decision Q13, finance); set REFUNDS_ENABLED=true only after that decision and after migration 0091 and the settlement daemon are deployed. */
   refundsEnabled: boolean;
 
@@ -181,6 +189,12 @@ function parseWebhookSecretEncryptionKey(value: string | undefined): string {
   return value;
 }
 
+function parseSecondFactor(value: string | undefined, nodeEnv: string): "otp" | "totp" {
+  if (value === undefined || value === "") return nodeEnv === "production" ? "totp" : "otp";
+  if (value === "otp" || value === "totp") return value;
+  throw new Error(`loadConfig: SECOND_FACTOR must be "otp" or "totp", got "${value}"`);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const databaseUrl = env.DATABASE_URL;
   if (!databaseUrl) {
@@ -215,6 +229,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     otpCodeLength: parseIntEnv(env.OTP_CODE_LENGTH, 6),
     otpMaxAttempts: parseIntEnv(env.OTP_MAX_ATTEMPTS, 5),
     otpDevExpose: parseBoolEnv(env.OTP_DEV_EXPOSE, nodeEnv !== "production"),
+    secondFactor: parseSecondFactor(env.SECOND_FACTOR, nodeEnv),
+    totpIssuer: env.TOTP_ISSUER ?? "FilsPay",
     refundsEnabled: parseBoolEnv(env.REFUNDS_ENABLED, false),
 
     argon2MemoryKib: parseIntEnv(env.ARGON2_MEMORY_KIB, 19_456),

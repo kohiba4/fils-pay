@@ -25,7 +25,12 @@ export type AdminRole = "support" | "finance" | "super_admin";
 /** `POST /v1/admin/auth/login` → `200 { otpRequired: true, otpExpiresAt, devOtpCode? }`. */
 export interface AdminLoginResponse {
   otpRequired: boolean;
-  otpExpiresAt: string;
+  /** OTP mode only. Absent when `method` is "totp". */
+  otpExpiresAt?: string;
+  /** "totp" = authenticator-app second factor (production default); absent = emailed/dev OTP. */
+  method?: "totp";
+  /** TOTP mode, first login only: the secret to enter into the authenticator app. Never shown again once confirmed. */
+  totpEnrollment?: { secret: string; otpauthUri: string };
   /** Dev-only convenience, gated server-side the same way merchant login gates it. */
   devOtpCode?: string;
 }

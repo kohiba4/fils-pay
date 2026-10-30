@@ -55,3 +55,6 @@ constant `Math.random` — all 5 failed. After: 5/5 pass. **Tests changed:** non
 
 ## Related
 AUD-001
+
+
+> **Update 2026-10-30 (Q16):** the residual items (resend resets the guess budget; endless new pending sessions) disappear in production: the second factor is now TOTP, which has no resend, a 5-try budget per session and a 10-try lock per account (`auth/totp.ts`). The OTP code path remains only for non-production use.
