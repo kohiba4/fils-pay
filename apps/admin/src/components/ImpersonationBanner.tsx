@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button, Icon } from "@filspay/ui";
 import { useAdminAuth } from "../auth/AdminAuthContext.js";
 import { describeError } from "../api/client.js";
 
@@ -38,19 +39,20 @@ export function ImpersonationBanner() {
   const label = impersonation.merchantDisplayName ?? impersonation.merchantId;
 
   return (
-    <div className="impersonation-banner" role="alert">
-      <div>
+    <div className="fp-impersonation" role="alert">
+      <Icon name="eye" size={22} className="fp-impersonation__icon" />
+      <div className="fp-impersonation__text">
         <strong>You are viewing as a merchant.</strong>{" "}
         <span>
           Active grant for <code>{label}</code>, expiring{" "}
           {new Date(impersonation.expiresAt).toLocaleString()}. Merchant screens in the dashboard are
           acting with this merchant&apos;s least-privileged (support) role.
         </span>
-        {error ? <div className="impersonation-banner-error">Could not end it: {error}</div> : null}
+        {error ? <div className="fp-impersonation__error">Could not end it: {error}</div> : null}
       </div>
-      <button type="button" onClick={() => void handleExit()} disabled={exiting}>
-        {exiting ? "Exiting..." : "Exit impersonation"}
-      </button>
+      <Button className="fp-impersonation__exit" icon="logout" loading={exiting} onClick={() => void handleExit()}>
+        {exiting ? "Exiting…" : "Exit impersonation"}
+      </Button>
     </div>
   );
 }

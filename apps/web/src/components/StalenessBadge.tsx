@@ -1,3 +1,5 @@
+import { Badge } from "@filspay/ui";
+
 /**
  * Renders the `readModelAsOf`/`live` pair every analytics response carries.
  * Staleness in this platform is a disclosed property, not a
@@ -16,23 +18,32 @@
 export function StalenessBadge({
   readModelAsOf,
   live,
+  compact = false,
 }: {
   readModelAsOf: string | null;
   live: boolean;
+  /** Short wording for small cards; the full sentence stays in the tooltip. */
+  compact?: boolean;
 }) {
   if (live) {
-    return <span className="dash-badge dash-badge-live">Live · computed just now</span>;
-  }
-  if (!readModelAsOf) {
     return (
-      <span className="dash-badge dash-badge-stale">
-        No data yet — the reporting worker has not completed a pass
-      </span>
+      <Badge tone="success" icon="activity" title="Live · computed just now">
+        {compact ? "Live" : "Live · computed just now"}
+      </Badge>
     );
   }
+  if (!readModelAsOf) {
+    const full = "No data yet — the reporting worker has not completed a pass";
+    return (
+      <Badge tone="warning" icon="alert" title={full}>
+        {compact ? "Reporting not run yet" : full}
+      </Badge>
+    );
+  }
+  const time = new Date(readModelAsOf).toLocaleTimeString();
   return (
-    <span className="dash-badge dash-badge-stale">
-      Data as of {new Date(readModelAsOf).toLocaleTimeString()}
-    </span>
+    <Badge tone="neutral" icon="clock" title={`Data as of ${time}`}>
+      {compact ? `As of ${time}` : `Data as of ${time}`}
+    </Badge>
   );
 }

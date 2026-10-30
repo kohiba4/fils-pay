@@ -1,9 +1,34 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  AccountMenu,
+  AccountRow,
+  AccountSection,
+  Alert,
+  AppShell,
+  Badge,
+  Icon,
+  IdText,
+  Logo,
+  NavGroup,
+  NavSection,
+  humanize,
+} from "@filspay/ui";
+import type { IconName } from "@filspay/ui";
 import { useDashboardAuth } from "../auth/DashboardAuthContext.js";
 import { RequireRole } from "../auth/RequireRole.js";
 import { describeError } from "../api/client.js";
-import "../dashboard.css";
+
+function NavItem({ to, icon, children }: { to: string; icon: IconName; children: string }) {
+  return (
+    <li>
+      <NavLink to={to} className="fp-nav__link">
+        <Icon name={icon} size={18} />
+        {children}
+      </NavLink>
+    </li>
+  );
+}
 
 /** Nav shell for every merchant dashboard screen. No impersonation banner
  *  here — nothing in the merchant plane impersonates anyone; when an admin
@@ -12,56 +37,113 @@ import "../dashboard.css";
 export function DashboardLayout() {
   const { me, signOut } = useDashboardAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   // sign out clears the cookie server side, local merchantId stays — am
   async function handleSignOut(): Promise<void> {
     setError(null);
+    setSigningOut(true);
     try {
       await signOut();
       navigate("/dashboard/login", { replace: true });
     } catch (err) {
       setError(describeError(err));
+    } finally {
+      setSigningOut(false);
     }
   }
 
+  const nav = (
+    <NavGroup label="Dashboard">
+      <NavSection title="Payments">
+        <NavItem to="/dashboard/overview" icon="overview">
+          Overview
+        </NavItem>
+        <NavItem to="/dashboard/transactions" icon="transactions">
+          Transactions
+        </NavItem>
+        <NavItem to="/dashboard/payment-links" icon="link">
+          Payment links
+        </NavItem>
+      </NavSection>
+      <NavSection title="Finance">
+        <NavItem to="/dashboard/settlement" icon="settlement">
+          Settlement
+        </NavItem>
+        {/* Reconciliation and every webhook route are owner/finance-only
+            server-side, so their links are hidden from support rather than
+            offered and then refused. UI convenience only — see RequireRole. */}
+        <RequireRole allow={["owner", "finance"]}>
+          <NavItem to="/dashboard/reconciliation" icon="reconcile">
+            Reconciliation
+          </NavItem>
+        </RequireRole>
+      </NavSection>
+      <RequireRole allow={["owner", "finance"]}>
+        <NavSection title="Developers">
+          <NavItem to="/dashboard/webhooks" icon="webhook">
+            Webhooks
+          </NavItem>
+        </NavSection>
+      </RequireRole>
+    </NavGroup>
+  );
+
+  const account = me ? (
+    <AccountMenu name={me.merchant.displayName} meta={`${humanize(me.role)} · ${me.email}`}>
+      <AccountSection>
+        <AccountRow label="Signed in as">{me.email}</AccountRow>
+        <AccountRow label="Role">
+          <Badge tone="neutral" icon="user">
+            {humanize(me.role)}
+          </Badge>
+        </AccountRow>
+        <AccountRow label="Onboarding">{humanize(me.merchant.onboardingStatus)}</AccountRow>
+      </AccountSection>
+      <AccountSection>
+        <span className="fp-muted fp-xs">Merchant ID</span>
+        <IdText value={me.merchant.id} copy copyLabel="Copy merchant ID" />
+      </AccountSection>
+      <AccountSection>
+        <button
+          type="button"
+          className="fp-account__action"
+          onClick={() => void handleSignOut()}
+          disabled={signingOut}
+        >
+          <Icon name="logout" size={18} />
+          {signingOut ? "Signing out…" : "Log out"}
+        </button>
+      </AccountSection>
+    </AccountMenu>
+  ) : null;
+
   return (
-    <div className="dash-shell">
-      <header className="dash-header">
-        <div className="dash-brand">FilsPay</div>
-        <nav className="dash-nav">
-          <NavLink to="/dashboard/transactions">Transactions</NavLink>
-          <NavLink to="/dashboard/payment-links">Payment links</NavLink>
-          {/* Every webhook route — including the plain list read — is
-              owner/finance-only server-side, so the link itself is
-              hidden from support rather than offered and then refused. */}
-          <RequireRole allow={["owner", "finance"]}>
-            <NavLink to="/dashboard/webhooks">Webhooks</NavLink>
-          </RequireRole>
-          <NavLink to="/dashboard/settlement">Settlement</NavLink>
-          <RequireRole allow={["owner", "finance"]}>
-            <NavLink to="/dashboard/reconciliation">Reconciliation</NavLink>
-          </RequireRole>
-          <NavLink to="/dashboard/overview">Overview</NavLink>
-        </nav>
-        <div className="dash-identity">
-          {me ? (
-            <span>
-              {me.email} <span className="dash-role-chip">{me.role}</span>
-              <span className="dash-muted"> · {me.merchant.displayName}</span>
-            </span>
-          ) : null}
-          <button type="button" className="dash-button" onClick={() => void handleSignOut()}>
-            Log out
-          </button>
-        </div>
-      </header>
-
-      {error ? <p className="dash-error">{error}</p> : null}
-
-      <main className="dash-main">
-        <Outlet />
-      </main>
-    </div>
+    <AppShell
+      brand={
+        <Link to="/dashboard" className="fp-brand-link" aria-label="FilsPay dashboard home">
+          <Logo />
+        </Link>
+      }
+      context={<span className="fp-context">Merchant dashboard</span>}
+      nav={nav}
+      sidebarFooter={
+        <>
+          Times are shown in your browser&apos;s time zone. Settlement batch dates are Asia/Bahrain
+          business days.
+        </>
+      }
+      account={account}
+      locationKey={location.pathname}
+    >
+      {error ? (
+        <Alert tone="danger" title="Couldn't sign out" onDismiss={() => setError(null)} className="dash-shell-alert">
+          {error}
+        </Alert>
+      ) : null}
+      <Outlet />
+    </AppShell>
   );
 }

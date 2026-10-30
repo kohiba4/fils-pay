@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
+import { Backdrop, Loading } from "@filspay/ui";
 import { useAdminAuth } from "../auth/AdminAuthContext.js";
 
 /**
@@ -19,8 +20,9 @@ export function RequireAdminAuth({ children }: { children: ReactNode }) {
 
   if (status === "loading") {
     return (
-      <main className="admin-centered">
-        <p>Checking your session...</p>
+      <main className="fp-standalone">
+        <Backdrop quiet />
+        <Loading page>Checking your session…</Loading>
       </main>
     );
   }

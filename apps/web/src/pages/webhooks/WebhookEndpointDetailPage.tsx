@@ -1,10 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import {
+  Alert,
+  Card,
+  ChipGroup,
+  DetailList,
+  EmptyState,
+  PageHeader,
+  SkeletonRows,
+  Spinner,
+  Button,
+  buttonClass,
+  useToast,
+} from "@filspay/ui";
 import { listDeliveries, listWebhookEndpoints, replayDelivery } from "../../api/webhooks.js";
 import { describeError } from "../../api/client.js";
 import { useDashboardAuth } from "../../auth/DashboardAuthContext.js";
 import { Pagination } from "../../components/Pagination.js";
-import { dash, dateTime } from "../../format.js";
+import { StatusBadge } from "../../components/StatusBadge.js";
+import { dateTime } from "../../format.js";
+import { deliveryStatus, endpointStatus } from "../../status.js";
+import { truncateMiddle } from "../../utils/helpers.js";
 import type { WebhookDeliveryDto, WebhookDeliveryStatus, WebhookEndpointDto } from "../../types.js";
 
 /** `webhook_deliveries.status`' four CHECK values. Note the dispatcher only
@@ -15,11 +31,19 @@ import type { WebhookDeliveryDto, WebhookDeliveryStatus, WebhookEndpointDto } fr
 const DELIVERY_STATUSES: WebhookDeliveryStatus[] = ["pending", "succeeded", "failed", "exhausted"];
 
 const PAGE_SIZE = 25;
+const COLUMNS = 7;
+
+const backLink = (
+  <Link className="fp-back-link" to="/dashboard/webhooks">
+    ← Webhook endpoints
+  </Link>
+);
 
 export function WebhookEndpointDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { me } = useDashboardAuth();
   const merchantId = me?.merchant.id;
+  const toast = useToast();
 
   const [endpoint, setEndpoint] = useState<WebhookEndpointDto | null>(null);
   const [endpointMissing, setEndpointMissing] = useState(false);
@@ -27,6 +51,7 @@ export function WebhookEndpointDetailPage() {
   const [deliveries, setDeliveries] = useState<WebhookDeliveryDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -63,6 +88,7 @@ export function WebhookEndpointDetailPage() {
           cursor ? [...previous, ...result.deliveries] : result.deliveries,
         );
         setNextCursor(result.nextCursor);
+        setLoadedOnce(true);
       } catch (err) {
         setError(describeError(err));
       } finally {
@@ -94,6 +120,7 @@ export function WebhookEndpointDetailPage() {
     setError(null);
     try {
       await replayDelivery(merchantId, id, delivery.id);
+      toast("Replay queued — it is sent by the next dispatcher pass");
       // The replay is a brand-new `pending` row, newest-first, so refetch from
       // the top rather than appending to what's on screen.
       await loadDeliveries(null);
@@ -108,147 +135,184 @@ export function WebhookEndpointDetailPage() {
 
   if (endpointMissing) {
     return (
-      <section>
-        <h1>Endpoint not found</h1>
-        <p>
-          No webhook endpoint with this id exists on your account.{" "}
-          <Link to="/dashboard/webhooks">Back to webhook endpoints</Link>
-        </p>
-      </section>
+      <>
+        <PageHeader back={backLink} title="Endpoint not found" />
+        <Card>
+          <EmptyState
+            icon="search"
+            title="No webhook endpoint with this ID exists on your account"
+            action={
+              <Link className={buttonClass({ variant: "secondary" })} to="/dashboard/webhooks">
+                Back to webhook endpoints
+              </Link>
+            }
+          />
+        </Card>
+      </>
     );
   }
 
   return (
-    <section>
-      <h1>Webhook endpoint</h1>
-
-      {endpoint ? (
-        <dl className="dash-dl">
-          <dt>URL</dt>
-          <dd>{endpoint.url}</dd>
-          <dt>Secret prefix</dt>
-          <dd>
-            <code>{endpoint.secretPrefix}</code>
-          </dd>
-          <dt>Status</dt>
-          <dd>
-            <span className={`dash-status dash-status-${endpoint.status}`}>{endpoint.status}</span>
-          </dd>
-          <dt>Created at</dt>
-          <dd>{dateTime(endpoint.createdAt)}</dd>
-          <dt>Updated at</dt>
-          <dd>{dateTime(endpoint.updatedAt)}</dd>
-        </dl>
-      ) : null}
-
-      <h2>Delivery log</h2>
-
-      <fieldset className="dash-filters">
-        <legend>Status</legend>
-        {DELIVERY_STATUSES.map((status) => (
-          <label key={status}>
-            <input
-              type="checkbox"
-              checked={statuses.includes(status)}
-              onChange={() => toggleStatus(status)}
-            />
-            {status}
-          </label>
-        ))}
-      </fieldset>
-
-      {error ? <p className="dash-error">{error}</p> : null}
-
-      <table className="dash-table">
-        <thead>
-          <tr>
-            <th>Created</th>
-            <th>Event</th>
-            <th>Status</th>
-            <th>Attempts</th>
-            <th>Response</th>
-            <th>Last attempt</th>
-            <th>Next attempt</th>
-            <th>Replay of</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {deliveries.map((delivery) => {
-            // Replaying a `pending` row is pointless — it is already queued,
-            // and the dispatcher leaves a row `pending` between retries. And a
-            // replay against a disabled endpoint is rejected `409` server-side,
-            // so the button is hidden rather than offered and refused, since
-            // the endpoint's own state is already known on this page.
-            const replayable =
-              (delivery.status === "succeeded" || delivery.status === "exhausted") &&
-              endpoint?.status === "active";
-            return (
-              <tr key={delivery.id}>
-                <td>{dateTime(delivery.createdAt)}</td>
-                <td>{delivery.eventType}</td>
-                <td>
-                  <span className={`dash-status dash-status-${delivery.status}`}>
-                    {delivery.status}
-                  </span>
-                </td>
-                <td>{delivery.attemptCount}</td>
-                <td>
-                  {dash(delivery.responseStatusCode)}
-                  {delivery.responseBodyExcerpt ? (
-                    <details>
-                      <summary>body</summary>
-                      <pre className="dash-pre">{delivery.responseBodyExcerpt}</pre>
-                    </details>
-                  ) : null}
-                </td>
-                <td>{dateTime(delivery.lastAttemptedAt)}</td>
-                <td>{dateTime(delivery.nextAttemptAt)}</td>
-                <td>
-                  {delivery.replayOfDeliveryId ? (
-                    <span className="dash-muted">
-                      replay of <code>{delivery.replayOfDeliveryId}</code>
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td>
-                  {replayable ? (
-                    <button
-                      type="button"
-                      className="dash-button"
-                      disabled={busyId === delivery.id}
-                      onClick={() => void handleReplay(delivery)}
-                    >
-                      Replay
-                    </button>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-          {deliveries.length === 0 && !loading && !error ? (
-            <tr>
-              <td colSpan={9}>No deliveries match these filters.</td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-
-      {loading ? <p>Loading...</p> : null}
-
-      <Pagination
-        nextCursor={nextCursor}
-        loading={loading}
-        onLoadMore={() => void loadDeliveries(nextCursor)}
+    <>
+      <PageHeader
+        back={backLink}
+        title="Webhook endpoint"
+        badges={endpoint ? <StatusBadge style={endpointStatus(endpoint.status)} raw={endpoint.status} /> : undefined}
+        description={endpoint ? <code className="fp-mono dash-break">{endpoint.url}</code> : undefined}
       />
 
-      <p>
-        <Link to="/dashboard/webhooks">Back to webhook endpoints</Link>
-      </p>
-    </section>
+      <div className="fp-stack">
+        {endpoint ? (
+          <Card title="Endpoint">
+            <DetailList
+              items={[
+                { term: "URL", detail: <span className="dash-break">{endpoint.url}</span> },
+                { term: "Secret prefix", detail: <code className="fp-mono">{endpoint.secretPrefix}…</code> },
+                { term: "Status", detail: <StatusBadge style={endpointStatus(endpoint.status)} raw={endpoint.status} /> },
+                { term: "Created at", detail: dateTime(endpoint.createdAt) },
+                { term: "Updated at", detail: dateTime(endpoint.updatedAt) },
+              ]}
+            />
+            {endpoint.status !== "active" ? (
+              <p className="fp-muted fp-small dash-card-note">
+                Replays are unavailable while this endpoint is disabled. Enable it from the endpoint
+                list first.
+              </p>
+            ) : null}
+          </Card>
+        ) : null}
+
+        <div className="fp-toolbar" role="search" aria-label="Filter deliveries">
+          <div className="dash-toolbar-row">
+            <ChipGroup
+              legend="Delivery status"
+              options={DELIVERY_STATUSES}
+              selected={statuses}
+              onToggle={toggleStatus}
+              labelFor={(status) => deliveryStatus(status).label}
+            />
+            {statuses.length > 0 ? (
+              <Button variant="ghost" size="sm" icon="close" onClick={() => setStatuses([])}>
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {error ? (
+          <Alert tone="danger" title="Something went wrong" onDismiss={() => setError(null)}>
+            {error}
+          </Alert>
+        ) : null}
+
+        <Card
+          flush
+          title="Delivery log"
+          subtitle="Newest first. A replay is a new delivery that points back to the original."
+          actions={loading && loadedOnce ? <Spinner label="Refreshing" /> : undefined}
+        >
+          <div className="fp-table-wrap">
+            <table className="fp-table fp-table--stack">
+              <caption className="fp-sr-only">Webhook deliveries</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Event</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="fp-num">Attempts</th>
+                  <th scope="col">Response</th>
+                  <th scope="col">Last attempt</th>
+                  <th scope="col">Next attempt</th>
+                  <th scope="col" className="fp-col-actions">
+                    <span className="fp-sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && !loadedOnce ? <SkeletonRows columns={COLUMNS} rows={4} /> : null}
+                {deliveries.map((delivery) => {
+                  // Replaying a `pending` row is pointless — it is already queued,
+                  // and the dispatcher leaves a row `pending` between retries. And a
+                  // replay against a disabled endpoint is rejected `409` server-side,
+                  // so the button is hidden rather than offered and refused, since
+                  // the endpoint's own state is already known on this page.
+                  const replayable =
+                    (delivery.status === "succeeded" || delivery.status === "exhausted") &&
+                    endpoint?.status === "active";
+                  return (
+                    <tr key={delivery.id}>
+                      <td className="fp-cell-head">
+                        <span className="fp-table__primary">{delivery.eventType}</span>
+                        <span className="fp-table__sub">
+                          Created {dateTime(delivery.createdAt)}
+                          {delivery.replayOfDeliveryId ? (
+                            <>
+                              {" · replay of "}
+                              <code className="fp-mono" title={delivery.replayOfDeliveryId}>
+                                {truncateMiddle(delivery.replayOfDeliveryId, 13)}
+                              </code>
+                            </>
+                          ) : null}
+                        </span>
+                      </td>
+                      <td data-label="Status">
+                        <StatusBadge style={deliveryStatus(delivery.status)} raw={delivery.status} />
+                      </td>
+                      <td data-label="Attempts" className="fp-num">
+                        {delivery.attemptCount}
+                      </td>
+                      <td data-label="Response">
+                        {delivery.responseStatusCode === null ? (
+                          <span className="fp-muted">—</span>
+                        ) : (
+                          <code className={delivery.responseStatusCode < 300 ? "dash-http-ok" : "dash-http-bad"}>
+                            HTTP {delivery.responseStatusCode}
+                          </code>
+                        )}
+                        {delivery.responseBodyExcerpt ? (
+                          <details className="fp-details">
+                            <summary>Response body</summary>
+                            <pre className="fp-pre">{delivery.responseBodyExcerpt}</pre>
+                          </details>
+                        ) : null}
+                      </td>
+                      <td data-label="Last attempt">{dateTime(delivery.lastAttemptedAt)}</td>
+                      <td data-label="Next attempt">
+                        {delivery.status === "pending" ? dateTime(delivery.nextAttemptAt) : <span className="fp-muted">—</span>}
+                      </td>
+                      <td className="fp-col-actions">
+                        {replayable ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon="replay"
+                            loading={busyId === delivery.id}
+                            onClick={() => void handleReplay(delivery)}
+                          >
+                            Replay
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {deliveries.length === 0 && !loading && !error ? (
+                  <tr className="fp-table__empty">
+                    <td colSpan={COLUMNS}>
+                      <EmptyState compact icon="inbox" title={statuses.length > 0 ? "No deliveries match these filters" : "No deliveries yet"} />
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          {nextCursor ? (
+            <div className="fp-table-footer">
+              <span>Showing {deliveries.length} deliveries</span>
+              <Pagination nextCursor={nextCursor} loading={loading} onLoadMore={() => void loadDeliveries(nextCursor)} />
+            </div>
+          ) : null}
+        </Card>
+      </div>
+    </>
   );
 }

@@ -8,6 +8,7 @@ import { MerchantListPage } from "./pages/merchants/MerchantListPage.js";
 import { MerchantDetailPage } from "./pages/merchants/MerchantDetailPage.js";
 import { SettlementPage } from "./pages/settlement/SettlementPage.js";
 import { WebhookReplayPage } from "./pages/webhooks/WebhookReplayPage.js";
+import { NotFoundPage } from "./components/NotFoundPage.js";
 
 // MK: /v2 routes live behind VITE_ADMIN_V2 — see the admin v2 doc
 export const router = createBrowserRouter([
@@ -30,6 +31,9 @@ export const router = createBrowserRouter([
       { path: "/adjustment-imports", element: <AdjustmentImportPage /> },
       { path: "/webhooks", element: <WebhookReplayPage /> },
       { path: "/webhooks/:merchantId", element: <WebhookReplayPage /> },
+      // Unknown console URLs: a 404 inside the shell rather than React
+      // Router's developer error screen.
+      { path: "*", element: <NotFoundPage /> },
     ],
   },
 ]);

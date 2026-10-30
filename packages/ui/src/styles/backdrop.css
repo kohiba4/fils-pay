@@ -1,0 +1,169 @@
+/* Page backdrop: near-black base, soft localized violet/lavender light with
+   faint pink and cyan accents, and a sparse field of fine dots that fades
+   out towards the edges. Purely decorative: fixed behind everything,
+   pointer-events none, aria-hidden.
+
+   Motion is compositor-only (transform/opacity), very slow, and loops
+   without jumps: each dot layer travels exactly one tile. It pauses when the
+   tab is hidden (html[data-fp-hidden], set by <Backdrop>) and stops entirely
+   under prefers-reduced-motion (base.css). The "quiet" variant used by
+   checkout and sign-in is dimmer and static. */
+
+.fp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--fp-bg);
+  pointer-events: none;
+}
+
+.fp-backdrop__glow {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+
+.fp-backdrop__glow--violet {
+  top: -30vh;
+  left: -12vw;
+  width: 72vw;
+  height: 78vh;
+  background: radial-gradient(closest-side, rgba(124, 58, 237, 0.34), rgba(124, 58, 237, 0.1) 55%, transparent);
+  animation: fp-glow-a 26s ease-in-out infinite alternate;
+}
+
+.fp-backdrop__glow--lavender {
+  top: -34vh;
+  left: 34vw;
+  width: 58vw;
+  height: 62vh;
+  background: radial-gradient(closest-side, rgba(167, 139, 250, 0.2), transparent);
+  animation: fp-glow-b 32s ease-in-out infinite alternate;
+}
+
+.fp-backdrop__glow--pink {
+  right: -16vw;
+  bottom: -34vh;
+  width: 56vw;
+  height: 66vh;
+  background: radial-gradient(closest-side, rgba(236, 72, 153, 0.1), transparent);
+  animation: fp-glow-b 38s ease-in-out infinite alternate-reverse;
+}
+
+.fp-backdrop__glow--cyan {
+  top: 30vh;
+  right: -22vw;
+  width: 46vw;
+  height: 54vh;
+  background: radial-gradient(closest-side, rgba(34, 211, 238, 0.07), transparent);
+  animation: fp-glow-a 44s ease-in-out infinite alternate-reverse;
+}
+
+/* The dot field is masked so it gathers around the header and overview area
+   and dissolves towards the edges instead of tiling every surface. */
+.fp-backdrop__dots {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 32% 8%, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 82%);
+  mask-image: radial-gradient(ellipse 80% 70% at 32% 8%, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 82%);
+}
+
+.fp-backdrop__dots-layer {
+  position: absolute;
+  will-change: transform, opacity;
+}
+
+.fp-backdrop__dots-layer--a {
+  inset: -240px;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='240'%20height='240'%3E%3Cg%20fill='%23ede9fe'%3E%3Ccircle%20cx='79.1'%20cy='39.0'%20r='0.89'%20fill-opacity='0.28'/%3E%3Ccircle%20cx='128.3'%20cy='88.8'%20r='0.53'%20fill-opacity='0.48'/%3E%3Ccircle%20cx='12.7'%20cy='104.6'%20r='0.54'%20fill-opacity='0.29'/%3E%3Ccircle%20cx='102.5'%20cy='195.8'%20r='0.57'%20fill-opacity='0.35'/%3E%3Ccircle%20cx='149.6'%20cy='223.9'%20r='0.85'%20fill-opacity='0.43'/%3E%3Ccircle%20cx='230.5'%20cy='14.8'%20r='1.02'%20fill-opacity='0.38'/%3E%3Ccircle%20cx='37.5'%20cy='31.3'%20r='0.69'%20fill-opacity='0.62'/%3E%3Ccircle%20cx='45.9'%20cy='138.9'%20r='0.88'%20fill-opacity='0.42'/%3E%3Ccircle%20cx='131.1'%20cy='18.6'%20r='0.54'%20fill-opacity='0.34'/%3E%3Ccircle%20cx='161.9'%20cy='103.2'%20r='0.69'%20fill-opacity='0.51'/%3E%3Ccircle%20cx='109.1'%20cy='73.5'%20r='0.98'%20fill-opacity='0.56'/%3E%3Ccircle%20cx='60.6'%20cy='137.3'%20r='0.82'%20fill-opacity='0.64'/%3E%3Ccircle%20cx='173.2'%20cy='70.8'%20r='1.09'%20fill-opacity='0.30'/%3E%3Ccircle%20cx='101.0'%20cy='179.7'%20r='0.59'%20fill-opacity='0.47'/%3E%3Ccircle%20cx='13.1'%20cy='159.0'%20r='0.96'%20fill-opacity='0.51'/%3E%3Ccircle%20cx='207.1'%20cy='76.8'%20r='0.92'%20fill-opacity='0.52'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 240px 240px;
+  animation:
+    fp-dots-a 150s linear infinite,
+    fp-twinkle 9s ease-in-out infinite alternate;
+}
+
+.fp-backdrop__dots-layer--b {
+  inset: -360px;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='360'%20height='360'%3E%3Cg%20fill='%23ede9fe'%3E%3Ccircle%20cx='163.2'%20cy='201.0'%20r='1.45'%20fill-opacity='0.29'/%3E%3Ccircle%20cx='182.8'%20cy='210.8'%20r='0.93'%20fill-opacity='0.30'/%3E%3Ccircle%20cx='225.7'%20cy='283.1'%20r='0.87'%20fill-opacity='0.24'/%3E%3Ccircle%20cx='35.9'%20cy='289.0'%20r='1.29'%20fill-opacity='0.16'/%3E%3Ccircle%20cx='349.7'%20cy='343.6'%20r='1.26'%20fill-opacity='0.33'/%3E%3Ccircle%20cx='59.4'%20cy='9.3'%20r='1.17'%20fill-opacity='0.17'/%3E%3Ccircle%20cx='71.0'%20cy='89.2'%20r='0.82'%20fill-opacity='0.29'/%3E%3Ccircle%20cx='159.1'%20cy='300.5'%20r='1.16'%20fill-opacity='0.34'/%3E%3Ccircle%20cx='179.9'%20cy='237.2'%20r='1.12'%20fill-opacity='0.23'/%3E%3Ccircle%20cx='355.2'%20cy='354.5'%20r='1.39'%20fill-opacity='0.36'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 360px 360px;
+  opacity: 0.8;
+  animation:
+    fp-dots-b 220s linear infinite,
+    fp-twinkle 13s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes fp-glow-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.85;
+  }
+  to {
+    transform: translate3d(4vw, 3vh, 0) scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes fp-glow-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.04);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(-3vw, 4vh, 0) scale(0.96);
+    opacity: 0.8;
+  }
+}
+
+/* Exactly one tile per loop, so the restart is invisible. */
+@keyframes fp-dots-a {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(240px, 0, 0);
+  }
+}
+
+@keyframes fp-dots-b {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 360px, 0);
+  }
+}
+
+@keyframes fp-twinkle {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+html[data-fp-hidden] .fp-backdrop *,
+.fp-backdrop--quiet * {
+  animation-play-state: paused !important;
+}
+
+/* Checkout and sign-in: same family, less light, no motion. */
+.fp-backdrop--quiet .fp-backdrop__glow--violet {
+  opacity: 0.7;
+}
+
+.fp-backdrop--quiet .fp-backdrop__glow--lavender {
+  opacity: 0.6;
+}
+
+.fp-backdrop--quiet .fp-backdrop__glow--pink,
+.fp-backdrop--quiet .fp-backdrop__glow--cyan {
+  opacity: 0.5;
+}
+
+.fp-backdrop--quiet .fp-backdrop__dots {
+  opacity: 0.5;
+  -webkit-mask-image: radial-gradient(ellipse 60% 45% at 50% 0%, #000 0%, transparent 80%);
+  mask-image: radial-gradient(ellipse 60% 45% at 50% 0%, #000 0%, transparent 80%);
+}

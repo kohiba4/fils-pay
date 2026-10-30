@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  Alert,
+  Button,
+  Card,
+  ConfirmDialog,
+  DetailList,
+  EmptyState,
+  Field,
+  IdText,
+  Loading,
+  PageHeader,
+  buttonClass,
+  humanize,
+} from "@filspay/ui";
+import {
   captureTransaction,
   getTransaction,
   getTransactionEvents,
@@ -8,7 +22,10 @@ import {
 } from "../../api/transactions.js";
 import { ApiError, describeError } from "../../api/client.js";
 import { RequireRole } from "../../auth/RequireRole.js";
+import { Money } from "../../components/Money.js";
+import { StatusBadge } from "../../components/StatusBadge.js";
 import { bhd, dash, dateTime } from "../../format.js";
+import { transactionStatus } from "../../status.js";
 import type { TransactionDto, TransactionEventDto } from "../../types.js";
 import { RefundDrawer } from "./RefundDrawer.js";
 import { useAttemptKey } from "./useAttemptKey.js";
@@ -18,6 +35,21 @@ type LoadState =
   | { kind: "not_found" }
   | { kind: "error"; message: string }
   | { kind: "loaded"; txn: TransactionDto };
+
+/** Whole positive fils typed into the capture box, for the live BHD preview
+ *  only — the request still sends exactly what was typed, as before. */
+function previewFils(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+const backLink = (
+  <Link className="fp-back-link" to="/dashboard/transactions">
+    ← Transactions
+  </Link>
+);
 
 /**
  * `GET /v1/transactions/:id` plus its event timeline on the same page — one
@@ -37,6 +69,7 @@ export function TransactionDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureAmount, setCaptureAmount] = useState("");
+  const [confirmVoid, setConfirmVoid] = useState(false);
   const captureAttempt = useAttemptKey(captureAmount);
 
   const load = useCallback(async () => {
@@ -90,12 +123,9 @@ export function TransactionDetailPage() {
     }
   }
 
-  /** Only offered while status is authorized. */
+  /** Only offered while status is authorized. Asked first in a dialog. */
   async function handleVoid(): Promise<void> {
     if (!id) return;
-    if (!window.confirm("Void this authorization? The held funds are released and cannot be captured afterwards.")) {
-      return;
-    }
     setSubmitting(true);
     setActionError(null);
     try {
@@ -103,8 +133,10 @@ export function TransactionDetailPage() {
       // indistinguishable from a first void on the wire, and correctly so:
       // both mean "now voided".
       await voidTransaction(id);
+      setConfirmVoid(false);
       await load();
     } catch (err) {
+      setConfirmVoid(false);
       setActionError(describeError(err));
     } finally {
       setSubmitting(false);
@@ -112,158 +144,214 @@ export function TransactionDetailPage() {
   }
 
   if (state.kind === "loading") {
-    return <p>Loading...</p>;
+    return <Loading page>Loading transaction…</Loading>;
   }
   if (state.kind === "not_found") {
     return (
-      <section>
-        <h1>Transaction not found</h1>
-        <p>
-          No transaction with this id exists on your account.{" "}
-          <Link to="/dashboard/transactions">Back to transactions</Link>
-        </p>
-      </section>
+      <>
+        <PageHeader back={backLink} title="Transaction not found" />
+        <Card>
+          <EmptyState
+            icon="search"
+            title="No transaction with this ID exists on your account"
+            action={
+              <Link className={buttonClass({ variant: "secondary" })} to="/dashboard/transactions">
+                Back to transactions
+              </Link>
+            }
+          />
+        </Card>
+      </>
     );
   }
   if (state.kind === "error") {
     return (
-      <section>
-        <h1>Transaction</h1>
-        <p className="dash-error">{state.message}</p>
-      </section>
+      <>
+        <PageHeader back={backLink} title="Transaction" />
+        <Alert
+          tone="danger"
+          title="Couldn't load this transaction"
+          actions={
+            <Button size="sm" variant="secondary" icon="replay" onClick={() => void load()}>
+              Try again
+            </Button>
+          }
+        >
+          {state.message}
+        </Alert>
+      </>
     );
   }
 
   const { txn } = state;
   const capturable = txn.status === "authorized" || txn.status === "partially_captured";
   const voidable = txn.status === "authorized";
+  const preview = previewFils(captureAmount);
 
   return (
-    <section>
-      <h1>Transaction</h1>
-      <p className="dash-muted">
-        <code>{txn.id}</code>
-      </p>
+    <>
+      <PageHeader
+        back={backLink}
+        title={txn.reference ?? "Transaction"}
+        documentTitle="Transaction"
+        badges={<StatusBadge style={transactionStatus(txn.status)} raw={txn.status} />}
+        description={<IdText value={txn.id} copy copyLabel="Copy transaction ID" />}
+      />
 
-      <dl className="dash-dl">
-        <dt>Status</dt>
-        <dd>
-          <span className={`dash-status dash-status-${txn.status}`}>{txn.status}</span>
-        </dd>
-        <dt>Authorized amount</dt>
-        <dd>{bhd(txn.amountFils)}</dd>
-        <dt>Captured amount</dt>
-        <dd>{bhd(txn.capturedFils)}</dd>
-        <dt>Refunded amount</dt>
-        <dd>{bhd(txn.refundedFils ?? 0)}</dd>
-        <dt>Currency</dt>
-        <dd>{txn.currency}</dd>
-        <dt>Reference</dt>
-        <dd>{dash(txn.reference)}</dd>
-        <dt>Acquirer reference</dt>
-        <dd>
-          <code>{txn.acquirerReference}</code>
-        </dd>
-        <dt>Occurred at</dt>
-        <dd>{dateTime(txn.occurredAt)}</dd>
-        <dt>Created at</dt>
-        <dd>{dateTime(txn.createdAt)}</dd>
-      </dl>
-
-      {/* Capture, void and refund are hidden from `support`. The API enforces the
-          same rule (owner/finance only, AUD-046 / FP-300); this hide only mirrors it. */}
-      <RequireRole allow={["owner", "finance"]}>
-        {capturable || voidable ? (
-          <div className="dash-actions">
-            {actionError ? <p className="dash-error">{actionError}</p> : null}
-
-            {capturable ? (
-              captureOpen ? (
-                <form className="dash-form dash-form-inline" onSubmit={(e) => void handleCapture(e)}>
-                  <label>
-                    Amount in fils (blank captures everything outstanding)
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={captureAmount}
-                      onChange={(e) => setCaptureAmount(e.target.value)}
-                    />
-                  </label>
-                  <button type="submit" className="dash-button" disabled={submitting}>
-                    {submitting ? "Capturing..." : "Capture"}
-                  </button>
-                  <button
-                    type="button"
-                    className="dash-button"
-                    disabled={submitting}
-                    onClick={() => setCaptureOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                </form>
-              ) : (
-                <button type="button" className="dash-button" onClick={() => setCaptureOpen(true)}>
-                  Capture
-                </button>
-              )
-            ) : null}
-
-            {voidable ? (
-              <button
-                type="button"
-                className="dash-button"
-                disabled={submitting}
-                onClick={() => void handleVoid()}
-              >
-                Void
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </RequireRole>
-
-      <RefundDrawer txn={txn} onRefunded={load} />
-
-      <h2>Event timeline</h2>
-      <table className="dash-table">
-        <thead>
-          <tr>
-            <th>Occurred</th>
-            <th>Event</th>
-            <th>Amount</th>
-            <th>Actor</th>
-          </tr>
-        </thead>
-        <tbody>
-          {/* Already ordered oldest-first by the endpoint — never re-sorted
-              here, so the page can't disagree with the API about history. */}
-          {events.map((event) => (
-            <tr key={event.id}>
-              <td>{dateTime(event.occurredAt)}</td>
-              <td>{event.eventType}</td>
-              <td>{event.amountFils === null ? "—" : bhd(event.amountFils)}</td>
-              <td>
-                {event.actorType}
-                {event.actorId ? (
-                  <div className="dash-muted">
-                    <code>{event.actorId}</code>
-                  </div>
+      <div className="fp-grid-main">
+        <div className="fp-stack">
+          <Card title="Payment">
+            <div className="dash-hero-amount">
+              <span className="fp-muted fp-small">Captured</span>
+              <Money fils={txn.capturedFils} hero />
+              <span className="fp-muted fp-small">
+                of <Money fils={txn.amountFils} /> authorized
+                {(txn.refundedFils ?? 0) > 0 ? (
+                  <>
+                    {" · "}
+                    <Money fils={txn.refundedFils} /> refunded
+                  </>
                 ) : null}
-              </td>
-            </tr>
-          ))}
-          {events.length === 0 ? (
-            <tr>
-              <td colSpan={4}>No events recorded.</td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+              </span>
+            </div>
+            <DetailList
+              items={[
+                { term: "Status", detail: <StatusBadge style={transactionStatus(txn.status)} raw={txn.status} /> },
+                { term: "Authorized amount", detail: <Money fils={txn.amountFils} /> },
+                { term: "Captured amount", detail: <Money fils={txn.capturedFils} /> },
+                { term: "Refunded amount", detail: <Money fils={txn.refundedFils ?? 0} /> },
+                { term: "Currency", detail: txn.currency },
+                { term: "Reference", detail: dash(txn.reference) },
+                { term: "Acquirer reference", detail: <IdText value={txn.acquirerReference} copy copyLabel="Copy acquirer reference" /> },
+                { term: "Occurred at", detail: dateTime(txn.occurredAt) },
+                { term: "Created at", detail: dateTime(txn.createdAt) },
+              ]}
+            />
+          </Card>
 
-      <p>
-        <Link to="/dashboard/transactions">Back to transactions</Link>
-      </p>
-    </section>
+          <Card title="Event timeline" subtitle="Oldest first, exactly as recorded.">
+            {/* Already ordered oldest-first by the endpoint — never re-sorted
+                here, so the page can't disagree with the API about history. */}
+            {events.length === 0 ? (
+              <EmptyState compact icon="activity" title="No events recorded" />
+            ) : (
+              <ol className="fp-timeline">
+                {events.map((event) => (
+                  <li key={event.id} className="fp-timeline__item">
+                    <span className="fp-timeline__marker" aria-hidden="true" />
+                    <div>
+                      <div className="fp-timeline__title">{humanize(event.eventType)}</div>
+                      <div className="fp-timeline__meta">
+                        {dateTime(event.occurredAt)} · {humanize(event.actorType)}
+                      </div>
+                      {event.actorId ? (
+                        <div className="fp-timeline__meta">
+                          <code className="fp-mono">{event.actorId}</code>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="fp-timeline__amount">
+                      {event.amountFils === null ? <span className="fp-muted">—</span> : <Money fils={event.amountFils} />}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Card>
+        </div>
+
+        {/* Capture, void and refund are hidden from `support`. The API enforces the
+            same rule (owner/finance only, AUD-046 / FP-300); this hide only mirrors it. */}
+        <div className="fp-stack">
+          <RequireRole allow={["owner", "finance"]}>
+            {capturable || voidable ? (
+              <Card title="Actions" subtitle="Capture settles held funds; void releases them.">
+                <div className="fp-stack fp-stack--sm">
+                  {actionError ? (
+                    <Alert tone="danger" title="That didn't go through" onDismiss={() => setActionError(null)}>
+                      {actionError}
+                    </Alert>
+                  ) : null}
+
+                  {capturable ? (
+                    captureOpen ? (
+                      <form className="fp-form" onSubmit={(e) => void handleCapture(e)}>
+                        <Field
+                          label="Amount in fils"
+                          optional
+                          hint={
+                            preview !== null
+                              ? `= ${bhd(preview)}. 1,000 fils = 1 BHD.`
+                              : "Leave blank to capture everything still outstanding. 1,000 fils = 1 BHD."
+                          }
+                        >
+                          {(props) => (
+                            <input
+                              {...props}
+                              className="fp-input fp-num"
+                              type="number"
+                              min={1}
+                              step={1}
+                              inputMode="numeric"
+                              value={captureAmount}
+                              onChange={(e) => setCaptureAmount(e.target.value)}
+                              autoFocus
+                            />
+                          )}
+                        </Field>
+                        <div className="fp-form-actions">
+                          <Button type="submit" variant="primary" loading={submitting}>
+                            {submitting ? "Capturing…" : "Capture"}
+                          </Button>
+                          <Button variant="ghost" disabled={submitting} onClick={() => setCaptureOpen(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <Button variant="primary" icon="checkCircle" block onClick={() => setCaptureOpen(true)}>
+                        Capture
+                      </Button>
+                    )
+                  ) : null}
+
+                  {voidable ? (
+                    <Button variant="danger" icon="xCircle" block disabled={submitting} onClick={() => setConfirmVoid(true)}>
+                      Void authorization
+                    </Button>
+                  ) : null}
+                </div>
+              </Card>
+            ) : null}
+          </RequireRole>
+
+          <RefundDrawer txn={txn} onRefunded={load} />
+
+          <Card title="Identifiers">
+            <DetailList
+              items={[
+                { term: "Transaction ID", detail: <IdText value={txn.id} copy copyLabel="Copy transaction ID" /> },
+                { term: "Merchant ID", detail: <IdText value={txn.merchantId} /> },
+              ]}
+            />
+          </Card>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={confirmVoid}
+        title="Void this authorization?"
+        confirmLabel="Void authorization"
+        busyLabel="Voiding…"
+        busy={submitting}
+        onConfirm={() => void handleVoid()}
+        onCancel={() => setConfirmVoid(false)}
+      >
+        <p>
+          The held funds of <Money fils={txn.amountFils} /> are released and cannot be captured
+          afterwards.
+        </p>
+      </ConfirmDialog>
+    </>
   );
 }

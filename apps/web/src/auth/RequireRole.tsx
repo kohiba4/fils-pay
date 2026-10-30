@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Card, EmptyState, PageHeader } from "@filspay/ui";
 import { useDashboardAuth } from "./DashboardAuthContext.js";
 import type { MerchantRole } from "../types.js";
 
@@ -62,13 +63,15 @@ export function RoleGatedPage({
     <RequireRole
       allow={allow}
       fallback={
-        <section>
-          <h1>{title}</h1>
-          <p className="dash-error">
-            You don&apos;t have permission to use this page — ask an owner or finance
-            user on your account.
-          </p>
-        </section>
+        <>
+          <PageHeader title={title} />
+          <Card>
+            <EmptyState icon="lock" title="You don't have access to this page">
+              It is available to owner and finance users only — ask an owner or finance user on
+              your account.
+            </EmptyState>
+          </Card>
+        </>
       }
     >
       {children}
