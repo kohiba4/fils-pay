@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | authz |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch |
 
 ## Summary
@@ -48,7 +48,7 @@ the single failure in both is the AUD-044 jitter test. Reporting 7/11 on both (A
 - Other merchant's owner session or API key: 404, target unchanged.
 - Sibling sweep: every merchant write route is now role-gated except `POST /v1/reporting/saved-filters`
   (`requireMerchantAuth` only; writes a saved report filter, no money). Left as is; noted for triage.
-- Independent skeptical review: **pending** (not run in this session by instruction).
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (4 of 6 fail on main as claimed). Other capture/void callers are `paymentLinks/pay.ts` system actions. Business check suggested: decision Q4 lets `finance` capture and void.
 
 ## Related
 AUD-024, AUD-003

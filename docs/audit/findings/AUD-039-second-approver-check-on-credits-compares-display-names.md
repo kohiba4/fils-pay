@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | authz |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/17-AUD-039.patch |
 
 ## Summary
@@ -52,7 +52,7 @@ differ in both id and name).
 - Same name, different people: approved once. Same person, new name: 409, nothing journaled.
 - Concurrent approvals by two checkers: one 200, one 409, one ledger group.
 - Reject path does not do a two-person check (any finance admin may reject); unchanged, not a requirement in the docs.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it.
 
 ## Related
 —

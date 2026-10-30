@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | trust boundary |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch |
 
 ## Summary
@@ -54,7 +54,7 @@ that the client instant decides expiry; corrected (not deleted) to assert it is 
 - Future instant on a live link: pays (200). Unparseable / empty value: server clock (unit tests).
 - `status.ts` (public read) already used server time, so read and pay now agree.
 - Boundary: expiry is a strict `expires_at > now` at the API clock; not tested at the exact millisecond.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; the changed `pay.test.ts` test is a correction (it asserted the client clock decides expiry). Stale text left: route comment `routes/paymentLinks.ts:35-37` ("ignored unless … API key": there is no API-key path), `ARCHITECTURE.md:79`, the 0020 note. The code uses the API server clock, not DB `now()` (tracker wording).
 
 ## Related
 AUD-006

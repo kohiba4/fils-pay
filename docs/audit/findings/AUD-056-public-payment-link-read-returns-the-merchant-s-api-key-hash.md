@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Low** |
 | Category | information disclosure / credential material |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch |
 
 ## Summary
@@ -41,7 +41,7 @@ test asserts it as part of the public contract. Payment-link route tests 10/10; 
 ## Re-attack notes
 - Body checked against every `key_hash` of the merchant; field absent; prefix still present.
 - The prefix exposes 8 characters of the secret after `fp_live_`; 144 random bits remain, so it is left as designed.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it. Note: `merchantPublicKey` still exposes 8 characters of the live key (acceptable, not really public).
 
 ## Related
 AUD-055

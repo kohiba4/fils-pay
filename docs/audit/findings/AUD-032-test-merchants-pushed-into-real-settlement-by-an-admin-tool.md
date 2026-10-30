@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | data integrity |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/14-AUD-032.patch |
 
 ## Summary
@@ -49,7 +49,7 @@ one captured transaction and no open authorizations). On `main`: `flagsUpdated: 
 - Data: merchants already cleared by this tool (Slack 2026-09-19 "testModeCleared: true" for Gamma) are not restored;
   that needs ops/finance to decide which merchants were really sandbox. Track A owns any settled sandbox volume.
 - No other code path writes `test_mode = false` (grep of apps/api).
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; no other writer of `test_mode = false`. Data-repair lookup for affected merchants: `admin_audit_log` where `action='transaction_status_recompute'` and `metadata->'flagsUpdated' ? 'test_mode'`.
 
 ## Related
 —

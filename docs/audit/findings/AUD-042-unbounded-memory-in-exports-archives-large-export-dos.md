@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | DoS |
-| Status | fix ready, not merged (measured and verified locally on 55433; review pending) |
+| Status | fix ready, not merged (measured and verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/18-AUD-042.patch |
 
 ## Summary
@@ -61,7 +61,7 @@ with 422 and writes nothing`. Existing export tests (format, filters, escaping) 
   (bounded by the cap for new archives; archives created before this change could be larger). A row-per-delivery archive
   table would remove the cap; that is a schema decision.
 - Not measured: client disconnect mid-export (by construction the generator stops when the stream is destroyed; no test).
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (keyset paging on ties; served by `idx_transactions_merchant_occurred`). **Regression vs main (non-blocking):** the CSV header is sent before the first query, so `?from=garbage` (main: 500) or any mid-export error now yields a 200 that is cut off. **Open:** validate `from`/`to` (400) and fetch the first page before sending. Archive cap: count and row SELECT are separate statements (READ COMMITTED) and the SELECT has no LIMIT, so rows arriving in between pass the cap (add `LIMIT cap+1`); the cap counts deliveries, not bytes. The unused `streamTransactionsExportCsv` was deleted (nothing imported it).
 
 ## Related
 —

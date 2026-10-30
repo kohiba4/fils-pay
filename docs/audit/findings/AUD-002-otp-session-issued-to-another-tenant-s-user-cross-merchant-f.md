@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Critical** |
 | Category | authn / tenant isolation |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/03-AUD-002.patch |
 
 ## Summary
@@ -41,7 +41,7 @@ AUD-044 jitter test, also failing on `main`), reporting 7/11 (AUD-041, same as `
 - Pending session row bound to the verified user; OTP verify returns the own merchant and the own role (`finance`, while the other tenant's user is `owner`).
 - The other tenant's password does not log in at the own merchant (401).
 - Resend already used `pending.merchantUserId`; admin login uses globally unique admin emails (unaffected).
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; `findOtpRecipient` has no callers left (dead code, delete later).
 
 ## Related
 AUD-001

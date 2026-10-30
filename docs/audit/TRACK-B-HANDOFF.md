@@ -148,3 +148,82 @@ the merged findings' Status to "fixed (…)" and regenerate.
 > marked, not deleted) + `ON CONFLICT DO NOTHING`. Is that index name OK for you? Merchants with no webhook endpoint still
 > get no disbursement row — moving the effect out of the webhook path is a settlement-side change, your call.
 > Full suites on a fresh DB: api 446/446, reporting 12/12, Go all ok except your AUD-048 repro.
+
+---
+
+## Update — 2026-10-30 evening (after the user's local commit `1b2ea38 "not finnal"`)
+`1b2ea38` (by the user, not pushed) contains everything above plus AUD-057 part 2, AUD-018 part 2 and migration 0083.
+Work after it is **uncommitted** (list below). `main` on the team remote is still `af8e9c9`.
+
+**Done in this session**
+- **AUD-057 part 2:** connection-time private-destination block in `webhooks/transport.ts` (node:http/https with a guarded
+  `lookup`: one checked resolution, mixed answers refused, literal and IPv4-mapped/NAT64 IPv6 checked, TLS verification
+  kept, no proxies, no redirects, bounded read). `WEBHOOK_BLOCK_PRIVATE_DESTINATIONS` default on in production.
+- **AUD-018 part 2:** disbursement written inside the payout transaction (Go `PayoutBatch`, `PayoutSplitBatch`); exists
+  without webhook endpoints; 5 Go tests. Backfill for already-paid batches needs a finance decision.
+- **AUD-021:** no provider/simulator contract exists in the repo; a replay has no additional effect after AUD-019.
+  Interoperability questions recorded in the finding.
+- **FP-300 PR 3:** `refund.succeeded` delivered (AUD-030), reporting consumer + admin rebuild + analytics refund totals,
+  `refundedFils` in the transaction DTO, 0083 refund columns and the corrected 0072 view (AUD-028).
+- **FP-300 PR 4:** refund drawer wired to `POST /v1/refunds`, BD input parsed to fils, one idempotency key per attempt (also
+  for capture), refunded amount shown.
+- **AUD-058 (new):** reporting consumer halted on `batch_closed` for a day with no rollup row; fixed.
+- **Flag:** `FLAG{order_of_the_prompt_never_read_the_diff}` reproduced from the challenge repo's commit history (steps in
+  `docs/audit/COVERAGE.md`). Not submitted.
+- **Browser journeys** (Playwright, local only): see `docs/audit/COVERAGE.md`. 20 checks, all passed.
+
+**Validation (fresh `filspay` DB on 55433):** migrate 78 + seed ok; typecheck ok; events 4/4, money 40/40, admin 3/3,
+api 452/452, reporting 14/14, web 8/8, scripts 14/14 (0 skipped); web + admin `vite build` ok; Go all ok except Track A's
+intentional `TestRepro_AUD048_RebuildThenCloseDoesNotDoubleCount` (fails identically on `main`).
+
+**Files changed after 1b2ea38 (uncommitted):**
+apps/api/src/admin/reportingRebuild.ts, apps/api/src/analytics/query.ts, apps/api/src/transactions/serialize.ts,
+apps/api/src/refunds/fp300Acceptance.test.ts (new), apps/reporting/src/consumer/applyEvent.ts,
+apps/reporting/src/consumer/runConsumerPass.ts, apps/reporting/src/consumer/batchClosedParity.test.ts (new),
+apps/reporting/src/consumer/refundRollup.test.ts (new), apps/web/src/pages/transactions/RefundDrawer.tsx,
+apps/web/src/pages/transactions/TransactionDetailPage.tsx, apps/web/src/pages/transactions/useAttemptKey.ts (new),
+apps/web/src/types.ts, docs/audit/COVERAGE.md (new), docs/audit/TRIAGE.md, docs/audit/TRACK-B-HANDOFF.md,
+docs/audit/tracker/track-b.md, docs/audit/findings/AUD-028-*.md, AUD-030-*.md, AUD-058-*.md (new).
+
+**Proposed commits:** `feat(refunds): refund.succeeded webhook, refund reporting and refundedFils [FP-300 AUD-028 AUD-030]`;
+`feat(web): wire the refund drawer to POST /v1/refunds with one key per attempt [FP-300]`;
+`fix(reporting): parity check warns instead of halting on a missing rollup row [AUD-058]`; `docs(audit): coverage map, flag,
+Track B status`. INDEX.md / REPORT.md: regenerate after merge (statuses say "fix ready, not merged").
+
+**Still needed:** Track A review of the Go payout change and FP-300 PR 3/4 (they own FP-300); finance decisions Q13
+(negative-net recovery) and the disbursement backfill; acquirer answers for AUD-021; network egress policy (ops); Dilmune
+access (Q10); a CORS or same-origin dev setup (the stock dashboards cannot call the API cross-origin with cookies).
+
+---
+
+## Integration into `main` — 2026-10-30 (integration session)
+- **Remote:** `kohiba4/fils-pay-hackathon` (private; verified URL); `main` not protected, no CI workflows exist. `main`
+  was `af8e9c9` (this branch's base) during validation, then advanced to `7cf7c19` (PR #25, Track A: SUBMISSION.md,
+  tracked `.claude/` AI setup files, `.gitignore`, one CLAUDE.md line). No file overlaps Track B; the merge is clean
+  and no code or test changed, so the validation below still applies. `main` is merged into this branch with a merge
+  commit (no rebase) and re-fetched immediately before the push. Team flow (TEAM.md): branch → PR into `main` →
+  skeptical review → merge commit (no squash). Not pushed, merged or deployed yet. Deadline (SUBMISSION.md): Fri
+  2026-10-30 23:00; the judged repo is a **public fork** of the challenge repo, which this integration does not touch.
+- **Validated tree** = `1b2ea38` + the 19 uncommitted paths (code byte-identical to the tested tree; docs changed after
+  only). Fresh DB `filspay_integ` on 55433: migrate 78 + seed self-checks ok; typecheck exit 0; events 4/4, money 40/40,
+  admin 3/3, api 452/452, reporting 14/14, web 8/8, scripts 14/14 (0 skipped); web + admin `vite build` ok; Go build +
+  vet ok; Go tests all ok except `TestRepro_AUD048_RebuildThenCloseDoesNotDoubleCount` (default and `-p 1`).
+- **`main` baseline** (pristine `af8e9c9`, DB `filspay_mainbase`): Go fails the same AUD-048 repro (pre-existing, Track
+  A's open finding). Under the default parallel run `TestRebuildOneMerchantBalance_WritesOnlyThatMerchant` also failed
+  once (cross-package DB race; passes alone 3/3 and with `-p 1`): pre-existing test-isolation flake, for @kohiba4.
+- **Upgrade path:** the branch migrator on the used `main` DB applies exactly 0080–0083 (74 → 78); the four new unique
+  indexes and the refund columns exist. No number clash (`main`: 0073–0078, 0090–0091; Track B: 0080–0083).
+- **Commit note:** `1b2ea38` alone does not typecheck (`serialize.ts(46,30)`: `refunded_fils` not on `TransactionRow`);
+  the next commit (FP-300 PR 3) fixes it.
+- **Independent review:** `docs/audit/reviews/2026-10-30-track-b-batch.md`. Slices 1 (auth/admin) and 2 (payment
+  links/callbacks/exports/summary) done; slice 3 (webhooks, Go payout record, reporting, FP-300 PR 3/4) **not
+  completed** (stopped), so those findings stay "review pending". Blocking points: new **AUD-059** (cross-tenant report
+  read, pre-existing, open); AUD-023 resend resets the guess budget (open); AUD-024 saved-filters write under
+  impersonation (open). All three are present on `main`, not introduced by this batch; docs corrected, fixes proposed
+  for the next Track B PR.
+- **Needs @kohiba4:** review of the Go payout-record change (`settlement/batch.go`, `splits/allocate.go`) and FP-300
+  PR 3/4 (Track A owns FP-300 and `apps/settlement`); confirm `uq_settlement_payout_disbursements_batch`; INDEX.md /
+  REPORT.md regeneration after the merge (TEAM.md: the integrator refreshes them).
+- **Added to the open list:** AUD-059; AUD-023 resend budget; AUD-024 saved-filters; AUD-042 error after the 200
+  header (regression vs `main`'s 500 on a bad `from`) and archive count/select window; AUD-006 `releaseReservation`
+  ownership and same-key retry 409; AUD-021 fail-open outside `NODE_ENV=production`.

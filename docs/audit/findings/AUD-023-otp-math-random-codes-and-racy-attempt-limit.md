@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | authn |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch |
 
 ## Summary
@@ -51,7 +51,7 @@ constant `Math.random` — all 5 failed. After: 5/5 pass. **Tests changed:** non
 - **Open (not fixed, policy):** each resend (30 s cooldown) and each fresh password login issues a new 5-attempt challenge;
   there is no per-user lockout or rate limit, so an attacker who already has the password gets 5 guesses per login.
   Needs a product decision on lockout; recorded in the Track B handoff.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **PARTLY DISPUTED.** Confirmed: atomic attempt increment, conditional consume, `crypto.randomInt` (merchant and admin). **Disputed: the guess budget is not enforced across resends.** `routes/auth.ts` resend docstring (present on main) says the new challenge "inherits the previous challenge's attempt_count"; `auth/otp.ts issueChallenge` inserts a fresh count. Review repro: 4 wrong guesses, resend, ×3 → 12 wrong guesses judged on one pending session (budget 5); ~100 per 10-minute pending session. This is a broken documented contract (not only a lockout-policy question as stated in the handoff). **Open:** carry `attempt_count` into the resent challenge (or correct the docstring and this finding). Non-blocking: `otpAttempts.test.ts` `latestAttemptCount` reads the newest challenge in the whole DB (flaky on a shared DB).
 
 ## Related
 AUD-001

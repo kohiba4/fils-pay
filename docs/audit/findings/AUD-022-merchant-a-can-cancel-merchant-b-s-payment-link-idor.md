@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | authz |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/04-AUD-022.patch |
 
 ## Summary
@@ -41,7 +41,7 @@ AUD-044 jitter test, also failing on `main`), reporting 7/11 (AUD-041, same as `
 - B on its own path with A's link id: 404 `payment_link_not_found`; A's link still `active`, `canceled_at` null.
 - B on A's path: 403 (existing path check).
 - A can still cancel its own link (204); existing happy/404/409 cancel test unchanged and passing.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it.
 
 ## Related
 AUD-003

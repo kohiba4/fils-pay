@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | authn |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending; provider contract unverifiable from the repo) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/09-AUD-021.patch |
 
 ## Summary
@@ -59,7 +59,7 @@ default…` (failed on `main`, passes). Callback + verifier + acquirer tests 26/
 - Production with no override: unsigned callbacks refused (config test). Integrator: ARCHITECTURE.md's env table still
   lists `ACQUIRER_CALLBACK_REQUIRE_SIGNATURE` default `false`.
 - No secret rotation support (single secret); not requested by any document.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (raw-bytes test); replay argument holds while the only callback type appends a note. **Open, non-blocking:** signatures are required by default only when `NODE_ENV=production` (`parseNodeEnv` maps e.g. `staging` to development: unsigned callbacks accepted); `ACQUIRER_CALLBACK_REQUIRE_SIGNATURE=false` is still honoured in production; `ARCHITECTURE.md:96` still says the default is false; revisit before any state-changing callback type.
 
 ## Related
 AUD-019, AUD-020

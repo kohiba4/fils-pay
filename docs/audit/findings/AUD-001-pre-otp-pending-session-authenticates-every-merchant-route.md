@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Critical** |
 | Category | authn |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/02-AUD-001.patch |
 
 ## Summary
@@ -41,7 +41,7 @@ AUD-044 jitter test, also failing on `main`), reporting 7/11 (AUD-041, same as `
 - Pending cookie refused on the `requireMerchantAuth` surface (`/v1/transactions`) and the legacy `requireSession` surface (`/v1/merchants/:id/api-keys`): both 401.
 - The same cookie works after a correct `/v1/auth/otp/verify` (flow preserved).
 - Only one authenticated-session lookup exists (`lookupSession`); `lookupPendingSession` already filters `authenticated = false`. Admin sessions already test `authenticated = true`.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; `lookupSession` is the only merchant session lookup.
 
 ## Related
 AUD-002, AUD-023

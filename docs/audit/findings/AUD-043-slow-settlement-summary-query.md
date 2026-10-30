@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Low** |
 | Category | performance |
-| Status | fix ready, not merged (wrong totals fixed and measured; slowness not reproduced, no index; review pending) |
+| Status | fix ready, not merged (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/19-AUD-043.patch |
 
 ## Summary
@@ -56,7 +56,7 @@ after: passes. Settlement tests 15/15. **Tests changed:** none.
 - Merchant scope unchanged (`t.merchant_id = $1`).
 - **Behaviour change merchants will see:** the settlement page's captured total drops for multi-capture merchants (it was
   overstated). Worth a support note; Track A should confirm it now ties to batch gross for the same Bahrain days.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; same predicate as Go `batch.go` gross (ties on 60/64 seeded closed + 4/4 open batches; the other 4 have seeded gross with no events). Only `getSettlementSummary` changed; Track A's fee/refund/reconciliation figures unchanged.
 
 ## Related
 —

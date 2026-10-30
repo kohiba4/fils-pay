@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Critical** |
 | Category | race / money |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch |
 
 ## Summary
@@ -66,7 +66,7 @@ pass after. All payment-link tests 25/25. Migration applied on both an upgraded 
   capture is running leaves a captured transaction on a canceled link; the request now returns 409 `needsReview` and
   logs it instead of claiming success. Historical double charges (incident 2026-05-14) are not linkable by this column.
 - Coordination: `authorize.ts` and `void.ts` are shared payments files (additive changes); tell @kohiba4.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (all 5 concurrency tests fail on main: second payer 200 instead of 409). No double-capture path and no credit for an uncaptured payment found. **Open, non-blocking (review):** (1) `releaseReservation` (`pay.ts` `WHERE id = $1 AND status = 'reserved'`) is not owner-checked, so a losing request can reopen the link while the winner's capture is in flight; the next payer then reaches the acquirer before the unique index refuses (authorization hold on that card, 409); (2) a same-Idempotency-Key retry after a crash before capture now gets 409 `not_capturable` (recovery voided its own auth); main captured once; API clients only; (3) a capture 502 (outcome unknown) voids the auth and reopens the link (main also reopened); (4) the unique-index race loser's acquirer authorization is not logged. Untested: the `needsReview` 409 path; transactions authorized by pre-0080 code during a deploy have a NULL link id.
 
 ## Related
 AUD-007, postmortem-2026-05

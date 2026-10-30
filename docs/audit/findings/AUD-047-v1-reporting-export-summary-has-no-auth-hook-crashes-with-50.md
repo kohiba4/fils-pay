@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Low** |
 | Category | authn / time |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/15-AUD-047.patch |
 
 ## Summary
@@ -54,7 +54,7 @@ columns (or change the function) before wiring `refund.succeeded` into reporting
 - Bahrain midnight boundary covered on both sides; 02:30 Bahrain (still the previous UTC day) goes to the Bahrain day.
 - Other reporting appliers already use `toBahrainDateString` (capture/void/batch-closed); no other UTC bucketing found in
   `apps/reporting/src` (grep for `toISOString().slice`).
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): Auth part **CONFIRMED** — regression test fails with the fix reverted, passes with it (both tests 500 on main). The Bahrain-date rollup part was in the review slice that was **not completed** (stopped 2026-10-30): still pending.
 
 ## Related
 AUD-041

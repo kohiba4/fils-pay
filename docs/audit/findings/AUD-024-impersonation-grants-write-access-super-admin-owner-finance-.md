@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | authz |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) |
 | Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch |
 
 ## Summary
@@ -48,7 +48,7 @@ the single failure in both is the AUD-044 jitter test. Reporting 7/11 on both (A
 - Disabled admin's grant: 401 on a read.
 - Writer helper unit check: impersonation actor gets 403.
 - Not covered: the admin UI's "view as merchant" screen (not run). ADMIN.md still says super_admin may make changes; fix that doc with the integrator.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **PARTLY DISPUTED.** Confirmed: every admin role maps to `support`; a disabled admin's grant stops working; money moves and owner-only writes refuse impersonation. **Disputed claim:** "an impersonation grant can never perform a write" — `POST /v1/reporting/saved-filters` has no role gate or writer check and returns 201 under impersonation (non-money write; already listed as a triage candidate in the handoff). **Open:** add `refuseImpersonation` there (as `refunds.ts` does) or narrow the claim; the docstring at `routes/merchantWriteAuthority.test.ts:8` over-claims. Side effect to document in ADMIN.md: impersonating admins now get 403 on owner/finance reads (settlement summary, reconciliation, webhook endpoint list). Non-blocking: the api-key assertion at `merchantWriteAuthority.test.ts:183-184` (`401 || 403`) also passes on main.
 
 ## Related
 —

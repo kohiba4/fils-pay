@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | security |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/13-AUD-038.patch |
 
 ## Summary
@@ -53,7 +53,7 @@ whole rotation back (atomicity), already-revoked → 409, another merchant's key
 - Tenant isolation: rotating another merchant's key id is 404 (existing test); the revoke statement is also merchant-scoped.
 - **Compatibility:** an integration still using the old key stops working the moment an admin rotates it. If ops want an
   overlap window, it needs a decision and a real `revoke_after` sweep; ADMIN.md should state the immediate behaviour.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; the `routes/admin.test.ts` change is a correction (0037 says rotation revokes; no grace-period mechanism exists).
 
 ## Related
 —

@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | crypto / bearer token |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch |
 
 ## Summary
@@ -46,7 +46,7 @@ Base `main` af8e9c9, uncommitted working tree in `~/Desktop/hakathons/fils-pay-h
 - Existing links are not re-issued; tokens minted before the fix stay as predictable as they were. Rotating them would
   break sent invoices; a decision for the merchant-facing side.
 - ARCHITECTURE.md and INVARIANTS I20 need correcting by the integrator.
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; remaining `Math.random`: `apps/web/src/utils/helpers.ts randomId` (unused) and dispatcher jitter (not security-relevant).
 
 ## Related
 AUD-023

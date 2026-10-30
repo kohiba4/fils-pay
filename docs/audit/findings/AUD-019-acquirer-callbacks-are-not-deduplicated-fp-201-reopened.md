@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | idempotency |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/08-AUD-019.patch |
 
 ## Summary
@@ -56,7 +56,7 @@ the earliest unmarked, the other two marked.
 - Same callbackId on a different transaction: kept (dedupe scope is per transaction).
 - Dedupe runs after signature verification in the route, so an unsigned forgery cannot pre-empt a real callback's id
   once signatures are required (see AUD-021).
-- Independent skeptical review: **pending**.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; 0081 upgrade verified on planted duplicates (earliest kept, ties by id, nothing deleted; re-run is a no-op). **Open, non-blocking:** a reused `callbackId` with a different outcome/note is answered 200 and silently dropped (log or 409 on mismatch).
 
 ## Related
 AUD-021
