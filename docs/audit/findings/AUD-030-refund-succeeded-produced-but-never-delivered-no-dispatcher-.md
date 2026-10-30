@@ -5,7 +5,7 @@
 | Owner | FP-300 (shared) |
 | Severity | **Medium** |
 | Category | integration |
-| Status | confirmed (trace) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -33,3 +33,10 @@ _To be filled after the fix (bypass via other route / tenant / retry / concurren
 
 ## Related
 FP-300
+
+## FP-300 PR 3 addendum (Track B, 2026-10-30; for @kohiba4)
+`apps/api/src/webhooks/dispatcher.ts` adds `refund.succeeded` to the eligible list; `webhooks/envelope.ts` maps it to
+`{ refundId, transactionId, merchantId, amountFils, feeReversedFils, refundedTotalFils, status }` (same conventions as
+`transaction.captured`). Verified end to end by `apps/api/src/refunds/fp300Acceptance.test.ts`: three refunds through
+`POST /v1/refunds` produce three signed `refund.succeeded` deliveries to the merchant's endpoint, each verifying over the
+raw body; failed against the code before the change.

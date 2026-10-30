@@ -35,5 +35,20 @@ export async function refreshAnalyticsRollups(client: PoolClient): Promise<Rebui
       GROUP BY t.merchant_id, (te.occurred_at AT TIME ZONE 'Asia/Bahrain')::date`,
   );
 
-  return { volumeRows: volumeResult.rowCount ?? 0, trendRows: trendResult.rowCount ?? 0 };
+  // FP-300 PR 3: refunds from source (succeeded refunds, Bahrain date), merged
+  // into the same daily rows the consumer maintains, so a rebuild keeps them.
+  const refundResult = await client.query(
+    `INSERT INTO merchant_daily_volume (merchant_id, volume_date, refund_count, refund_gross_fils, last_updated_at)
+     SELECT r.merchant_id, (r.occurred_at AT TIME ZONE 'Asia/Bahrain')::date, COUNT(*), SUM(r.amount_fils), now()
+       FROM refunds r
+      WHERE r.status = 'succeeded'
+      GROUP BY r.merchant_id, (r.occurred_at AT TIME ZONE 'Asia/Bahrain')::date
+     ON CONFLICT (merchant_id, volume_date) DO UPDATE
+       SET refund_count = EXCLUDED.refund_count, refund_gross_fils = EXCLUDED.refund_gross_fils`,
+  );
+
+  return {
+    volumeRows: (volumeResult.rowCount ?? 0) + (refundResult.rowCount ?? 0),
+    trendRows: trendResult.rowCount ?? 0,
+  };
 }
