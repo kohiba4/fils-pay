@@ -7,6 +7,7 @@
 # safe order and health-checks them; on a failed health check it rolls the symlink back to the previous release.
 #
 # First time on a new server:  ssh <host> 'bash -s' < deploy/remote/provision.sh   (installs packages, Postgres, firewall)
+# First deploy only: SEED=1 ./deploy/deploy.sh loads the repo's own dataset (db/seed) when the database has no merchants.
 # Config:  DEPLOY_HOST, DEPLOY_KEY, PUBLIC_HOST (defaults below).  Secrets: generated ON the server in /etc/filspay/filspay.env.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -40,5 +41,5 @@ echo "== upload"
 tar -C "$STAGE" -czf - . | "${SSH[@]}" 'tar -xzf - -C /tmp/filspay-stage'
 
 echo "== release (remote)"
-"${SSH[@]}" "sudo bash /tmp/filspay-stage/code/deploy/remote/release.sh /tmp/filspay-stage"
+"${SSH[@]}" "sudo SEED=${SEED:-0} bash /tmp/filspay-stage/code/deploy/remote/release.sh /tmp/filspay-stage"
 echo "== deployed $REV: https://$PUBLIC_HOST  (admin: https://$PUBLIC_HOST:8443)"
