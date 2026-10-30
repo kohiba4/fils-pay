@@ -6,6 +6,8 @@ export interface TransactionRow {
   status: string;
   amount_fils: string | number;
   captured_fils: string | number;
+  /** 0043; present on every row read with SELECT *. */
+  refunded_fils?: string | number;
   currency: string;
   reference: string | null;
   acquirer_reference: string;
