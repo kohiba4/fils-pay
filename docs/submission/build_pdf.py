@@ -33,7 +33,7 @@ section.slide h1 { font-size: 30pt; margin: 0 0 8px; color: #b13a00; } section.s
 section.slide ul { margin: 6px 0 6px 18px; padding: 0; } section.slide li { margin: 4px 0; }
 table { border-collapse: collapse; font-size: 12pt; margin: 8px 0; } th, td { border: 1px solid #bbb; padding: 3px 8px; } th { background: #f1e3da; }
 code { font: 11pt Consolas, "DejaVu Sans Mono", monospace; background: #f3f3f3; padding: 0 3px; } pre { font: 10.5pt/1.3 Consolas, monospace; background: #f3f3f3; padding: 6px 10px; }
-img { max-height: 105mm; max-width: 100%; border: 1px solid #ccc; } .small { font-size: 11pt; color: #444; } .foot { position: absolute; bottom: 6mm; right: 18mm; font-size: 9pt; color: #777; }
+img { max-height: 105mm; max-width: 100%; border: 1px solid #ccc; } .two { display: flex; gap: 6mm; margin: 4px 0 8px; } .two img { width: 48%; max-height: 84mm; object-fit: contain; object-position: top left; } .small { font-size: 11pt; color: #444; } .foot { position: absolute; bottom: 6mm; right: 18mm; font-size: 9pt; color: #777; }
 """
 
 def md_to_html(text, base):
@@ -50,6 +50,7 @@ def to_pdf(html, pdf_path):
         os.unlink(tmp)
 
 def fix_images(text):
+    text = re.sub(r'src="(?!https?:|file:)([^"]+)"', lambda m: f'src="file://{os.path.join(HERE, m.group(1))}"', text)
     # images are referenced relative to docs/submission/; make them absolute file URLs for Chrome
     return re.sub(r"!\[([^\]]*)\]\((?!https?:|file:)([^)]+)\)", lambda m: f"![{m.group(1)}](file://{os.path.join(HERE, m.group(2))})", text)
 

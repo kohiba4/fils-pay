@@ -42,7 +42,7 @@
 
 ## Live demo: full and partial refund, end to end
 
-![refund drawer](shots/after-refund-drawer.png) ![timeline](shots/after-refund-timeline.png)
+<div class="two"><img src="shots/after-refund-drawer.png"><img src="shots/after-refund-timeline.png"></div>
 
 - Partial refund 10.000 BD of 426.987 BD → `partially_refunded`, `refund_partial` −10.000, fee given back proportional and capped
 - Batch close: payout = gross − fee − refunds + fee given back; reconciliation still **0.000 BD gap**
@@ -52,7 +52,7 @@
 
 ## Refunds in the settlement report
 
-![reconciliation](shots/after-reconciliation.png) ![batches](shots/after-settlement-batches.png)
+<div class="two"><img src="shots/after-reconciliation.png"><img src="shots/after-settlement-batches.png"></div>
 
 - Screenshots ready in case the live demo fails (taken from a real session)
 - Negative net (refunds above captures): pays nothing, debt visible; recovery policy = open decision Q13
