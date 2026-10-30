@@ -44,7 +44,8 @@ fi
 [ -z "${PG_POOL_MAX:-}" ] || sed -i "s/^PG_POOL_MAX=.*/PG_POOL_MAX=${PG_POOL_MAX}/" "$ENVF"
 # the second factor is an authenticator app (TOTP): no code is ever returned by the API, so drop the old dev switch
 sed -i '/^OTP_DEV_EXPOSE=/d' "$ENVF"
-grep -q '^SECOND_FACTOR=' "$ENVF" || echo 'SECOND_FACTOR=totp' >> "$ENVF"
+sed -i '/^SECOND_FACTOR=/d' "$ENVF"
+echo 'SECOND_FACTOR=totp' >> "$ENVF"   # forced on every release: production never runs the emailed/dev OTP
 
 echo "== dependencies (only the workspaces the server runs)"
 sudo -u filspay -H bash -o pipefail -c "cd '$REL' && npm ci -w apps/api -w apps/reporting -w packages/money -w packages/events --include-workspace-root --no-audit --no-fund 2>&1 | tail -3"

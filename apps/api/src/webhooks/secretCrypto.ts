@@ -26,7 +26,7 @@ function assertKeyLength(key: Buffer): void {
 
 /** AES-256-GCM encrypt, random 12-byte IV per call. Returns
  *  base64(iv || authTag || ciphertext). */
-/** Deterministic for a given key and plaintext, so stored ciphertexts can be compared for equality. */
+/** Not deterministic: a fresh random 96-bit IV is generated for every call (output differs each time, decrypts to the same plaintext).
 export function encryptSecret(plaintext: string, key: Buffer): string {
   assertKeyLength(key);
   const iv = randomBytes(IV_LENGTH_BYTES);

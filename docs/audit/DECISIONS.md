@@ -128,8 +128,9 @@ default so local development and the existing tests need nothing installed (`SEC
 - First login of an account that has never confirmed a code returns the secret once (`totpEnrollment`); the first correct code confirms it.
   **Open risk:** until then the account is only as safe as its password (anyone with the password can enrol first). Safeguard: provision
   secrets out of band for real merchants (reset procedure in RUNBOOK) or require an admin-issued enrolment link.
-- Limits (AUD-023 residual: the old resend reset the guess budget): 5 wrong codes per pending session, then the session is revoked; 10 wrong
+- Limits (AUD-023 residual: the old resend reset the guess budget): 5 attempts of any kind per pending session (the counter also counts the correct one), then the session is revoked; 10 wrong
   codes per ACCOUNT lock it for 15 minutes whatever session they came from; an accepted code's 30 s step can never be reused (replay);
   clock drift of one step either way is accepted. No resend exists.
 - Judges/demo: the demo accounts are NOT pre-enrolled; whoever logs in first scans the key into an authenticator app.
 Tests: RFC 6238 vectors, replay, drift window, session budget, account lock, enrolment shown once, both planes (`auth/totp.test.ts`, `routes/totpLogin.test.ts`).
+Review follow-ups (docs/audit/reviews/2026-10-30-totp.md): (a) **denial of service accepted:** someone who knows only an account's PASSWORD can lock that account out (10 wrong codes = 15 minutes) by repeating it; it is not a bypass. Safeguards if this mattered: rate-limit `/login`, alert on repeated locks, lock per (account, IP). (b) **Coupling:** TOTP secrets are encrypted with `WEBHOOK_SECRET_ENCRYPTION_KEY`; rotating that key locks every TOTP account out (and breaks webhook secrets) until they are re-enrolled. (c) `release.sh` forces `SECOND_FACTOR=totp` on every release.
