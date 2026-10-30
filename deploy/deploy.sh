@@ -48,5 +48,5 @@ echo "== upload"
 tar -C "$STAGE" -czf - . | "${SSH[@]}" 'tar -xzf - -C /tmp/filspay-stage'
 
 echo "== release (remote)"
-"${SSH[@]}" "sudo SEED=${SEED:-0} PG_POOL_MAX=${PG_POOL_MAX:-40} GLOBAL_RATE=${GLOBAL_RATE:-200} BURST=${BURST:-100} MAXCONN=${MAXCONN:-45} bash /tmp/filspay-stage/code/deploy/remote/release.sh /tmp/filspay-stage"
+"${SSH[@]}" "sudo SEED=${SEED:-0} PG_POOL_MAX=${PG_POOL_MAX:-40} GLOBAL_RATE=${GLOBAL_RATE:-200} BURST=${BURST:-100} MAXCONN=${MAXCONN:-150} NEWCONN=${NEWCONN:-40} bash /tmp/filspay-stage/code/deploy/remote/release.sh /tmp/filspay-stage"
 echo "== deployed $REV: https://$PUBLIC_HOST  (admin: https://$PUBLIC_HOST:8443)"
