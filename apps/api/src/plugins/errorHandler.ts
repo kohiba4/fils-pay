@@ -31,6 +31,14 @@ export function errorHandler(
     return;
   }
 
+  // Saturation, not a bug: every pooled database connection is busy (pg-pool "timeout exceeded when trying to connect",
+  // or the driver's own connection timeout). Shed the request fast and tell the client when to retry.
+  if (/timeout exceeded when trying to connect|connection timeout|sorry, too many clients/i.test(err.message)) {
+    request.log.warn({ occurredOn: formatIsoDate(new Date()) }, "database pool saturated: request shed with 503");
+    reply.header("retry-after", "1").code(503).send({ error: "server_busy", message: "the server is at capacity, retry shortly" });
+    return;
+  }
+
   request.log.error({ err, occurredOn: formatIsoDate(new Date()) }, "unhandled error");
   reply.code(500).send({ error: "internal_error" });
 }
