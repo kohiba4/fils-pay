@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Runs ON THE SERVER as root (via deploy.sh). Idempotent. Argument: the staging dir deploy.sh uploaded.
+# Any failing step aborts the release (set -e; pipelines use pipefail).
 # Order matters: files -> dependencies -> backup -> migrate -> (first time: seed) -> switch -> restart -> health -> rollback.
 set -euo pipefail
 STAGE=${1:?usage: release.sh <stage dir>}
@@ -41,17 +42,17 @@ ENV
 fi
 
 echo "== dependencies (only the workspaces the server runs)"
-sudo -u filspay -H bash -c "cd '$REL' && npm ci -w apps/api -w apps/reporting -w packages/money -w packages/events --include-workspace-root --no-audit --no-fund 2>&1 | tail -3"
+sudo -u filspay -H bash -o pipefail -c "cd '$REL' && npm ci -w apps/api -w apps/reporting -w packages/money -w packages/events --include-workspace-root --no-audit --no-fund 2>&1 | tail -3"
 
 echo "== database backup, then migrations"
 mkdir -p /var/backups/filspay
 sudo -u postgres pg_dump filspay | gzip > "/var/backups/filspay/pre-$REV-$(date +%Y%m%d%H%M%S).sql.gz"
 ls -1t /var/backups/filspay/*.sql.gz | tail -n +8 | xargs -r rm -f
-sudo -u filspay -H bash -c "set -a; . '$ENVF'; set +a; cd '$REL' && npm run migrate 2>&1 | tail -3"
+sudo -u filspay -H bash -o pipefail -c "set -a; . '$ENVF'; set +a; cd '$REL' && npm run migrate 2>&1 | tail -3"
 
 if [ "${SEED:-0}" = "1" ] && [ "$(sudo -u postgres psql -tAc 'SELECT count(*) FROM merchants' filspay)" = "0" ]; then
   echo "== first deploy: loading the repo's own deterministic dataset (db/seed). Keys are written to a root-only file, not printed."
-  sudo -u filspay -H bash -c "set -a; . '$ENVF'; set +a; cd '$REL' && npm run seed" > /etc/filspay/seed-output.txt 2>&1
+  sudo -u filspay -H bash -o pipefail -c "set -a; . '$ENVF'; set +a; cd '$REL' && npm run seed" > /etc/filspay/seed-output.txt 2>&1
   chmod 600 /etc/filspay/seed-output.txt
   tail -2 /etc/filspay/seed-output.txt | sed -E 's/fp_[a-z]+_[A-Za-z0-9_-]+/<key redacted>/g'
 fi
@@ -87,16 +88,18 @@ if [ ! -f "$CERT" ]; then
   sed "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" "$REL/deploy/nginx/filspay-http-only.conf" > /etc/nginx/sites-available/filspay
   ln -sfn /etc/nginx/sites-available/filspay /etc/nginx/sites-enabled/filspay
   rm -f /etc/nginx/sites-enabled/default
-  nginx -t && systemctl reload nginx
+  nginx -t
+  systemctl reload nginx
   certbot certonly --webroot -w /var/www/certbot -d "$PUBLIC_HOST" --non-interactive --agree-tos --register-unsafely-without-email
   printf '#!/bin/sh\nsystemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
   chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 fi
 sed "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" "$REL/deploy/nginx/filspay.conf" > /etc/nginx/sites-available/filspay
-nginx -t && systemctl reload nginx
+nginx -t
+systemctl reload nginx
 
 echo "== checks"
-curl -fsS -m 5 "https://$PUBLIC_HOST/readyz" && echo
-systemctl is-active filspay-api filspay-reporting filspay-settlement nginx postgresql | tr '\n' ' '; echo
+curl -fsS -m 5 "https://$PUBLIC_HOST/readyz"; echo
+for u in filspay-api filspay-reporting filspay-settlement nginx postgresql; do systemctl is-active --quiet $u || { echo "!! $u is not active"; exit 1; }; done; echo "all services active"
 ls -1dt /opt/filspay/releases/* | tail -n +5 | xargs -r rm -rf
 echo "== release $REV is live"

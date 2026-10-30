@@ -29,6 +29,7 @@ echo "== service user and directories"
 id filspay >/dev/null 2>&1 || sudo useradd --system --home /opt/filspay --shell /usr/sbin/nologin filspay
 sudo mkdir -p /opt/filspay/releases /etc/filspay /var/lib/filspay/kyc /var/log/filspay /var/www/filspay-web /var/www/filspay-admin /var/www/certbot
 sudo chown -R filspay:filspay /opt/filspay /var/lib/filspay /var/log/filspay
+sudo chown root:filspay /etc/filspay
 sudo chmod 750 /etc/filspay
 
 echo "== postgres (listens on localhost only by default)"
