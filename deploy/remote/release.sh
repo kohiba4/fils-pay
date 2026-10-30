@@ -99,7 +99,7 @@ nginx -t
 systemctl reload nginx
 
 echo "== checks"
-curl -fsS -m 5 "https://$PUBLIC_HOST/readyz"; echo
+for _ in $(seq 1 15); do curl -fsS -m 5 "https://$PUBLIC_HOST/readyz" && break; sleep 1; done; echo
 for u in filspay-api filspay-reporting filspay-settlement nginx postgresql; do systemctl is-active --quiet $u || { echo "!! $u is not active"; exit 1; }; done; echo "all services active"
 ls -1dt /opt/filspay/releases/* | tail -n +5 | xargs -r rm -rf
 echo "== release $REV is live"
