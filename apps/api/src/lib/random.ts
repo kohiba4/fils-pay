@@ -1,16 +1,20 @@
-/** Generates a string of `n` random decimal digits (e.g. "042817"). */
+import { randomInt } from "node:crypto";
+
+/** Generates a string of `n` random decimal digits (e.g. "042817").
+ *  AUD-023: `crypto.randomInt`, never `Math.random()` — V8's Math.random is a
+ *  predictable xorshift stream whose state can be recovered from outputs. */
 export function randomDigits(n: number): string {
-  const max = 10 ** n;
-  return Math.floor(Math.random() * max)
-    .toString()
-    .padStart(n, "0");
+  let out = "";
+  for (let i = 0; i < n; i++) out += String(randomInt(0, 10));
+  return out;
 }
 
 /** Generates a string of `n` characters drawn uniformly from `alphabet`. */
 export function randomFromAlphabet(alphabet: string, n: number): string {
   let out = "";
   for (let i = 0; i < n; i++) {
-    out += alphabet[Math.floor(Math.random() * alphabet.length)];
+    // AUD-055: payment-link tokens are bearer identifiers; use a CSPRNG.
+    out += alphabet[randomInt(0, alphabet.length)];
   }
   return out;
 }

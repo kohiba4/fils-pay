@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { insertAdminAuditLog } from "../adminAudit/log.js";
 import { withTransaction } from "../db/withTransaction.js";
-import { ConflictError, NotFoundError } from "../lib/errors.js";
+import { ConflictError, NotFoundError, UnprocessableEntityError } from "../lib/errors.js";
 import { insertReplayDeliveryRow } from "./replay.js";
 
 export interface ArchivedDeliveryEntry {
@@ -25,6 +25,9 @@ export interface CreateArchiveResult {
  * team, or a future auditor, needs the *complete* record for the range they
  * were told the archive covers).
  */
+/** Largest number of deliveries one archive document may hold (AUD-042). */
+export const ARCHIVE_MAX_DELIVERIES = 20_000;
+
 export async function createWebhookDeliveryArchive(
   pool: Pool,
   input: { merchantId: string; endpointId: string; adminUserId: string; from: Date; to: Date },
@@ -36,6 +39,22 @@ export async function createWebhookDeliveryArchive(
     );
     if (!endpoint.rows[0]) {
       throw new NotFoundError("webhook_endpoint_not_found");
+    }
+
+    // AUD-042: the archive is one JSON document (0068), built in memory.
+    // 100k deliveries measured +269 MB RSS against a 512 MB container, so a
+    // range above the cap is refused; the admin archives it in smaller ranges.
+    const sized = await client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM webhook_deliveries
+        WHERE endpoint_id = $1 AND created_at >= $2 AND created_at < $3`,
+      [input.endpointId, input.from, input.to],
+    );
+    const deliveryCount = sized.rows[0]?.n ?? 0;
+    if (deliveryCount > ARCHIVE_MAX_DELIVERIES) {
+      throw new UnprocessableEntityError(
+        "archive_range_too_large",
+        `${deliveryCount} deliveries in range; archive at most ${ARCHIVE_MAX_DELIVERIES} per request (use a smaller from/to range)`,
+      );
     }
 
     const rows = await client.query<{

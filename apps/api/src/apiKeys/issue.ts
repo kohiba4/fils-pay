@@ -77,6 +77,18 @@ export async function issueApiKeyInTx(
   if (!row) {
     throw new Error("issueApiKeyInTx: insert into api_keys returned no row");
   }
+  if (input.rotatedFromKeyId) {
+    // AUD-038: rotation revokes the previous key in this same transaction
+    // (the docstring always said so; nothing did it). Scoped to the merchant.
+    const revoked = await client.query(
+      `UPDATE api_keys SET revoked_at = now(), revoked_reason = 'rotated'
+        WHERE id = $1 AND merchant_id = $2 AND revoked_at IS NULL`,
+      [input.rotatedFromKeyId, input.merchantId],
+    );
+    if ((revoked.rowCount ?? 0) !== 1) {
+      throw new Error("issueApiKeyInTx: the key being rotated is missing, revoked or not this merchant's");
+    }
+  }
 
   return { id: row.id, prefix: keyPrefix, rawKey, createdAt: row.created_at };
 }

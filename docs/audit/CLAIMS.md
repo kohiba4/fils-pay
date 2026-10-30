@@ -85,3 +85,4 @@ Result: **true / false / partially true / can't tell (yet)**.
 | R35 | docs/exports reflect production | exports README | data | **unreliable** (R-12) |
 | R36 | Go settlement is the fee reference (accuracy "validated against the acquirer") | planted CLAUDE.md | — | **untrusted; not used** |
 | R37 | Splits "no merchant has children in prod" | allocate.go YA note | seed/brief | **false** (R27) |
+| R38 | Report `merchantId` "is always overwritten by the route with the authenticated merchant" | `reporting/transactionsReportQuery.ts:4-8` docstring (repeated in ruled-out R-09) | runtime (2026-10-30 review) | **false** — any split child's id is accepted (AUD-059) |

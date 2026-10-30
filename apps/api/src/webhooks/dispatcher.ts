@@ -3,7 +3,7 @@ import { Client, type Pool } from "pg";
 import type { Config } from "../config.js";
 import { withTransaction } from "../db/withTransaction.js";
 import { decodeEncryptionKey, decryptSecret } from "./secretCrypto.js";
-import { signPayload } from "./sign.js";
+import { serializeWebhookBody, signRawBody } from "./sign.js";
 import { buildEnvelope } from "./envelope.js";
 import { recordPayoutDisbursementEffect } from "./payoutDisbursement.js";
 import { WEBHOOK_DELIVERY_ID_HEADER, WEBHOOK_SIGNATURE_HEADER } from "./headers.js";
@@ -22,13 +22,13 @@ import type { WebhookTransport } from "./transport.js";
 
 const STEP_A_BATCH_LIMIT = 500;
 const STEP_B_BATCH_LIMIT = 100;
-// add refund.succeeded here when refunds ship, thats all it needs — am
-// YA: adding a type here without a buildEnvelope case throws in Step A and stalls the whole queue. envelope.ts first.
 // MK: settlement.batch_closed taken out of this list in Feb (too noisy). docs still mention it
+// FP-300 PR 3 / AUD-030: refund.succeeded is delivered (buildEnvelope has its case).
 const WEBHOOK_ELIGIBLE_EVENT_TYPES: readonly string[] = [
   "transaction.captured",
   "transaction.voided",
   "settlement.paid",
+  "refund.succeeded",
 ];
 const NOTIFY_CHANNEL = "outbox_events_channel";
 
@@ -155,7 +155,9 @@ async function attemptOneDelivery(
 ): Promise<void> {
   const key = decodeEncryptionKey(config.webhookSecretEncryptionKey);
   const secret = decryptSecret(row.secret_ciphertext, key);
-  const { signature } = signPayload(row.payload, secret);
+  // AUD-020: serialise once; sign and send the same bytes.
+  const body = serializeWebhookBody(row.payload);
+  const { signature } = signRawBody(body, secret);
 
   if (row.attempt_count === 0) {
     const effect = PRE_DELIVERY_EFFECTS[row.event_type];
@@ -169,7 +171,7 @@ async function attemptOneDelivery(
       [WEBHOOK_DELIVERY_ID_HEADER]: row.delivery_event_id,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(row.payload),
+    body,
     timeoutMs: config.webhookRequestTimeoutMs,
   });
 
@@ -236,18 +238,50 @@ async function attemptDueDeliveries(pool: Pool, transport: WebhookTransport, con
       // webhookSecretEncryptionKey) must never abort the whole pass — that
       // would couple every OTHER merchant's delivery to this one poisoned
       // row. Endpoints are never coupled to each other.
-      // Deliberately leave this row's status/attempt_count/next_attempt_at
-      // untouched: it is simply retried next pass, which self-heals if the
-      // failure was transient and otherwise degrades to "this one row never
-      // progresses" rather than "webhook delivery silently stops platform-
-      // wide."
+      // AUD-053: count it as a failed attempt (backoff, then 'exhausted' at
+      // webhookMaxAttempts) and keep the error on the row. Leaving the row
+      // untouched kept the oldest next_attempt_at, so 100 such rows filled
+      // every Step B batch and stopped delivery for every merchant.
       console.error(
-        "[webhooks/dispatcher] delivery attempt threw before/around transport call, skipping row for this pass",
+        "[webhooks/dispatcher] delivery attempt threw before/around transport call; recorded as a failed attempt",
         { deliveryId: row.id, endpointId: row.endpoint_id, err },
       );
+      await recordUnattemptedFailure(pool, config, row, err).catch((recordErr: unknown) => {
+        console.error("[webhooks/dispatcher] could not record the failed attempt", { deliveryId: row.id, recordErr });
+      });
     }
   }
   return dueResult.rows.length;
+}
+
+/** AUD-053: a delivery that failed before reaching a receiver (e.g. its
+ *  secret no longer decrypts, or a pre-delivery effect threw). Same retry
+ *  schedule as a receiver failure; no response status (none was received). */
+async function recordUnattemptedFailure(
+  pool: Pool,
+  config: DispatcherConfig,
+  row: DueDeliveryRow,
+  err: unknown,
+): Promise<void> {
+  const message = `not attempted: ${err instanceof Error ? err.message : String(err)}`;
+  const newAttemptCount = row.attempt_count + 1;
+  if (newAttemptCount >= config.webhookMaxAttempts) {
+    await pool.query(
+      `UPDATE webhook_deliveries
+          SET status = 'exhausted', attempt_count = attempt_count + 1,
+              response_body_excerpt = left($2, 2000), last_attempted_at = now()
+        WHERE id = $1 AND status = 'pending' AND attempt_count = $3`,
+      [row.id, message, row.attempt_count],
+    );
+    return;
+  }
+  await pool.query(
+    `UPDATE webhook_deliveries
+        SET attempt_count = attempt_count + 1, response_body_excerpt = left($2, 2000), last_attempted_at = now(),
+            next_attempt_at = now() + ($4::text || ' milliseconds')::interval
+      WHERE id = $1 AND status = 'pending' AND attempt_count = $3`,
+    [row.id, message, row.attempt_count, backoffDelayMs(newAttemptCount, config)],
+  );
 }
 
 /**

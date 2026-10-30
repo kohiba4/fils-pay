@@ -28,58 +28,52 @@ function toCsvRow(row: TransactionRow): string {
 }
 
 /** Builds the CSV body for `GET /v1/transactions/export`. */
-export async function buildTransactionsExportCsv(
+const HEADER = "id,status,amount_bhd,captured_bhd,reference,occurred_at";
+/** Rows fetched per keyset page; bounds memory per page, not per export. */
+export const EXPORT_PAGE_SIZE = 1000;
+
+/**
+ * AUD-042: the export streams in keyset pages ordered by (occurred_at, id)
+ * instead of loading every matching row, a line array and the joined string
+ * at once (300k rows peaked at ~476 MB RSS against a 512 MB container).
+ * Output is byte-identical: header, then "\n" + one line per row, no trailing
+ * newline. Each page is its own short query, so an abandoned download holds
+ * no connection or cursor: the consumer simply stops pulling.
+ */
+export async function* iterateTransactionsExportCsv(
   pool: Pool,
   filters: TransactionsExportFilters,
-): Promise<string> {
+): AsyncGenerator<string> {
   const statusArray = filters.status && filters.status.length > 0 ? filters.status : null;
-  const result = await pool.query<TransactionRow>(
-    `SELECT * FROM transactions
-      WHERE merchant_id = $1
-        AND ($2::timestamptz IS NULL OR occurred_at >= $2)
-        AND ($3::timestamptz IS NULL OR occurred_at <  $3)
-        AND ($4::text[] IS NULL OR status = ANY($4))
-      ORDER BY occurred_at ASC`,
-    [filters.merchantId, filters.from ?? null, filters.to ?? null, statusArray],
-  );
-
-  const header = "id,status,amount_bhd,captured_bhd,reference,occurred_at";
-  const lines = result.rows.map(toCsvRow);
-  return [header, ...lines].join("\n");
-}
-
-
-/** Cursor-paginated export for large date ranges. */
-export async function streamTransactionsExportCsv(
-  pool: Pool,
-  filters: TransactionsExportFilters,
-  write: (chunk: string) => void,
-): Promise<void> {
-  write("id,status,amount_bhd,captured_bhd,reference,occurred_at\n");
-
-  let cursor: Date | null = null;
-  const PAGE_SIZE = 1000;
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const statusArray = filters.status && filters.status.length > 0 ? filters.status : null;
-    const result: { rows: TransactionRow[] } = await pool.query<TransactionRow>(
-      `SELECT * FROM transactions
+  yield HEADER;
+  let cursor: { occurredAt: string; id: string } | null = null;
+  for (;;) {
+    const result: { rows: Array<TransactionRow & { occurred_at_cursor: string }> } = await pool.query(
+      `SELECT *, occurred_at::text AS occurred_at_cursor FROM transactions
         WHERE merchant_id = $1
           AND ($2::timestamptz IS NULL OR occurred_at >= $2)
           AND ($3::timestamptz IS NULL OR occurred_at <  $3)
           AND ($4::text[] IS NULL OR status = ANY($4))
-          AND ($5::timestamptz IS NULL OR occurred_at > $5)
-        ORDER BY occurred_at ASC
-        LIMIT $6`,
-      [filters.merchantId, filters.from ?? null, filters.to ?? null, statusArray, cursor, PAGE_SIZE],
+          AND ($5::timestamptz IS NULL OR (occurred_at, id) > ($5::timestamptz, $6::uuid))
+        ORDER BY occurred_at ASC, id ASC
+        LIMIT $7`,
+      [filters.merchantId, filters.from ?? null, filters.to ?? null, statusArray, cursor?.occurredAt ?? null, cursor?.id ?? null, EXPORT_PAGE_SIZE],
     );
-
-    for (const row of result.rows) {
-      write(toCsvRow(row) + "\n");
-    }
-
-    if (result.rows.length < PAGE_SIZE) break;
-    cursor = result.rows[result.rows.length - 1]!.occurred_at;
+    let chunk = "";
+    for (const row of result.rows) chunk += "\n" + toCsvRow(row);
+    if (chunk) yield chunk;
+    if (result.rows.length < EXPORT_PAGE_SIZE) return;
+    const last = result.rows[result.rows.length - 1]!;
+    cursor = { occurredAt: last.occurred_at_cursor, id: last.id };
   }
+}
+
+/** Whole export as one string (kept for callers/tests that want it). */
+export async function buildTransactionsExportCsv(
+  pool: Pool,
+  filters: TransactionsExportFilters,
+): Promise<string> {
+  let out = "";
+  for await (const part of iterateTransactionsExportCsv(pool, filters)) out += part;
+  return out;
 }

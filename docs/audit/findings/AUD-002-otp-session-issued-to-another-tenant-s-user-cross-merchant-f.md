@@ -5,8 +5,8 @@
 | Owner | B |
 | Severity | **Critical** |
 | Category | authn / tenant isolation |
-| Status | confirmed (trace) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
+| Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/03-AUD-002.patch |
 
 ## Summary
 OTP/session issued to another tenant's user (cross-merchant `findOtpRecipient`).
@@ -28,8 +28,20 @@ A person with a login at merchant A whose email also exists at merchant B can en
 ## Fix (proposed)
 Use the authenticated `user` row; delete the cross-merchant lookup (keep `users.ts` export only if referenced elsewhere).
 
+## Fix (applied, Track B, 2026-10-30)
+Discovered in the Phase 0 team audit; repaired here. Base `main` af8e9c9, uncommitted working tree in `~/Desktop/hakathons/fils-pay-hackathon`; reviewable patch `~/Desktop/hakathons/track-b-patches/stack/03-AUD-002.patch` (applies alone to af8e9c9, checked with `git apply --check`). Commands: fresh DB, `npm run migrate && npm run seed`, `cd apps/api && npm test`, `cd apps/reporting && npm test`.
+`routes/auth.ts` login binds the OTP challenge and pending session to the password-verified `user`; the `findOtpRecipient` call and import are removed. `auth/users.ts findOtpRecipient` is now unreferenced and left in place (removal is cleanup, not part of the fix).
+
+**Test:** `apps/api/src/routes/authOtpRecipient.test.ts` (new). Same email at two merchants, the other tenant's row created first. Failed on `main` (pending session bound to the other tenant's user), passes after the fix.
+Suites on a fresh 127.0.0.1:55433 DB (2026-10-30) with this fix stacked on AUD-046/024: api 407/408 (only failure: the
+AUD-044 jitter test, also failing on `main`), reporting 7/11 (AUD-041, same as `main`). Typecheck clean.
+**Tests changed:** none.
+
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- Pending session row bound to the verified user; OTP verify returns the own merchant and the own role (`finance`, while the other tenant's user is `owner`).
+- The other tenant's password does not log in at the own merchant (401).
+- Resend already used `pending.merchantUserId`; admin login uses globally unique admin emails (unaffected).
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; `findOtpRecipient` has no callers left (dead code, delete later).
 
 ## Related
 AUD-001

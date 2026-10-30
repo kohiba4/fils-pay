@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /** Verifies the signature on an inbound acquirer callback. */
 
@@ -37,12 +37,25 @@ export interface VerifyAcquirerCallbackResult {
   reason?: VerifyAcquirerCallbackFailureReason;
 }
 
-function constantTimeEquals(a: string, b: string): boolean {
-  return Buffer.from(a).length === Buffer.from(b).length &&
-    Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
+/** AUD-021: `Buffer.compare` stops at the first differing byte (not
+ *  constant-time). Compare the decoded 32-byte digests with timingSafeEqual
+ *  after checking the format, so malformed input is a mismatch, never a throw. */
+function constantTimeEquals(expectedHex: string, providedHex: string): boolean {
+  if (!/^[0-9a-f]{64}$/i.test(providedHex)) return false;
+  return timingSafeEqual(Buffer.from(expectedHex, "hex"), Buffer.from(providedHex, "hex"));
 }
 
 /** Verifies the acquirer callback signature when present and required. */
+/**
+ * AUD-021: `rawBody` should be the request body exactly as received (the
+ * route keeps it); an HMAC over a re-serialised object depends on key order
+ * and whitespace the acquirer never promised, so genuine callbacks failed.
+ * A non-string argument falls back to JSON.stringify for direct callers.
+ * No freshness window is enforced: the provider's retry schedule (up to 5
+ * retries from 60 s, acquirer comparison 2025-11) and whether retries are
+ * re-signed are not documented, and a replayed callback is a no-op since
+ * AUD-019's dedupe.
+ */
 export function verifyAcquirerCallbackSignature(
   payload: unknown,
   header: string | undefined,
@@ -59,7 +72,7 @@ export function verifyAcquirerCallbackSignature(
   if (!parsed) return { valid: false, reason: "malformed_header" };
 
   const expected = createHmac("sha256", secret)
-    .update(`${parsed.timestamp}.${JSON.stringify(payload)}`)
+    .update(`${parsed.timestamp}.${typeof payload === "string" ? payload : JSON.stringify(payload)}`)
     .digest("hex");
 
   if (!constantTimeEquals(expected, parsed.signature)) {

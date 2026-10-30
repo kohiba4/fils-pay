@@ -403,3 +403,45 @@ test("GET /v1/admin/credits filters by status", async () => {
     );
   }
 });
+
+function approve(cookie: string, id: string) {
+  return app.inject({ method: "POST", url: `/v1/admin/credits/${id}/approve`, headers: { cookie }, payload: {} });
+}
+
+test("AUD-039: two different admins who share a display name can be maker and checker", async () => {
+  const maker = await signedInAdmin("finance", "same-name-maker");
+  const checker = await signedInAdmin("finance", "same-name-checker");
+  await pool.query(`UPDATE admin_users SET display_name = 'Finance Ops' WHERE id = ANY($1::uuid[])`, [[maker.id, checker.id]]);
+  const merchantId = await createMerchant("same-name");
+  const pending = await issueCredit(maker.cookie, merchantId, { baseAmountFils: 120_000 });
+  const res = await approve(checker.cookie, pending.id);
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal((res.json() as { status: string }).status, "posted");
+});
+
+test("AUD-039: the requester cannot approve their own credit after changing their display name", async () => {
+  const maker = await signedInAdmin("finance", "rename-maker");
+  const merchantId = await createMerchant("rename");
+  const pending = await issueCredit(maker.cookie, merchantId, { baseAmountFils: 120_000 });
+  await pool.query(`UPDATE admin_users SET display_name = $2 WHERE id = $1`, [maker.id, `Someone Else ${randomUUID()}`]);
+  const res = await approve(maker.cookie, pending.id);
+  assert.equal(res.statusCode, 409, res.body);
+  assert.equal(res.json().error, "self_approval_forbidden");
+  const groups = await pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM ledger_entries WHERE merchant_id = $1`, [merchantId]);
+  assert.equal(groups.rows[0]!.n, 0, "nothing journaled");
+});
+
+test("AUD-039: two checkers approving the same credit at once post it exactly once", async () => {
+  const maker = await signedInAdmin("finance", "race-maker");
+  const c1 = await signedInAdmin("finance", "race-checker-1");
+  const c2 = await signedInAdmin("super_admin", "race-checker-2");
+  const merchantId = await createMerchant("race");
+  const pending = await issueCredit(maker.cookie, merchantId, { baseAmountFils: 120_000 });
+  const [a, b] = await Promise.all([approve(c1.cookie, pending.id), approve(c2.cookie, pending.id)]);
+  assert.deepEqual([a.statusCode, b.statusCode].sort(), [200, 409]);
+  const groups = await pool.query<{ count: string }>(
+    `SELECT COUNT(DISTINCT entry_group_id)::text AS count FROM ledger_entries WHERE merchant_id = $1`,
+    [merchantId],
+  );
+  assert.equal(groups.rows[0]!.count, "1");
+});

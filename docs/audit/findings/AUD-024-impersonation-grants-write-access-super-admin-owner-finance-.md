@@ -5,8 +5,8 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | authz |
-| Status | confirmed (trace) — doc conflict |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) |
+| Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch |
 
 ## Summary
 Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one.
@@ -28,8 +28,27 @@ Admin acts as the merchant owner (issue API keys, refunds later) with merchant a
 ## Fix (proposed)
 Decision needed: which doc wins. Default recommendation: map every role to `support` (the documented security posture).
 
+## Fix (applied, Track B, 2026-10-30)
+Discovered in the Phase 0 team audit; repaired here. Base `main` af8e9c9, uncommitted working tree in `~/Desktop/hakathons/fils-pay-hackathon`; reviewable patch `~/Desktop/hakathons/track-b-patches/stack/01-AUD-046-024.patch` (applies alone to af8e9c9, checked with `git apply --check`). Commands: fresh DB, `npm run migrate && npm run seed`, `cd apps/api && npm test`, `cd apps/reporting && npm test`.
+Per decision Q4: `admin/impersonation.ts` maps every admin role (support, finance, super_admin) to merchant `support`.
+`lookupImpersonationGrant` now also requires `admin_users.status = 'active'`: the code comment claiming an
+admin-disable trigger revokes grants is false (no such trigger in `db/migrations`), so a disabled admin's grant kept
+working. `auth/requireMerchantAuth.ts requireMerchantWriterActor` throws 403 for an `admin_impersonation` actor, so a
+future write route without a role gate still cannot record an admin's write as the merchant's. The start route still
+needs only an admin session; that is acceptable because the grant itself is read-only.
+
+**Test:** `apps/api/src/routes/merchantWriteAuthority.test.ts` (new, real Postgres). Seen failing on `main` af8e9c9
+(4 of 6: support capture 200, impersonation capture 200, disabled admin grant 200, writer helper accepts impersonation),
+passing after the fix (6/6). Suites on a fresh 127.0.0.1:55433 DB (2026-10-30): `main` api 398/399, branch api 404/405;
+the single failure in both is the AUD-044 jitter test. Reporting 7/11 on both (AUD-041, unchanged). Typecheck clean.
+**Tests changed:** none. The existing support-grant test in `routes/admin.test.ts` still passes unchanged.
+
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- super_admin, finance and support grants: capture, void, payment-link create 403; API-key issue refused; reads 200; no side effects.
+- Disabled admin's grant: 401 on a read.
+- Writer helper unit check: impersonation actor gets 403.
+- Not covered: the admin UI's "view as merchant" screen (not run). ADMIN.md still says super_admin may make changes; fix that doc with the integrator.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **PARTLY DISPUTED.** Confirmed: every admin role maps to `support`; a disabled admin's grant stops working; money moves and owner-only writes refuse impersonation. **Disputed claim:** "an impersonation grant can never perform a write" — `POST /v1/reporting/saved-filters` has no role gate or writer check and returns 201 under impersonation (non-money write; already listed as a triage candidate in the handoff). **Open:** add `refuseImpersonation` there (as `refunds.ts` does) or narrow the claim; the docstring at `routes/merchantWriteAuthority.test.ts:8` over-claims. Side effect to document in ADMIN.md: impersonating admins now get 403 on owner/finance reads (settlement summary, reconciliation, webhook endpoint list). Non-blocking: the api-key assertion at `merchantWriteAuthority.test.ts:183-184` (`401 || 403`) also passes on main.
 
 ## Related
 —

@@ -132,37 +132,46 @@ export async function adminAuthRoutes(app: FastifyInstance): Promise<void> {
       expires_at: Date;
       consumed_at: Date | null;
     }>(
-      `SELECT id, code_salt, code_hash, attempt_count, max_attempts, expires_at, consumed_at
-         FROM admin_otp_challenges WHERE id = $1`,
+      // AUD-023: atomic conditional increment before comparing (the old
+      // comment said this row was read FOR UPDATE; it was a plain SELECT).
+      `UPDATE admin_otp_challenges
+          SET attempt_count = attempt_count + 1
+        WHERE id = $1 AND consumed_at IS NULL AND attempt_count < max_attempts
+      RETURNING id, code_salt, code_hash, attempt_count, max_attempts, expires_at, consumed_at`,
       [pending.otpChallengeId],
     );
     const challenge = challengeResult.rows[0];
-    if (!challenge || challenge.consumed_at !== null) {
-      throw new GoneError("otp_expired");
+    if (!challenge) {
+      const current = await app.db.query<{ consumed_at: Date | null }>(
+        `SELECT consumed_at FROM admin_otp_challenges WHERE id = $1`,
+        [pending.otpChallengeId],
+      );
+      const row = current.rows[0];
+      if (!row || row.consumed_at !== null) {
+        throw new GoneError("otp_expired");
+      }
+      await revokeAdminSession(app.db, pending.adminSessionId);
+      throw new TooManyRequestsError("too_many_attempts");
     }
     if (challenge.expires_at.getTime() <= Date.now()) {
       throw new GoneError("otp_expired");
     }
 
-    // admin path doesn't have the merchant race, the challenge row is read FOR UPDATE — MK
-    if (challenge.attempt_count >= challenge.max_attempts) {
-      await revokeAdminSession(app.db, pending.adminSessionId);
-      throw new TooManyRequestsError("too_many_attempts");
-    }
 
     const matches = verifyOtpCode(code, challenge.code_salt, challenge.code_hash);
     if (!matches) {
-      await app.db.query(
-        `UPDATE admin_otp_challenges SET attempt_count = attempt_count + 1 WHERE id = $1`,
-        [challenge.id],
-      );
       throw new UnauthorizedError("invalid_code");
     }
 
     const adminUser = await withTransaction(app.db, async (client) => {
-      await client.query(`UPDATE admin_otp_challenges SET consumed_at = now() WHERE id = $1`, [
-        challenge.id,
-      ]);
+      // AUD-023: conditional consume — one promotion per challenge.
+      const consumed = await client.query(
+        `UPDATE admin_otp_challenges SET consumed_at = now() WHERE id = $1 AND consumed_at IS NULL`,
+        [challenge.id],
+      );
+      if ((consumed.rowCount ?? 0) === 0) {
+        throw new GoneError("otp_expired");
+      }
       await promoteAdminSession(client, pending.adminSessionId, app.config.adminSessionTtlHours);
       const result = await client.query<{ role: AdminRole }>(
         `SELECT role FROM admin_users WHERE id = $1`,

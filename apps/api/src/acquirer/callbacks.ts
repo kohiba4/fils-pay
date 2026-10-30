@@ -34,10 +34,15 @@ export async function applyAcquirerCallback(pool: Pool, callback: AcquirerCallba
     throw new NotFoundError("transaction_not_found");
   }
 
+  // AUD-019: a redelivery (same callback_id for the same transaction — the
+  // acquirer's retry, or withCallbackRetry repeating the insert) is a no-op at
+  // the database (unique index, migration 0081), so it is acknowledged but
+  // never recorded twice, even when copies arrive concurrently.
   await pool.query(
     `INSERT INTO acquirer_callback_notes
         (transaction_id, merchant_id, callback_id, callback_type, outcome, note, received_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (transaction_id, callback_id) WHERE duplicate_of_note_id IS NULL DO NOTHING`,
     [
       callback.transactionId,
       txnRow.merchant_id,

@@ -33,8 +33,23 @@ export function signPayload(
   secret: string,
   timestamp: number = Math.floor(Date.now() / 1000),
 ): SignedPayload {
-  const signedString = `${timestamp}.${canonicalJson(payload)}`;
-  const signature = createHmac("sha256", secret).update(signedString).digest("hex");
+  return signRawBody(serializeWebhookBody(payload), secret, timestamp);
+}
+
+/** AUD-020: the one serialisation of an outbound webhook body. Senders call
+ *  this ONCE, sign the result with signRawBody and transmit that same string,
+ *  so a receiver's raw-body HMAC verifies (FP-240). */
+export function serializeWebhookBody(payload: unknown): string {
+  return canonicalJson(payload);
+}
+
+/** Signs `${timestamp}.${body}` over the exact string that will be sent. */
+export function signRawBody(
+  body: string,
+  secret: string,
+  timestamp: number = Math.floor(Date.now() / 1000),
+): SignedPayload {
+  const signature = createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
   return { timestamp, signature: `t=${timestamp},v1=${signature}` };
 }
 

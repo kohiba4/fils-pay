@@ -50,9 +50,9 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-036 | BUG (traced) | high | Slack shows a double import. The "unique filename" claim is false (no such constraint). |
 | AUD-037 | DESIGN | high | **Not a code bug.** `applyBalanceCorrection` is cache-only exactly as ADR-0006 says; the journaled variant exists but is not wired. Only ADMIN.md ("journaled to the ledger") is wrong. |
 | AUD-038 | BUG (traced) | high | Old key is never revoked. The "24h grace" mentioned in a migration comment is not in ADMIN.md or in code. |
-| AUD-039 | UNVERIFIED | low | Compares display names, but `admin_users.display_name` is not unique and no route lets admins rename themselves, so exploitation needs DB access. Likely low. |
+| AUD-039 | BUG (runtime) | high | Reproduced through the approval route: two different admins sharing a display name were refused (409), and a renamed requester could approve their own credit (needs DB access to rename). Fixed by comparing admin ids. |
 | AUD-040 | LIMITATION | high | Code comments state "only run ONE api replica". Real if scaled, not a current bug. |
-| AUD-041 | UNVERIFIED | medium | 4 reporting tests really fail (null merchant_id); root cause not traced. |
+| AUD-041 | NOT A BUG (test pollution) | high | Reporting 12/12 alone on a fresh DB; the 4 failures came from `archiveReplay.test.ts` outbox fixtures with payload `{}` under real event types. Producers include merchantId. Fixture repaired; no production change. |
 | AUD-042 | UNVERIFIED | low | Export memory behaviour not measured. |
 | AUD-043 | UNVERIFIED | low | Slow query not measured with EXPLAIN. |
 | AUD-044 | HYGIENE | high | Test uses real jitter and expects an exact delay. |
@@ -65,4 +65,9 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-051 | BUG (traced) | high | `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact. |
 | AUD-053 | BUG (runtime) | high | Reproduced: 134 stuck pending deliveries made 6 dispatcher tests fail; Step B orders by next_attempt_at and never advances an unattemptable row. Track B. |
 | AUD-054 | BUG (runtime) | high | Batch close selected capture events only; latent until FP-300 PR 1 made refunds possible. Reproduced by the settlement tests, fixed in PR 2. |
+| AUD-055 | BUG (runtime) | high | Found in the AUD-023 sibling sweep: `randomFromAlphabet` (payment-link tokens) used `Math.random`; a constant `Math.random` made all tokens identical on main. ARCHITECTURE's "crypto.randomBytes" claim is false. Track B. |
+| AUD-056 | BUG (runtime) | high | Public link read returned `api_keys.key_hash` as merchantIntegrationId (test on main shows the hash in the body). 192-bit keys, so not a usable credential; Low. Track B. |
+| AUD-057 | BUG (runtime) | high | Real-server test on main: a 302 from an https-allowed receiver was followed to an internal server and its body returned; 5 MB body buffered. Reachable by any merchant via test-send. Track B. |
+| AUD-058 | BUG (runtime) | high | Reproduced: batch_closed for a day with captures but no merchant_daily_volume row threw a TypeError in the parity check, rolling back every reporting pass. Fixed: missing row = lag 0 → warning. Track B. |
+| AUD-059 | BUG (runtime) | high | Found by the 2026-10-30 independent review (reproduced on a disposable DB): `reporting/scope.ts` accepts any caller-supplied `merchantId` that is a split child of *any* parent, so an unrelated merchant reads that child's transaction report. Parent never compared with the caller. Present on `main`. Open (not fixed). Track B. |
 | AUD-052 | HYGIENE | high | Reproduced: counter above 2e9 turns on the 15 bps tier and three fee tests fail. Test isolation only; fixed by resetting the counter in `mustPool`. |

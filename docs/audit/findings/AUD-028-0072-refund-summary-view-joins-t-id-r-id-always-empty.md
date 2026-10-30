@@ -5,7 +5,7 @@
 | Owner | FP-300 (shared) |
 | Severity | **Medium** |
 | Category | reporting |
-| Status | confirmed (trace) |
+| Status | fix ready, not merged (migration 0083; no reader yet; review pending) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary
@@ -33,3 +33,10 @@ _To be filled after the fix (bypass via other route / tenant / retry / concurren
 
 ## Related
 FP-300
+
+## FP-300 PR 3 addendum (Track B, 2026-10-30; for @kohiba4)
+Migration `0083_refund_reporting.sql` (committed by the user in 1b2ea38) drops and recreates `refund_merchant_summary`
+joining `t.id = r.transaction_id`, and counts each refunded transaction's `captured_fils` once per day (the old view
+summed it once per refund). Nothing in `apps/` or `scripts/` reads the view, so the visible refund reporting path is
+`merchant_daily_volume.refund_count / refund_gross_fils` (also added in 0083) via the reporting consumer and admin rebuild.
+Not separately tested beyond a successful fresh migrate; add a view test when something reads it.
