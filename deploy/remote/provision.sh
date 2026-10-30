@@ -45,6 +45,9 @@ sudo -u postgres psql -v ON_ERROR_STOP=1 -tAc "SELECT 1 FROM pg_roles WHERE roln
 sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE filspay PASSWORD '${pass}'" >/dev/null
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='filspay'" | grep -q 1 \
   || sudo -u postgres createdb -O filspay filspay
+# capacity (docs/audit/LOAD-TEST.md): no NOTIFY inside business transactions in production; consumers poll (see migration 0093)
+sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER DATABASE filspay SET filspay.outbox_notify = 'off'" >/dev/null
+
 echo "== postgres tuning for 2 GB RAM / 1 vCPU (durability untouched: synchronous_commit stays on)"
 PGVER=$(ls /etc/postgresql | sort -n | tail -1)
 sudo mkdir -p /etc/postgresql/$PGVER/main/conf.d

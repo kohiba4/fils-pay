@@ -37,11 +37,16 @@ SECOND_FACTOR=totp
 REFUNDS_ENABLED=true
 KYC_UPLOAD_DIR=/var/lib/filspay/kyc
 NODE_OPTIONS=--max-old-space-size=384
+WEBHOOK_POLL_INTERVAL_MS=1000
+REPORTING_POLL_INTERVAL_MS=2000
 ENV
   chown root:filspay "$ENVF"; chmod 640 "$ENVF"
 fi
 # connection pool size override (tuned from the load test): PG_POOL_MAX=30 ./deploy/deploy.sh
 [ -z "${PG_POOL_MAX:-}" ] || sed -i "s/^PG_POOL_MAX=.*/PG_POOL_MAX=${PG_POOL_MAX}/" "$ENVF"
+# no NOTIFY in production (migration 0093): the consumers poll quickly instead
+grep -q '^WEBHOOK_POLL_INTERVAL_MS=' "$ENVF" || echo 'WEBHOOK_POLL_INTERVAL_MS=1000' >> "$ENVF"
+grep -q '^REPORTING_POLL_INTERVAL_MS=' "$ENVF" || echo 'REPORTING_POLL_INTERVAL_MS=2000' >> "$ENVF"
 # the second factor is an authenticator app (TOTP): no code is ever returned by the API, so drop the old dev switch
 sed -i '/^OTP_DEV_EXPOSE=/d' "$ENVF"
 sed -i '/^SECOND_FACTOR=/d' "$ENVF"
