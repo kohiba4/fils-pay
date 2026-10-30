@@ -40,6 +40,8 @@ NODE_OPTIONS=--max-old-space-size=384
 ENV
   chown root:filspay "$ENVF"; chmod 640 "$ENVF"
 fi
+# connection pool size override (tuned from the load test): PG_POOL_MAX=30 ./deploy/deploy.sh
+[ -z "${PG_POOL_MAX:-}" ] || sed -i "s/^PG_POOL_MAX=.*/PG_POOL_MAX=${PG_POOL_MAX}/" "$ENVF"
 # the second factor is an authenticator app (TOTP): no code is ever returned by the API, so drop the old dev switch
 sed -i '/^OTP_DEV_EXPOSE=/d' "$ENVF"
 grep -q '^SECOND_FACTOR=' "$ENVF" || echo 'SECOND_FACTOR=totp' >> "$ENVF"
@@ -97,7 +99,8 @@ if [ ! -f "$CERT" ]; then
   printf '#!/bin/sh\nsystemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
   chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 fi
-sed "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" "$REL/deploy/nginx/filspay.conf" > /etc/nginx/sites-available/filspay
+# overload ceiling (tuned from the load test; override with GLOBAL_RATE / BURST / MAXCONN in the environment of deploy)
+sed -e "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" -e "s/__GLOBAL_RATE__/${GLOBAL_RATE:-150}/" -e "s/__BURST__/${BURST:-60}/" -e "s/__MAXCONN__/${MAXCONN:-200}/" "$REL/deploy/nginx/filspay.conf" > /etc/nginx/sites-available/filspay
 nginx -t
 systemctl reload nginx
 
