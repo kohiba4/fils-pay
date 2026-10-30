@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | SSRF / resource exhaustion |
-| Status | fix ready, not merged (runtime-verified locally; review pending) |
+| Status | **fixed** (merged with PR #27/#28) (runtime-verified locally; review pending) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch |
 
 ## Summary

@@ -4,20 +4,20 @@
 
 ## 1. Summary
 
-- Findings: **60** (Critical 5, High 23, Medium 21, Low 11); fixed so far: **25**.
-- By verdict: BUG 45, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, NOT A BUG 1, UNVERIFIED 2.
+- Findings: **61** (Critical 5, High 24, Medium 21, Low 11); fixed so far: **51**.
+- By verdict: BUG 46, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, NOT A BUG 1, UNVERIFIED 2.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
 | ID | Title | Severity | Verdict | Status | Owner |
 |---|---|---|---|---|---|
-| [AUD-001](#aud-001) | Pre-OTP (pending) session authenticates every merchant route | Critical | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
-| [AUD-002](#aud-002) | OTP/session issued to another tenant's user (cross-merchant `findOtpRecipient`) | Critical | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-001](#aud-001) | Pre-OTP (pending) session authenticates every merchant route | Critical | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-002](#aud-002) | OTP/session issued to another tenant's user (cross-merchant `findOtpRecipient`) | Critical | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-003](#aud-003) | Refund path has no transaction-ownership check (IDOR across merchants) | Critical | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-004](#aud-004) | Concurrent refunds both succeed (no lock across acquirer call; stale `refunded_fils`) — FP-209 | Critical | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-006](#aud-006) | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-006](#aud-006) | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-005](#aud-005) | Refund ceiling is authorized − refunded, not captured − refunded | High | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-007](#aud-007) | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-007](#aud-007) | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-008](#aud-008) | Net payout computed in float32 (`NetPayableFils`) | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-009](#aud-009) | Split payouts: independent per-child rounding over- or under-allocates the batch net | High | BUG (runtime) | fixed (merged into main; historical stranded fils not repaired) | A |
 | [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | fixed (merged into main; historical files already sent are not corrected) | A |
@@ -29,48 +29,49 @@
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
 | [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | fixed (merged into main; the tier approval question remains open) | A |
 | [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | partly fixed: duplicate `settlement.paid` events fixed (merged into main); duplicate disbursement records (dispatcher, Track B) still open | A |
-| [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; review pending) | B |
-| [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) | B |
-| [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | B |
+| [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) | B |
+| [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-026](#aud-026) | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
-| [AUD-053](#aud-053) | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | BUG (runtime) | fix ready, not merged (runtime-verified locally on 55433; review pending) | B |
+| [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-053](#aud-053) | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | B |
 | [AUD-054](#aud-054) | Refunds never reach a payout: batch close ignores refunds | High | BUG (runtime) | partially fixed (branch `feat/FP-300-settlement-refunds`): refunds now reduce the payout; recovery of a negative net is open (Q13, finance); the route stays OFF by default until then | A |
-| [AUD-057](#aud-057) | Webhook transport follows redirects (SSRF past the https-only rule) and reads unbounded responses | High | BUG (runtime) | fix ready, not merged (runtime-verified locally; review pending) | B |
+| [AUD-057](#aud-057) | Webhook transport follows redirects (SSRF past the https-only rule) and reads unbounded responses | High | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally; review pending) | B |
 | [AUD-059](#aud-059) | Reporting scope accepts any split child: cross-tenant transaction read | High | BUG (runtime) | open: not fixed (found by the independent review of the Track B batch, 2026-10-30; present unchanged on `main` af8e9c9) | B |
-| [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
-| [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) | B |
-| [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) | B |
+| [AUD-061](#aud-061) | Capture scans the whole ledger several times: no index on `ledger_entries.entry_group_id` or `transaction_id` (nor `holds.transaction_id`) | High | BUG (runtime) | fixed (branch `feat/totp`, migration 0094) | A |
+| [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) | B |
+| [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) | B |
 | [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | fixed (merged into main) | A |
-| [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | fix ready, not merged (migration 0083; no reader yet; review pending) | FP-300 (shared) |
+| [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | fixed (merged with PR #27/#28) (migration 0083; no reader yet; review pending) | FP-300 (shared) |
 | [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | fix ready, not merged (runtime-verified locally on 55433; review pending) | FP-300 (shared) |
+| [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | FP-300 (shared) |
 | [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (merged into main) | A |
-| [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | fixed (merged into main; TRUNCATE and the application role's privileges still need an ops change) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
 | [AUD-036](#aud-036) | Adjustment import has no duplicate-submit protection | Medium | BUG (traced) | fixed (branch `fix/AUD-036-import-duplicate-guard`) | A |
-| [AUD-038](#aud-038) | Admin API-key rotation never revokes the old key | Medium | BUG (traced) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
-| [AUD-039](#aud-039) | Second-approver check on credits compares display names | Medium | BUG (runtime) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-038](#aud-038) | Admin API-key rotation never revokes the old key | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-039](#aud-039) | Second-approver check on credits compares display names | Medium | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | NOT A BUG (test pollution) | disproven as a production defect; test-fixture pollution repaired (verified locally; review pending) | B |
-| [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | fix ready, not merged (measured and verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | fixed (merged with PR #27/#28) (measured and verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
 | [AUD-050](#aud-050) | Manual credit MDR reversal uses the fallback rate, not the rate that was charged | Medium | BUG (traced) | confirmed (trace) | A |
-| [AUD-055](#aud-055) | Payment-link tokens (and the shared random helper) use Math.random | Medium | BUG (runtime) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
-| [AUD-058](#aud-058) | Reporting consumer halts when a batch closes on a day with no rollup row | Medium | BUG (runtime) | fix ready, not merged (runtime-verified locally on 55433; review pending) | B |
+| [AUD-055](#aud-055) | Payment-link tokens (and the shared random helper) use Math.random | Medium | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-058](#aud-058) | Reporting consumer halts when a batch closes on a day with no rollup row | Medium | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | B |
 | [AUD-060](#aud-060) | Merchant dashboard login cookie expires after 10 minutes even though the session lasts 12 hours | Medium | BUG (traced) | fixed (branch `feat/totp`) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | fixed (branch `fix/AUD-033-payout-estimate-integer`) | A |
 | [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change | A |
 | [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | deferred: limitation under the supported single-replica deployment (no change) | B |
-| [AUD-043](#aud-043) | Slow settlement summary query | Low | UNVERIFIED | fix ready, not merged (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) | B |
-| [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | fix ready, not merged (test-only change; verified locally; review pending) | B |
+| [AUD-043](#aud-043) | Slow settlement summary query | Low | UNVERIFIED | fixed (merged with PR #27/#28) (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | fixed (merged with PR #27/#28) (test-only change; verified locally; review pending) | B |
 | [AUD-045](#aud-045) | Seed prints raw API keys; 'production' seed dump committed | Low | HYGIENE | confirmed (runtime + read) | A |
-| [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) | B |
+| [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) | B |
 | [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | fixed (branch `fix/AUD-049-rebuild-one-merchant`) | A |
 | [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | fixed (branch `fix/AUD-051-admin-default-date`) | A |
 | [AUD-052](#aud-052) | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | HYGIENE | fixed (merged into main) | A |
-| [AUD-056](#aud-056) | Public payment-link read returns the merchant's API key hash | Low | BUG (runtime) | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-056](#aud-056) | Public payment-link read returns the merchant's API key hash | Low | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 
 ## 2. Bugs (by severity)
 
@@ -79,7 +80,7 @@
 
 - Severity: **Critical** · Category: authn · Owner: B
 - Verdict: **BUG (traced)** (confidence high): `lookupSession` reads the `live_sessions` view and never tests `authenticated`; 0012 states every auth query must. Track B to reproduce.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/02-AUD-001.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/02-AUD-001.patch
 
 **Where**
 
@@ -119,7 +120,7 @@ _Source file: [findings/AUD-001-pre-otp-pending-session-authenticates-every-merc
 
 - Severity: **Critical** · Category: authn / tenant isolation · Owner: B
 - Verdict: **BUG (traced)** (confidence high): login re-resolves the OTP recipient by email across all merchants; 0003 allows duplicate emails and 0011 says no code resolves a challenge by email.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/03-AUD-002.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/03-AUD-002.patch
 
 **Where**
 
@@ -237,7 +238,7 @@ _Source file: [findings/AUD-004-concurrent-refunds-both-succeed-no-lock-across-a
 
 - Severity: **Critical** · Category: race / money · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Matches the incident exactly (>60 s first attempt, finalize answers 200 on 0 rows). The postmortem's callback theory is wrong: callbacks never touch links.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch
 
 **Where**
 
@@ -323,7 +324,7 @@ _Source file: [findings/AUD-005-refund-ceiling-is-authorized-refunded-not-captur
 
 - Severity: **High** · Category: trust boundary · Owner: B
 - Verdict: **BUG (traced)** (confidence high): ARCHITECTURE documents client-clock expiry as a feature, but the brief (FP-187) calls it untrusted input. Treated as a bug.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch
 
 **Where**
 
@@ -865,7 +866,7 @@ _Source file: [findings/AUD-018-duplicate-payout-notifications-and-duplicate-dis
 
 - Severity: **High** · Category: integration / security · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Signs canonical JSON but sends the JSONB re-serialization.
-- Status: fix ready, not merged (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/10-AUD-020.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/10-AUD-020.patch
 
 **Where**
 
@@ -906,7 +907,7 @@ _Source file: [findings/AUD-020-outbound-webhook-signature-computed-over-differe
 
 - Severity: **High** · Category: authn · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Missing signature accepted by default, no timestamp check, non-constant-time compare.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/09-AUD-021.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/09-AUD-021.patch
 
 **Where**
 
@@ -948,7 +949,7 @@ _Source file: [findings/AUD-021-inbound-acquirer-callback-signature-optional-by-
 
 - Severity: **High** · Category: authz · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Cancel updates `WHERE id` without merchant. Confirmed by chat claim.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/04-AUD-022.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/04-AUD-022.patch
 
 **Where**
 
@@ -1070,7 +1071,7 @@ _Source file: [findings/AUD-027-refund-inserts-violate-the-0070-reason-constrain
 
 - Severity: **High** · Category: authz · Owner: B
 - Verdict: **BUG (traced)** (confidence high): No role gate on capture/void; MK's "enforced in requireMerchantAuth" comment is false.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch
 
 **Where**
 
@@ -1113,7 +1114,7 @@ _Source file: [findings/AUD-046-capture-and-void-have-no-role-gate-support-users
 
 - Severity: **High** · Category: reliability / availability · Owner: B
 - Verdict: **BUG (runtime)** (confidence high): Reproduced: 134 stuck pending deliveries made 6 dispatcher tests fail; Step B orders by next_attempt_at and never advances an unattemptable row. Track B.
-- Status: fix ready, not merged (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/11-AUD-053.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/11-AUD-053.patch
 
 **What is wrong**
 
@@ -1199,7 +1200,7 @@ _Source file: [findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores
 
 - Severity: **High** · Category: SSRF / resource exhaustion · Owner: B
 - Verdict: **BUG (runtime)** (confidence high): Real-server test on main: a 302 from an https-allowed receiver was followed to an internal server and its body returned; 5 MB body buffered. Reachable by any merchant via test-send. Track B.
-- Status: fix ready, not merged (runtime-verified locally; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch
 
 **What is wrong**
 
@@ -1323,12 +1324,51 @@ in apps/api that trust a caller-supplied id.
 
 _Source file: [findings/AUD-059-reporting-scope-accepts-any-split-child-cross-tenant-transaction-read.md](findings/AUD-059-reporting-scope-accepts-any-split-child-cross-tenant-transaction-read.md)_
 
+### AUD-061
+**Capture scans the whole ledger several times: no index on `ledger_entries.entry_group_id` or `transaction_id` (nor `holds.transaction_id`)**
+
+- Severity: **High** · Category: performance / capacity · Owner: A
+- Verdict: **BUG (runtime)** (confidence high): Measured: `EXPLAIN ANALYZE` shows a Seq Scan over the whole ledger (42,943 rows filtered, 7.4 ms) per capture; no index exists on ledger_entries.transaction_id. Index added, test added.
+- Status: fixed (branch `feat/totp`, migration 0094) · Fix commit: see `git log feat/totp` (migrations 0094, 0095)
+
+**What is wrong**
+
+`ledger_entries` has only `(merchant_id, occurred_at)` and the primary key. Two hot paths look rows up by columns that are not indexed: the **balance trigger** (migration 0007: deferred, once per inserted row, `SUM ... WHERE entry_group_id = ...`) and the capture/refund code (`WHERE transaction_id = ...`). Every capture therefore rescans the entire ledger several times (4 ledger rows = 4 scans at commit, plus the discount step). `holds` has the same gap on `transaction_id`.
+
+**Where**
+
+`apps/api/src/payments/discountAdjustment.ts` (count of discount adjustments per transaction), `apps/api/src/payments/processRefund.ts` (fee kept per transaction), `payments/capture.ts` (`UPDATE holds ... WHERE transaction_id`). Indexes: `db/migrations/0007`, `0005` (never created).
+
+**Why it happens (root cause)**
+
+The tables were designed around merchant and time queries (`idx_ledger_entries_merchant_occurred`); the transaction-scoped look-ups added later by capture, the discount adjustment and refunds were never given an index.
+
+**What it breaks (impact)**
+
+Every capture (and every refund) gets slower as the platform grows, and the work is done under the transaction lock and the connection held across the call. The platform degrades with its own success; under load the slowdown compounds (each checkout adds rows that every later checkout must scan).
+
+**Proof / evidence**
+
+Found while load testing the live server (docs/audit/LOAD-TEST.md): throughput plateaued far below what the CPU allowed. `EXPLAIN (ANALYZE, BUFFERS)` of the discount-adjustment query on the load-tested database: `Seq Scan on ledger_entries ... Rows Removed by Filter: 42943, Buffers: shared hit=961, Execution Time: 7.4 ms`, against 0.03 ms for the indexed `transaction_events` look-up in the same statement. The cost is linear in the size of the ledger, i.e. in the number of checkouts ever processed.
+
+**Fix**
+
+Migration 0094: `idx_ledger_entries_transaction` (partial, `transaction_id IS NOT NULL`: settlement and MDR legs have no transaction) and `idx_holds_transaction`. Migration 0095: `idx_ledger_entries_group` on `entry_group_id` (the balance trigger's look-up; this one is the dominant cost: found after 0094 alone did not move the throughput ceiling, which is why both are recorded). Test: `apps/api/src/db/hotPathIndexes.test.ts` (fails before the migration). Effect on existing data: none (indexes only).
+
+**Re-attack and side notes**
+
+Other look-ups by `transaction_id` on the same tables (refunds fee query, reconciliation) use the same index. Index build on a large production ledger should be run with `CREATE INDEX CONCURRENTLY` outside the migration runner; on this deployment the ledger is small.
+
+**Related:** Capacity section of the submission document; AUD-048.
+
+_Source file: [findings/AUD-061-capture-scans-the-whole-ledger-no-index-on-ledger-entries-t.md](findings/AUD-061-capture-scans-the-whole-ledger-no-index-on-ledger-entries-t.md)_
+
 ### AUD-019
 **Acquirer callbacks are not deduplicated — FP-201 (reopened)**
 
 - Severity: **Medium** · Category: idempotency · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Plain INSERT, no unique key; the "dedupe" commit is empty. Confirmed by the brief (FP-201).
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/08-AUD-019.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/08-AUD-019.patch
 
 **Where**
 
@@ -1369,7 +1409,7 @@ _Source file: [findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-r
 
 - Severity: **Medium** · Category: authn · Owner: B
 - Verdict: **BUG (traced)** (confidence medium): `Math.random` OTP and a check-then-increment attempt limit. Mostly moot until AUD-001 is fixed.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch
 
 **Where**
 
@@ -1460,7 +1500,7 @@ _Source file: [findings/AUD-025-daily-close-runs-03-15-bahrain-not-00-15.md](fin
 
 - Severity: **Medium** · Category: reporting · Owner: FP-300 (shared)
 - Verdict: **LATENT** (confidence high): View joins `t.id = r.id`; refunds are not live yet.
-- Status: fix ready, not merged (migration 0083; no reader yet; review pending) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (migration 0083; no reader yet; review pending) · Fix commit: — (not fixed; Phase 2)
 
 **Where**
 
@@ -1532,7 +1572,7 @@ _Source file: [findings/AUD-029-refund-fee-reversal-can-exceed-the-fee-charged.m
 
 - Severity: **Medium** · Category: integration · Owner: FP-300 (shared)
 - Verdict: **LATENT** (confidence high): Event produced, no envelope or dispatcher entry.
-- Status: fix ready, not merged (runtime-verified locally on 55433; review pending) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: — (not fixed; Phase 2)
 
 **Where**
 
@@ -1613,7 +1653,7 @@ _Source file: [findings/AUD-031-fee-shown-to-merchant-245-bps-fee-charged-225-bp
 
 - Severity: **Medium** · Category: data integrity · Owner: B
 - Verdict: **BUG (traced)** (confidence medium): The code clears `test_mode` deliberately ("tidied"), but a status recompute changing settlement eligibility contradicts 0002. Confirmed by chat.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/14-AUD-032.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/14-AUD-032.patch
 
 **Where**
 
@@ -1771,7 +1811,7 @@ _Source file: [findings/AUD-036-adjustment-import-has-no-duplicate-submit-protec
 
 - Severity: **Medium** · Category: security · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Old key is never revoked. The "24h grace" mentioned in a migration comment is not in ADMIN.md or in code.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/13-AUD-038.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/13-AUD-038.patch
 
 **Where**
 
@@ -1813,7 +1853,7 @@ _Source file: [findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key
 
 - Severity: **Medium** · Category: authz · Owner: B
 - Verdict: **BUG (runtime)** (confidence high): Reproduced through the approval route: two different admins sharing a display name were refused (409), and a renamed requester could approve their own credit (needs DB access to rename). Fixed by comparing admin ids.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/17-AUD-039.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/17-AUD-039.patch
 
 **Where**
 
@@ -1968,7 +2008,7 @@ _Source file: [findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rat
 
 - Severity: **Medium** · Category: crypto / bearer token · Owner: B
 - Verdict: **BUG (runtime)** (confidence high): Found in the AUD-023 sibling sweep: `randomFromAlphabet` (payment-link tokens) used `Math.random`; a constant `Math.random` made all tokens identical on main. ARCHITECTURE's "crypto.randomBytes" claim is false. Track B.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch
 
 **What is wrong**
 
@@ -2020,7 +2060,7 @@ _Source file: [findings/AUD-055-payment-link-tokens-and-shared-random-helper-use
 
 - Severity: **Medium** · Category: reliability / reporting · Owner: B
 - Verdict: **BUG (runtime)** (confidence high): Reproduced: batch_closed for a day with captures but no merchant_daily_volume row threw a TypeError in the parity check, rolling back every reporting pass. Fixed: missing row = lag 0 → warning. Track B.
-- Status: fix ready, not merged (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (after 1b2ea38)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (after 1b2ea38)
 
 **What is wrong**
 
@@ -2147,7 +2187,7 @@ _Source file: [findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.
 
 - Severity: **Low** · Category: authn / time · Owner: B
 - Verdict: **BUG (traced, low)** (confidence high): Route lacks the auth hook (fails closed with a 500).
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/15-AUD-047.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/15-AUD-047.patch
 
 **Where**
 
@@ -2268,7 +2308,7 @@ _Source file: [findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-ho
 
 - Severity: **Low** · Category: information disclosure / credential material · Owner: B
 - Verdict: **BUG (runtime)** (confidence high): Public link read returned `api_keys.key_hash` as merchantIntegrationId (test on main shows the hash in the body). 192-bit keys, so not a usable credential; Low. Track B.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch
 
 **What is wrong**
 
@@ -2324,7 +2364,7 @@ Collected from the fix sections above (search for 'Tests changed'). Tests were n
 
 - Severity: **Medium** · Category: authz · Owner: B
 - Verdict: **DESIGN (decided to change)** (confidence medium): Write-capable impersonation was a deliberate July change (migration comment), but it contradicts the security docs. Q4: read-only.
-- Status: fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch
 
 **Where**
 
@@ -2365,7 +2405,7 @@ _Source file: [findings/AUD-024-impersonation-grants-write-access-super-admin-ow
 
 - Severity: **Medium** · Category: DoS · Owner: B
 - Verdict: **UNVERIFIED** (confidence low): Export memory behaviour not measured.
-- Status: fix ready, not merged (measured and verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/18-AUD-042.patch
+- Status: fixed (merged with PR #27/#28) (measured and verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/18-AUD-042.patch
 
 **Where**
 
@@ -2483,7 +2523,7 @@ _Source file: [findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi
 
 - Severity: **Low** · Category: performance · Owner: B
 - Verdict: **UNVERIFIED** (confidence low): Slow query not measured with EXPLAIN.
-- Status: fix ready, not merged (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/19-AUD-043.patch
+- Status: fixed (merged with PR #27/#28) (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/19-AUD-043.patch
 
 **Where**
 
@@ -2524,7 +2564,7 @@ _Source file: [findings/AUD-043-slow-settlement-summary-query.md](findings/AUD-0
 
 - Severity: **Low** · Category: test quality · Owner: B
 - Verdict: **HYGIENE** (confidence high): Test uses real jitter and expects an exact delay.
-- Status: fix ready, not merged (test-only change; verified locally; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/05-AUD-044-test.patch (+ docs in stack/16)
+- Status: fixed (merged with PR #27/#28) (test-only change; verified locally; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/05-AUD-044-test.patch (+ docs in stack/16)
 
 **Where**
 

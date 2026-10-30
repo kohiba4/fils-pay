@@ -5,7 +5,7 @@
 | Owner | FP-300 (shared) |
 | Severity | **Medium** |
 | Category | reporting |
-| Status | fix ready, not merged (migration 0083; no reader yet; review pending) |
+| Status | **fixed** (merged with PR #27/#28) (migration 0083; no reader yet; review pending) |
 | Fix commit | — (not fixed; Phase 2) |
 
 ## Summary

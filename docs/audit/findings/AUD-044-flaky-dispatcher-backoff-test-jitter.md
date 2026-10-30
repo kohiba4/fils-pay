@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Low** |
 | Category | test quality |
-| Status | fix ready, not merged (test-only change; verified locally; review pending) |
+| Status | **fixed** (merged with PR #27/#28) (test-only change; verified locally; review pending) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/05-AUD-044-test.patch (+ docs in stack/16) |
 
 ## Summary

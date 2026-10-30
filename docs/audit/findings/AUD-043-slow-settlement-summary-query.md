@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Low** |
 | Category | performance |
-| Status | fix ready, not merged (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) |
+| Status | **fixed** (merged with PR #27/#28) (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/19-AUD-043.patch |
 
 ## Summary
