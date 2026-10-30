@@ -25,6 +25,12 @@ async function leadingColumnIndexed(table: string, column: string): Promise<bool
   return Number(r.rows[0]!.n) > 0;
 }
 
+// The ledger balance trigger (0007) runs once per inserted row at commit and sums the group by entry_group_id. Unindexed, a
+// capture that writes 4 ledger rows rescanned the whole ledger 4 times at commit (the dominant cost in the load test).
+test("ledger_entries is indexed by entry_group_id (the balance trigger's look-up)", async () => {
+  assert.equal(await leadingColumnIndexed("ledger_entries", "entry_group_id"), true, "ledger_entries(entry_group_id)");
+});
+
 test("ledger_entries and holds are indexed by transaction_id (capture, refund fee lookup and discount step)", async () => {
   assert.equal(await leadingColumnIndexed("ledger_entries", "transaction_id"), true, "ledger_entries(transaction_id)");
   assert.equal(await leadingColumnIndexed("holds", "transaction_id"), true, "holds(transaction_id)");
