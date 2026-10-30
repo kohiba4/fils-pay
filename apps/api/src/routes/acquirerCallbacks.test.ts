@@ -153,3 +153,103 @@ test("POST /v1/acquirer/callbacks returns 404 for an unknown transaction id", as
   assert.equal(res.statusCode, 404);
   assert.equal(res.json().error, "transaction_not_found");
 });
+
+function postCallback(body: ReturnType<typeof callbackBody>) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/acquirer/callbacks",
+    headers: { "acquirer-callback-signature": signatureHeader(body) },
+    payload: body,
+  });
+}
+
+test("AUD-019: a redelivered callback (same callbackId) is acknowledged but recorded once", async () => {
+  const transactionId = await createTransaction();
+  const callbackId = `acqcb_${randomUUID()}`;
+  const body = callbackBody(transactionId, callbackId);
+  for (let i = 0; i < 3; i++) {
+    const res = await postCallback(body);
+    assert.equal(res.statusCode, 200, res.body);
+    assert.deepEqual(res.json(), { received: true });
+  }
+  assert.equal(await noteCount(callbackId), "1");
+});
+
+test("AUD-019: concurrent deliveries of the same callback record one note", async () => {
+  const transactionId = await createTransaction();
+  const callbackId = `acqcb_${randomUUID()}`;
+  const body = callbackBody(transactionId, callbackId);
+  const results = await Promise.all(Array.from({ length: 10 }, () => postCallback(body)));
+  for (const r of results) assert.equal(r.statusCode, 200, r.body);
+  assert.equal(await noteCount(callbackId), "1");
+});
+
+test("AUD-019: distinct callbacks are all kept, including one callbackId reused on another transaction", async () => {
+  const t1 = await createTransaction();
+  const t2 = await createTransaction();
+  const a = `acqcb_${randomUUID()}`;
+  const b = `acqcb_${randomUUID()}`;
+  for (const body of [callbackBody(t1, a), callbackBody(t1, b), callbackBody(t2, a)]) {
+    assert.equal((await postCallback(body)).statusCode, 200);
+  }
+  assert.equal(await noteCount(a), "2", "same id on two transactions = two callbacks");
+  assert.equal(await noteCount(b), "1");
+});
+
+function signRaw(raw: string, timestamp = 1_757_930_000, secret = ACQUIRER_SECRET): string {
+  return `t=${timestamp},v1=${createHmac("sha256", secret).update(`${timestamp}.${raw}`).digest("hex")}`;
+}
+
+function postRaw(raw: string, signature: string) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/acquirer/callbacks",
+    headers: { "content-type": "application/json", "acquirer-callback-signature": signature },
+    payload: raw,
+  });
+}
+
+test("AUD-021: the signature is checked over the exact bytes received (any whitespace or key order)", async () => {
+  const transactionId = await createTransaction();
+  const callbackId = `acqcb_${randomUUID()}`;
+  const b = callbackBody(transactionId, callbackId);
+  // Same fields, the acquirer's own formatting: different key order and whitespace than JSON.stringify.
+  const raw = `{ "note": ${JSON.stringify(b.note)}, "outcome": "${b.outcome}", "occurredAt": "${b.occurredAt}",\n  "transactionId": "${transactionId}", "type": "${b.type}", "callbackId": "${callbackId}" }`;
+  const res = await postRaw(raw, signRaw(raw));
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(await noteCount(callbackId), "1");
+});
+
+test("AUD-021: bytes changed after signing, or a malformed / truncated / non-hex v1, are refused with 401", async () => {
+  const transactionId = await createTransaction();
+  const callbackId = `acqcb_${randomUUID()}`;
+  const raw = JSON.stringify(callbackBody(transactionId, callbackId));
+  const tampered = raw.replace("confirmed_fraud", "cleared");
+  const good = signRaw(raw);
+  const goodHex = good.split("v1=")[1]!;
+  for (const [body, sig] of [
+    [tampered, good],
+    [raw, `t=1757930000,v1=${goodHex.slice(0, 20)}`],
+    [raw, `t=1757930000,v1=${"zz".repeat(32)}`],
+    [raw, `t=1757930001,v1=${goodHex}`],
+    [raw, "v1=abc"],
+    [raw, "garbage"],
+  ] as const) {
+    const res = await postRaw(body, sig);
+    assert.equal(res.statusCode, 401, `${sig}: ${res.body}`);
+  }
+  assert.equal(await noteCount(callbackId), "0");
+});
+
+test("AUD-021: production requires a callback signature by default; an explicit override is still honoured", () => {
+  const base = {
+    DATABASE_URL: databaseUrl,
+    NODE_ENV: "production",
+    WEBHOOK_SECRET_ENCRYPTION_KEY: "Y1ZTGTcYbe30GZJebys9w7T3OYZNKewuOH3SUCEdRQk=",
+    ACQUIRER_CALLBACK_SIGNING_SECRET: "prod-like-secret",
+    SETTLEMENT_INTERNAL_TOKEN: "prod-like-token",
+  };
+  assert.equal(loadConfig(base).acquirerCallbackRequireSignature, true);
+  assert.equal(loadConfig({ ...base, ACQUIRER_CALLBACK_REQUIRE_SIGNATURE: "false" }).acquirerCallbackRequireSignature, false);
+  assert.equal(loadConfig({ ...base, NODE_ENV: "development" }).acquirerCallbackRequireSignature, false);
+});

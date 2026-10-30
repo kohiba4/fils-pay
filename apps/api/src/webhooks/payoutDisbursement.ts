@@ -12,8 +12,12 @@ export async function recordPayoutDisbursementEffect(
   }
 
   await pool.query(
+    // AUD-018 (B half): one disbursement per paid batch (migration 0082). The
+    // effect runs once per settlement.paid delivery row — per endpoint and per
+    // replay — so a repeat must be a no-op, not a second payout instruction.
     `INSERT INTO settlement_payout_disbursements (settlement_batch_id, amount_fils, disbursement_reference)
-     VALUES ($1, $2, 'disb_' || gen_random_uuid())`,
+     VALUES ($1, $2, 'disb_' || gen_random_uuid())
+     ON CONFLICT (settlement_batch_id) WHERE duplicate_of_disbursement_id IS NULL DO NOTHING`,
     [settlementBatchId, amountFils],
   );
 }

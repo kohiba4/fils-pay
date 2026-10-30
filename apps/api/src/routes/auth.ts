@@ -9,7 +9,6 @@ import {
   promoteSession,
   revokeSession,
 } from "../auth/sessions.js";
-import { findOtpRecipient } from "../auth/users.js";
 import { withTransaction } from "../db/withTransaction.js";
 import { BadRequestError, GoneError, TooManyRequestsError, UnauthorizedError } from "../lib/errors.js";
 
@@ -75,7 +74,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       throw new UnauthorizedError("invalid_credentials");
     }
 
-    const recipient = await findOtpRecipient(app.db, email) ?? user;
+    // AUD-002: the challenge and the pending session belong to the user
+    // whose password was just checked. Emails are only unique per merchant
+    // (0003), so re-resolving by email could pick another tenant's user.
+    const recipient = user;
 
     const { code, expiresAt, rawToken } = await withTransaction(app.db, async (client) => {
       const challenge = await issueChallenge(client, {
@@ -141,35 +143,48 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         expires_at: Date;
         consumed_at: Date | null;
       }>(
-        `SELECT id, code_salt, code_hash, attempt_count, max_attempts, expires_at, consumed_at
-           FROM otp_challenges WHERE id = $1`,
+        // AUD-023: one atomic conditional increment BEFORE comparing, so N
+        // parallel guesses can never all read attempt_count = 0. The winning
+        // guess also uses an attempt (5 comparisons per challenge, as before).
+        `UPDATE otp_challenges
+            SET attempt_count = attempt_count + 1
+          WHERE id = $1 AND consumed_at IS NULL AND attempt_count < max_attempts
+        RETURNING id, code_salt, code_hash, attempt_count, max_attempts, expires_at, consumed_at`,
         [pending.otpChallengeId],
       );
       const challenge = challengeResult.rows[0];
-      if (!challenge || challenge.consumed_at !== null) {
-        throw new GoneError("otp_expired");
+      if (!challenge) {
+        const current = await app.db.query<{ consumed_at: Date | null }>(
+          `SELECT consumed_at FROM otp_challenges WHERE id = $1`,
+          [pending.otpChallengeId],
+        );
+        const row = current.rows[0];
+        if (!row || row.consumed_at !== null) {
+          throw new GoneError("otp_expired");
+        }
+        await revokeSession(app.db, pending.sessionId);
+        throw new TooManyRequestsError("too_many_attempts");
       }
       if (challenge.expires_at.getTime() <= Date.now()) {
         throw new GoneError("otp_expired");
       }
 
-      // am: check-then-increment is fine, max_attempts=5 so worst case is 5 guesses
-      // MK: 5 guesses per parallel batch? if i fire 50 at once they all read attempt_count=0
-      if (challenge.attempt_count >= challenge.max_attempts) {
-        await revokeSession(app.db, pending.sessionId);
-        throw new TooManyRequestsError("too_many_attempts");
-      }
 
       const matches = verifyOtpCode(code, challenge.code_salt, challenge.code_hash);
       if (!matches) {
-        await app.db.query(`UPDATE otp_challenges SET attempt_count = attempt_count + 1 WHERE id = $1`, [
-          challenge.id,
-        ]);
         throw new UnauthorizedError("invalid_code");
       }
 
       const merchantUserResult = await withTransaction(app.db, async (client) => {
-        await client.query(`UPDATE otp_challenges SET consumed_at = now() WHERE id = $1`, [challenge.id]);
+        // AUD-023: conditional consume — two concurrent correct submissions
+        // resolve to exactly one promotion.
+        const consumed = await client.query(
+          `UPDATE otp_challenges SET consumed_at = now() WHERE id = $1 AND consumed_at IS NULL`,
+          [challenge.id],
+        );
+        if ((consumed.rowCount ?? 0) === 0) {
+          throw new GoneError("otp_expired");
+        }
         // promoteSession bumps expires_at to 12h server-side; the cookie maxAge doesn't matter because
         // MK: admin verify re-sets the cookie after this, merchant verify doesnt. related to the 10 min logouts?
         await promoteSession(client, pending.sessionId, app.config.sessionTtlHours);

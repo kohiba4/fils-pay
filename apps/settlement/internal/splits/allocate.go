@@ -166,6 +166,18 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 		return SplitPayoutResult{}, err
 	}
 
+	// AUD-018: same as PayoutBatch: one disbursement record per paid batch, in
+	// the payout transaction (the per-child amounts are in settlement_batch_splits).
+	if netPayout > 0 {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO settlement_payout_disbursements (settlement_batch_id, amount_fils, disbursement_reference)
+			VALUES ($1, $2, 'disb_' || gen_random_uuid())
+			ON CONFLICT (settlement_batch_id) WHERE duplicate_of_disbursement_id IS NULL DO NOTHING
+		`, batchID, netPayout); err != nil {
+			return SplitPayoutResult{}, err
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return SplitPayoutResult{}, err
 	}

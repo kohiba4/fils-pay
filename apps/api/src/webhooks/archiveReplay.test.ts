@@ -10,8 +10,9 @@ import {
   createWebhookDeliveryArchive,
   replayWebhookDeliveryArchive,
   type ArchivedDeliveryEntry,
+  ARCHIVE_MAX_DELIVERIES,
 } from "./archiveReplay.js";
-import { ConflictError, NotFoundError } from "../lib/errors.js";
+import { ConflictError, NotFoundError, UnprocessableEntityError } from "../lib/errors.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -58,10 +59,19 @@ async function insertDelivery(
   endpointId: string,
   opts: { eventType: string; createdAt: string },
 ): Promise<string> {
+  // AUD-041: this FK-only fixture used to carry payload '{}' under a real
+  // event type. The reporting consumer reads every transaction.captured /
+  // voided row in the shared DB, and a payload without merchantId (which no
+  // real producer emits) failed its NOT NULL insert and rolled back every
+  // later reporting pass. Use the producers' shape for the endpoint's merchant.
   const outbox = await pool.query<{ id: string }>(
     `INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload)
-     VALUES ($1, 'transaction', $2, '{}'::jsonb) RETURNING id`,
-    [opts.eventType, randomUUID()],
+     SELECT $1, 'transaction', $2,
+            jsonb_build_object('merchantId', we.merchant_id, 'amountCapturedFils', 0, 'feeFils', 0,
+                               'newStatus', 'captured', 'capturedTotalFils', 0)
+       FROM webhook_endpoints we WHERE we.id = $3
+     RETURNING id`,
+    [opts.eventType, randomUUID(), endpointId],
   );
   const outboxEventId = outbox.rows[0]!.id;
 
@@ -229,4 +239,34 @@ test("replay 404s on an archive/merchant mismatch and conflicts on a disabled ta
     }),
     (err: unknown) => err instanceof ConflictError && err.code === "endpoint_disabled",
   );
+});
+
+test("AUD-042: an archive range larger than the cap is refused with 422 and writes nothing", async () => {
+  const merchantId = await createMerchant();
+  const endpointId = await createEndpoint(merchantId);
+  const adminUserId = await createAdminUser();
+  await pool.query(
+    `WITH o AS (
+       INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload, processed_at)
+       SELECT 'archive.test.fixture', 'transaction', gen_random_uuid(), '{}'::jsonb, now()
+         FROM generate_series(1, $2) RETURNING id)
+     INSERT INTO webhook_deliveries (endpoint_id, outbox_event_id, event_type, delivery_event_id, payload, status, created_at)
+     SELECT $1, o.id, 'transaction.captured', gen_random_uuid(), '{}'::jsonb, 'succeeded', now() - interval '1 hour' FROM o`,
+    [endpointId, ARCHIVE_MAX_DELIVERIES + 1],
+  );
+  await assert.rejects(
+    createWebhookDeliveryArchive(pool, {
+      merchantId,
+      endpointId,
+      adminUserId,
+      from: new Date(Date.now() - 86_400_000),
+      to: new Date(),
+    }),
+    (err: unknown) => err instanceof UnprocessableEntityError && (err as { code?: string }).code === "archive_range_too_large",
+  );
+  const archives = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM webhook_delivery_archives WHERE endpoint_id = $1`,
+    [endpointId],
+  );
+  assert.equal(archives.rows[0]!.n, 0);
 });

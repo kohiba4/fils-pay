@@ -5,8 +5,8 @@
 | Owner | B |
 | Severity | **High** |
 | Category | authz |
-| Status | confirmed (trace) |
-| Fix commit | — (not fixed; Phase 2) |
+| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch |
 
 ## Summary
 Capture and void have no role gate: support users and impersonating admins can move money.
@@ -28,8 +28,27 @@ A read-only support user or a 'view as merchant' admin can capture or void payme
 ## Fix (proposed)
 Add `requireMerchantRole('owner','finance')` to capture, void (and the refund route in FP-300); API keys keep full authority by design.
 
+## Fix (applied, Track B, 2026-10-30)
+Discovered in the Phase 0 team audit; repaired here. Base `main` af8e9c9, uncommitted working tree in `~/Desktop/hakathons/fils-pay-hackathon`; reviewable patch `~/Desktop/hakathons/track-b-patches/stack/01-AUD-046-024.patch` (applies alone to af8e9c9, checked with `git apply --check`). Commands: fresh DB, `npm run migrate && npm run seed`, `cd apps/api && npm test`, `cd apps/reporting && npm test`.
+`routes/transactions.ts`: capture and void now chain `requireMerchantRole("owner", "finance")` after
+`requireMerchantAuth` (decision Q4). Nothing else in the file changed; Track A's post-commit
+`applyCaptureDiscountAdjustment` call (AUD-016) is left exactly as it is for A to remove after this merges.
+`capture.ts`, `void.ts` and refund code are untouched. Ported from the earlier uncommitted repair, minus its other changes.
+
+**Test:** `apps/api/src/routes/merchantWriteAuthority.test.ts` (new, real Postgres). Seen failing on `main` af8e9c9
+(4 of 6: support capture 200, impersonation capture 200, disabled admin grant 200, writer helper accepts impersonation),
+passing after the fix (6/6). Suites on a fresh 127.0.0.1:55433 DB (2026-10-30): `main` api 398/399, branch api 404/405;
+the single failure in both is the AUD-044 jitter test. Reporting 7/11 on both (AUD-041, unchanged). Typecheck clean.
+**Tests changed:** none. The existing support-grant test in `routes/admin.test.ts` still passes unchanged.
+
 ## Re-attack notes
-_To be filled after the fix (bypass via other route / tenant / retry / concurrency)._
+- Support session: capture and void 403; status, captured amount, events, ledger and outbox rows unchanged; reads still 200.
+- Impersonation grant of every admin role: capture and void 403, no side effects (with AUD-024).
+- Owner and finance sessions: capture and void 200. API key of the merchant: capture 200 (contract unchanged).
+- Other merchant's owner session or API key: 404, target unchanged.
+- Sibling sweep: every merchant write route is now role-gated except `POST /v1/reporting/saved-filters`
+  (`requireMerchantAuth` only; writes a saved report filter, no money). Left as is; noted for triage.
+- Independent skeptical review: **pending** (not run in this session by instruction).
 
 ## Related
 AUD-024, AUD-003

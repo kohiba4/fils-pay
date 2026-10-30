@@ -414,6 +414,22 @@ func PayoutBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) (Payo
 		return PayoutResult{}, fmt.Errorf("settlement: PayoutBatch: update batch status: %w", err)
 	}
 
+	// AUD-018: the payout instruction record is written in the same transaction
+	// as the 'paid' transition (0057: "one row per paid batch"), so it exists
+	// whether or not the merchant has a webhook endpoint, and a crash cannot
+	// separate the payout from its record. Only a positive net carries an
+	// instruction. uq_settlement_payout_disbursements_batch (0082) makes a repeat
+	// a no-op; the dispatcher's settlement.paid effect is now only a backstop.
+	if netPayout > 0 {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO settlement_payout_disbursements (settlement_batch_id, amount_fils, disbursement_reference)
+			VALUES ($1, $2, 'disb_' || gen_random_uuid())
+			ON CONFLICT (settlement_batch_id) WHERE duplicate_of_disbursement_id IS NULL DO NOTHING
+		`, batchID, netPayout); err != nil {
+			return PayoutResult{}, fmt.Errorf("settlement: PayoutBatch: record disbursement: %w", err)
+		}
+	}
+
 	// Only a positive net is ever paid. A negative net (refunds above the day's captures) pays nothing and must
 	// not be "paid back" into the cache: the debt stays visible in the cached balance (FP-300, AUD-054).
 	paidOut := netPayout

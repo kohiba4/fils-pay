@@ -89,7 +89,11 @@ export async function lookupSession(
     `SELECT s.id AS session_id, s.merchant_user_id, mu.merchant_id, mu.role
        FROM live_sessions s
        JOIN merchant_users mu ON mu.id = s.merchant_user_id
-      WHERE s.token_hash = $1`,
+      WHERE s.token_hash = $1
+        -- AUD-001: live_sessions (0058) filters revoked/expired only; 0012
+        -- requires every auth lookup to test authenticated = true, otherwise
+        -- the pending (pre-OTP) cookie is a full session.
+        AND s.authenticated = true`,
     [tokenHash],
   );
   const row = result.rows[0];

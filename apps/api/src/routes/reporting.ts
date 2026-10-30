@@ -76,7 +76,9 @@ export async function reportingRoutes(app: FastifyInstance): Promise<void> {
     async (request) => listSavedFilters(app.db, { merchantId: request.merchantAuth!.merchantId }),
   );
 
-  app.get("/export-summary", async (request) => {
+  // AUD-047: authenticated and scoped to the caller's merchant (it read
+  // request.merchantAuth without any hook, so every call was a 500).
+  app.get("/export-summary", { preHandler: requireMerchantAuth }, async (request) => {
     const result = await app.db.query(
       `SELECT COUNT(*) AS total, SUM(captured_gross_fils) AS gross
          FROM merchant_daily_volume WHERE merchant_id = $1`,

@@ -358,3 +358,52 @@ test(
     assert.equal(finalLink.rows[0]!.transaction_id, txnId);
   },
 );
+
+test("AUD-022: merchant B cannot cancel merchant A's payment link by id; the link stays active", async () => {
+  const a = await createApprovedMerchantWithApiKey("cancel-idor-a");
+  const b = await createApprovedMerchantWithApiKey("cancel-idor-b");
+  const linkA = await createLink(a.rawKey, a.merchantId, {});
+
+  // B on its own path with A's link id: reported as not found, nothing changes.
+  const viaOwnPath = await app.inject({
+    method: "DELETE",
+    url: `/v1/merchants/${b.merchantId}/payment-links/${linkA.id}`,
+    headers: authHeader(b.rawKey),
+  });
+  assert.equal(viaOwnPath.statusCode, 404, viaOwnPath.body);
+  assert.equal(viaOwnPath.json().error, "payment_link_not_found");
+
+  // B on A's path: refused by the path check.
+  const viaOtherPath = await app.inject({
+    method: "DELETE",
+    url: `/v1/merchants/${a.merchantId}/payment-links/${linkA.id}`,
+    headers: authHeader(b.rawKey),
+  });
+  assert.equal(viaOtherPath.statusCode, 403, viaOtherPath.body);
+
+  const row = await pool.query<{ status: string; canceled_at: Date | null }>(
+    `SELECT status, canceled_at FROM payment_links WHERE id = $1`,
+    [linkA.id],
+  );
+  assert.equal(row.rows[0]!.status, "active");
+  assert.equal(row.rows[0]!.canceled_at, null);
+
+  // The owner can still cancel it.
+  const own = await app.inject({
+    method: "DELETE",
+    url: `/v1/merchants/${a.merchantId}/payment-links/${linkA.id}`,
+    headers: authHeader(a.rawKey),
+  });
+  assert.equal(own.statusCode, 204, own.body);
+});
+
+test("AUD-056: the public, unauthenticated link read does not expose the merchant's API key hash", async () => {
+  const owner = await createApprovedMerchantWithApiKey("public-read-hash");
+  const link = await createLink(owner.rawKey, owner.merchantId, {});
+  const hashes = await pool.query<{ key_hash: string }>(`SELECT key_hash FROM api_keys WHERE merchant_id = $1`, [owner.merchantId]);
+  const res = await getPublicLink(link.token);
+  assert.equal(res.statusCode, 200, res.body);
+  for (const h of hashes.rows) assert.ok(!res.body.includes(h.key_hash.trim()), "key hash must not appear in the public body");
+  assert.equal("merchantIntegrationId" in (res.json() as object), false);
+  assert.ok((res.json() as { merchantPublicKey?: string }).merchantPublicKey?.startsWith("fp_"), "the documented prefix stays");
+});

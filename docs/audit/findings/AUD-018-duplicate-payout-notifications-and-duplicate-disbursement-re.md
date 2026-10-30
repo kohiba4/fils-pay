@@ -44,3 +44,24 @@ Merchants told twice; two disbursement instructions per batch (possible double p
 
 ## Related
 AUD-040
+
+## Track B addendum (2026-10-30, uncommitted; for @kohiba4 to review)
+**Part 1 — duplicates.** Migration `0082_settlement_payout_disbursements_one_per_batch.sql`: `duplicate_of_disbursement_id`;
+existing duplicates are marked (later rows point at the earliest for the same batch), nothing deleted; partial unique index
+`uq_settlement_payout_disbursements_batch (settlement_batch_id) WHERE duplicate_of_disbursement_id IS NULL` (name proposed by
+Track B, please confirm). `apps/api/src/webhooks/payoutDisbursement.ts` inserts `ON CONFLICT … DO NOTHING`.
+Tests (`apps/api/src/webhooks/payoutDisbursement.test.ts`): 8 sequential + concurrent calls → 1 row; one `settlement.paid` to two
+endpoints, then a replay → 1 row. Upgrade check: 7 of 12 planted rows marked, none deleted.
+
+**Part 2 — merchants without a webhook endpoint got no disbursement.** The record was written only as a side effect of the
+first attempt of each `settlement.paid` delivery row, and delivery rows exist only per active endpoint. Now the record is
+written **inside the payout transaction** — `apps/settlement/internal/settlement/batch.go PayoutBatch` and
+`apps/settlement/internal/splits/allocate.go PayoutSplitBatch` — right after the `status = 'paid'` update, only when
+`net_payout_fils > 0`, `ON CONFLICT … DO NOTHING`. This matches 0057's stated design ("written inside PayoutBatch's
+transaction, one row per paid batch"), makes the record atomic with the payout (no crash window), and independent of
+endpoint count, delivery success and replay. The dispatcher effect is kept as an idempotent backstop for batches paid
+before this change. Go tests (written first, all failed on `main` with 0 rows): `TestPayoutBatch_RecordsOneDisbursementWithoutAnyWebhookEndpoint`
+(incl. re-pay), `TestPayoutBatch_ConcurrentPayoutsRecordOneDisbursement` (5 goroutines), `TestPayoutBatch_ZeroNetRecordsNoDisbursement`,
+`TestPayoutBatch_UnpaidBatchHasNoDisbursement`, `TestPayoutSplitBatch_RecordsOneDisbursement` (two 50 % children, paid twice).
+**Not done (needs a finance decision):** backfilling disbursement rows for batches already paid without one; nothing in the
+repo reads this table, so whoever pays from it must decide whether a backfill would pay twice.

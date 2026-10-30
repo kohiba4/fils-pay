@@ -7,7 +7,7 @@
  * point at a real, migrated Postgres (run `npm run migrate` first).
  */
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { Pool } from "pg";
 import { enqueueEvent } from "@filspay/events";
@@ -15,6 +15,7 @@ import { loadConfig } from "../config.js";
 import { createWebhookEndpoint } from "./create.js";
 import { backoffDelayMs, runDispatchPass } from "./dispatcher.js";
 import { verifySignature } from "./sign.js";
+import { sendTestWebhookEvent } from "./testSend.js";
 import { WEBHOOK_DELIVERY_ID_HEADER, WEBHOOK_SIGNATURE_HEADER } from "./headers.js";
 import type { WebhookTransport, WebhookTransportRequest } from "./transport.js";
 
@@ -87,6 +88,7 @@ interface DeliveryRow {
   response_status_code: number | null;
   signature: string | null;
   delivery_event_id: string;
+  response_body_excerpt: string | null;
 }
 
 async function getDelivery(outboxEventId: string, endpointId: string): Promise<DeliveryRow> {
@@ -192,7 +194,9 @@ test("failing endpoint: backoff/exhaustion sequence across repeated runDispatchP
   assert.equal(delivery.status, "pending");
   assert.equal(delivery.attempt_count, 1);
   assert.equal(delivery.response_status_code, 500);
-  const expectedDelay1 = backoffDelayMs(1, config);
+  // AUD-044: the exact value is only defined for a fixed jitter source; the
+  // production default (Math.random) lands anywhere in the ±10 % band.
+  const expectedDelay1 = backoffDelayMs(1, config, () => 0.5);
   assert.equal(expectedDelay1, 1000);
   const actualDelay1 = delivery.next_attempt_at.getTime() - Date.now();
   assert.ok(Math.abs(actualDelay1 - expectedDelay1) < 3000, `expected ~${expectedDelay1}ms, got ${actualDelay1}ms`);
@@ -212,7 +216,9 @@ test("failing endpoint: backoff/exhaustion sequence across repeated runDispatchP
   delivery = await getDelivery(String(outboxEvent.id), endpoint.id);
   assert.equal(delivery.status, "pending");
   assert.equal(delivery.attempt_count, 2);
-  const expectedDelay2 = backoffDelayMs(2, config);
+  // AUD-044: the exact value is only defined for a fixed jitter source; the
+  // production default (Math.random) lands anywhere in the ±10 % band.
+  const expectedDelay2 = backoffDelayMs(2, config, () => 0.5);
   assert.equal(expectedDelay2, 2000);
   const actualDelay2 = delivery.next_attempt_at.getTime() - Date.now();
   assert.ok(Math.abs(actualDelay2 - expectedDelay2) < 3000, `expected ~${expectedDelay2}ms, got ${actualDelay2}ms`);
@@ -336,7 +342,11 @@ test("no backfill: an endpoint registered after an event was enqueued never gets
   assert.equal(captured.length, 1);
 });
 
-test("per-row isolation: one poisoned row (undecryptable secret) throwing before the transport call never blocks another merchant's healthy delivery in the same pass, and the poisoned row's state is left unchanged rather than crashing the pass", async () => {
+// AUD-053: this test used to assert the poisoned row stays untouched (attempt 0,
+// next_attempt_at unchanged). That is the starvation bug: such rows keep the
+// oldest next_attempt_at and fill every Step B batch. Corrected, not deleted:
+// the throw now counts as a failed attempt with backoff.
+test("per-row isolation: one poisoned row (undecryptable secret) throwing before the transport call never blocks another merchant's healthy delivery in the same pass, and the poisoned row is backed off as a failed attempt rather than crashing the pass", async () => {
   const poisonedMerchantId = await createMerchant("poisoned");
   const poisonedEndpoint = await createEndpoint(poisonedMerchantId, "http://poisoned.test/webhook");
   const poisonedOutboxEvent = await enqueueCaptured(poisonedMerchantId);
@@ -374,15 +384,16 @@ test("per-row isolation: one poisoned row (undecryptable secret) throwing before
   assert.equal(healthyDelivery.attempt_count, 1);
   assert.equal(healthyDelivery.response_status_code, 200);
 
-  // The poisoned row was created by Step A (its existence itself proves
-  // Step A ran), but Step B's per-row throw must leave it completely
-  // untouched: still pending, zero attempts, never attempted, unmodified
-  // next_attempt_at so it is simply retried next pass.
+  // The poisoned row was created by Step A; Step B's per-row throw is
+  // recorded as a failed attempt: still pending, one attempt, backed off,
+  // no response status (never reached a receiver), the error kept.
   const poisonedDelivery = await getDelivery(String(poisonedOutboxEvent.id), poisonedEndpoint.id);
   assert.equal(poisonedDelivery.status, "pending");
-  assert.equal(poisonedDelivery.attempt_count, 0);
+  assert.equal(poisonedDelivery.attempt_count, 1);
   assert.equal(poisonedDelivery.response_status_code, null);
   assert.equal(poisonedDelivery.signature, null);
+  assert.ok(poisonedDelivery.next_attempt_at.getTime() > Date.now(), "backed off");
+  assert.match(String(poisonedDelivery.response_body_excerpt), /not attempted/);
 
   // Running a second pass proves the process is still alive and the
   // dispatcher keeps functioning platform-wide afterward, not just that
@@ -390,7 +401,7 @@ test("per-row isolation: one poisoned row (undecryptable secret) throwing before
   await assert.doesNotReject(runDispatchPass(pool, transport, config));
   const poisonedAfterSecondPass = await getDelivery(String(poisonedOutboxEvent.id), poisonedEndpoint.id);
   assert.equal(poisonedAfterSecondPass.status, "pending");
-  assert.equal(poisonedAfterSecondPass.attempt_count, 0);
+  assert.equal(poisonedAfterSecondPass.attempt_count, 1, "not due yet, so not re-attempted");
 });
 
 test("a disabled endpoint gets no delivery row for a new event", async () => {
@@ -407,4 +418,110 @@ test("a disabled endpoint gets no delivery row for a new event", async () => {
     endpoint.id,
   ]);
   assert.equal(rows.rows.length, 0);
+});
+
+test("AUD-044: backoff jitter stays inside ±10 % of the exponential step, and the production default is random", () => {
+  // Fixed sources pin the band edges exactly.
+  assert.equal(backoffDelayMs(1, config, () => 0), 900);
+  assert.equal(backoffDelayMs(1, config, () => 1), 1100);
+  assert.equal(backoffDelayMs(3, config, () => 0.5), 4000);
+  // Default source: every value in band, and not all identical (jitter is on).
+  const seen = new Set<number>();
+  for (let i = 0; i < 200; i++) {
+    const d = backoffDelayMs(2, config);
+    assert.ok(d >= 1800 && d <= 2200, `attempt-2 delay ${d} outside 1800..2200`);
+    seen.add(d);
+  }
+  assert.ok(seen.size > 1, "production backoff must keep its jitter");
+});
+
+/** What a receiver does: HMAC-SHA256 over `${t}.${rawBody}` with its secret. */
+function receiverAccepts(rawBody: string, header: string, secret: string): boolean {
+  const t = /t=(\d+)/.exec(header)?.[1];
+  const v1 = /v1=([0-9a-f]+)/.exec(header)?.[1];
+  if (!t || !v1) return false;
+  return createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex") === v1;
+}
+
+test("AUD-020: the dispatcher signs exactly the bytes it sends (raw-body HMAC verifies at the receiver)", async () => {
+  const merchantId = await createMerchant("raw-body-sign");
+  const url = `http://fake-receiver.test/raw-${randomUUID()}`;
+  const endpoint = await createEndpoint(merchantId, url);
+  await enqueueCaptured(merchantId);
+  const seen: Array<{ body: string; signature: string }> = [];
+  let calls = 0;
+  const transport: WebhookTransport = async (req) => {
+    if (req.url !== url) return { statusCode: 200, body: "" };
+    seen.push({ body: req.body, signature: req.headers[WEBHOOK_SIGNATURE_HEADER]! });
+    calls++;
+    return { statusCode: calls === 1 ? 500 : 200, body: "" }; // first attempt fails -> retry
+  };
+  await runDispatchPass(pool, transport, config);
+  await pool.query(`UPDATE webhook_deliveries SET next_attempt_at = now() WHERE endpoint_id = $1`, [endpoint.id]);
+  await runDispatchPass(pool, transport, config);
+  assert.equal(seen.length, 2, "one attempt and one retry");
+  for (const s of seen) {
+    assert.ok(receiverAccepts(s.body, s.signature, endpoint.secret), "receiver-side HMAC over the raw body");
+  }
+  assert.equal(seen[0]!.body, seen[1]!.body, "a retry re-sends identical bytes");
+});
+
+test("AUD-020: test-send signs exactly the bytes it sends", async () => {
+  const merchantId = await createMerchant("raw-body-test-send");
+  const endpoint = await createEndpoint(merchantId, `http://fake-receiver.test/ts-${randomUUID()}`);
+  let captured: { body: string; signature: string } | undefined;
+  const transport: WebhookTransport = async (req) => {
+    captured = { body: req.body, signature: req.headers[WEBHOOK_SIGNATURE_HEADER]! };
+    return { statusCode: 200, body: "ok" };
+  };
+  await sendTestWebhookEvent(pool, config, transport, { merchantId, endpointId: endpoint.id });
+  assert.ok(captured);
+  assert.ok(receiverAccepts(captured.body, captured.signature, endpoint.secret), "receiver-side HMAC over the raw body");
+});
+
+test("AUD-053: a full batch of unsendable rows ahead in the queue does not starve a later healthy delivery", async () => {
+  const poisonedMerchantId = await createMerchant("starve-poison");
+  const poisonedEndpoint = await createEndpoint(poisonedMerchantId, `http://poisoned.test/starve-${randomUUID()}`);
+  await pool.query(`UPDATE webhook_endpoints SET secret_ciphertext = $1 WHERE id = $2`, [
+    Buffer.from("too-short").toString("base64"),
+    poisonedEndpoint.id,
+  ]);
+  for (let i = 0; i < 105; i++) await enqueueCaptured(poisonedMerchantId); // > the 100-row Step B batch
+  await runDispatchPass(pool, alwaysRespond(200), config); // creates the rows; first batch attempted
+  // Put every poisoned row at the head of the queue, as a long-running stuck set would be.
+  await pool.query(
+    `UPDATE webhook_deliveries SET next_attempt_at = now() - interval '1 hour' WHERE endpoint_id = $1 AND status = 'pending'`,
+    [poisonedEndpoint.id],
+  );
+
+  const healthyMerchantId = await createMerchant("starve-healthy");
+  const healthyUrl = `http://healthy.test/starve-${randomUUID()}`;
+  const healthyEndpoint = await createEndpoint(healthyMerchantId, healthyUrl);
+  const healthyEvent = await enqueueCaptured(healthyMerchantId);
+  let delivered = 0;
+  const transport: WebhookTransport = async (req) => {
+    if (req.url === healthyUrl) delivered++;
+    return { statusCode: 200, body: "ok" };
+  };
+  for (let pass = 0; pass < 3 && delivered === 0; pass++) await runDispatchPass(pool, transport, config);
+  assert.equal(delivered, 1, "the healthy delivery got through within 3 passes");
+  assert.equal((await getDelivery(String(healthyEvent.id), healthyEndpoint.id)).status, "succeeded");
+});
+
+test("AUD-053: an unsendable row is exhausted at webhookMaxAttempts and keeps the error, not retried forever", async () => {
+  const merchantId = await createMerchant("poison-exhaust");
+  const endpoint = await createEndpoint(merchantId, `http://poisoned.test/exhaust-${randomUUID()}`);
+  await pool.query(`UPDATE webhook_endpoints SET secret_ciphertext = $1 WHERE id = $2`, [
+    Buffer.from("too-short").toString("base64"),
+    endpoint.id,
+  ]);
+  const event = await enqueueCaptured(merchantId);
+  for (let i = 0; i < 3; i++) {
+    await runDispatchPass(pool, alwaysRespond(200), config);
+    await pool.query(`UPDATE webhook_deliveries SET next_attempt_at = now() WHERE endpoint_id = $1`, [endpoint.id]);
+  }
+  const d = await getDelivery(String(event.id), endpoint.id);
+  assert.equal(d.status, "exhausted");
+  assert.equal(d.attempt_count, 3);
+  assert.match(String(d.response_body_excerpt), /not attempted/);
 });

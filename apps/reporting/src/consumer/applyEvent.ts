@@ -167,7 +167,9 @@ export async function applyDailySummaryRollup(
   occurredAt: Date,
   amountFils: number,
 ): Promise<void> {
-  const summaryDate = occurredAt.toISOString().slice(0, 10);
+  // AUD-047: merchant_daily_volume is keyed by the Asia/Bahrain date (0027,
+  // decision Q6); the UTC date put 00:00–03:00 Bahrain on the previous day.
+  const summaryDate = toBahrainDateString(occurredAt);
   await client.query(
     `INSERT INTO merchant_daily_volume (merchant_id, volume_date, refund_count, refund_gross_fils, last_updated_at)
      VALUES ($1, $2, 1, $3, now())
@@ -196,6 +198,13 @@ export async function applyEvent(client: PoolClient, row: OutboxEventRow): Promi
       return applyTransactionVoided(client, row);
     case "settlement.batch_closed":
       return applyBatchClosed(client, row);
+    case "refund.succeeded": {
+      // FP-300 PR 3: refund.succeeded payload (processRefund.ts) carries
+      // merchantId and this refund's amountFils; bucketed by the event's
+      // Bahrain date like captures.
+      const payload = row.payload as { merchantId: string; amountFils: number };
+      return applyDailySummaryRollup(client, payload.merchantId, row.created_at, payload.amountFils);
+    }
     default:
       throw new Error(`applyEvent: unhandled event_type ${row.event_type}`);
   }
