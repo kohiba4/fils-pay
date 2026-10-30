@@ -10,6 +10,8 @@ import { ApiError, describeError } from "../../api/client.js";
 import { RequireRole } from "../../auth/RequireRole.js";
 import { bhd, dash, dateTime } from "../../format.js";
 import type { TransactionDto, TransactionEventDto } from "../../types.js";
+import { RefundDrawer } from "./RefundDrawer.js";
+import { useAttemptKey } from "./useAttemptKey.js";
 
 type LoadState =
   | { kind: "loading" }
@@ -27,7 +29,6 @@ type LoadState =
  * this page does not undo that by guessing.
  */
 // MK: timeline renders refund events fine
-// FH: RefundDrawer import removed 2026-06 until the route exists
 export function TransactionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -36,6 +37,7 @@ export function TransactionDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureAmount, setCaptureAmount] = useState("");
+  const captureAttempt = useAttemptKey(captureAmount);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -72,9 +74,10 @@ export function TransactionDetailPage() {
       // everything still outstanding — its own documented default. Computing
       // the remainder here would just be a second, staler copy of that rule.
       const input = trimmed === "" ? {} : { amountFils: Number(trimmed) };
-      // A fresh Idempotency-Key per click, including a retry after a decline —
-      // same discipline as the checkout page's submit handler.
-      await captureTransaction(id, input, crypto.randomUUID());
+      // One Idempotency-Key per capture attempt: a retry of the same amount
+      // after an error or a lost response replays instead of capturing again.
+      await captureTransaction(id, input, captureAttempt.key);
+      captureAttempt.consumed();
       setCaptureOpen(false);
       setCaptureAmount("");
       // Refetch rather than patch: a capture wrote a new transaction_events
@@ -151,6 +154,8 @@ export function TransactionDetailPage() {
         <dd>{bhd(txn.amountFils)}</dd>
         <dt>Captured amount</dt>
         <dd>{bhd(txn.capturedFils)}</dd>
+        <dt>Refunded amount</dt>
+        <dd>{bhd(txn.refundedFils ?? 0)}</dd>
         <dt>Currency</dt>
         <dd>{txn.currency}</dd>
         <dt>Reference</dt>
@@ -165,12 +170,8 @@ export function TransactionDetailPage() {
         <dd>{dateTime(txn.createdAt)}</dd>
       </dl>
 
-      {/* Capture and void are hidden from `support` as a UX choice — a support
-          agent looks things up, they don't move money. Unlike the
-          reconciliation page, this hide is NOT backed by a matching
-          server-side role check: the API gates capture/void at "any
-          authenticated merchant actor". Do not mistake a hidden button here for a security
-          boundary. */}
+      {/* Capture, void and refund are hidden from `support`. The API enforces the
+          same rule (owner/finance only, AUD-046 / FP-300); this hide only mirrors it. */}
       <RequireRole allow={["owner", "finance"]}>
         {capturable || voidable ? (
           <div className="dash-actions">
@@ -221,6 +222,8 @@ export function TransactionDetailPage() {
           </div>
         ) : null}
       </RequireRole>
+
+      <RefundDrawer txn={txn} onRefunded={load} />
 
       <h2>Event timeline</h2>
       <table className="dash-table">
