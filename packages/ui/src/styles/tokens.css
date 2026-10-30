@@ -1,0 +1,135 @@
+/* FilsPay design tokens — one dark theme shared by apps/web (dashboard and
+   hosted checkout) and apps/admin. Every component reads these variables;
+   nothing hard-codes a colour.
+
+   Direction: near-black plum base with soft violet/lavender light, rounded
+   plum-charcoal panels, soft-white type. Yellow stays the FilsPay brand
+   colour and the colour of primary actions only. Violet, lavender, pink and
+   cyan are decorative (backdrop, charts, selected states) and are never used
+   to say "error", "warning" or "paid" — semantic colours below do that.
+
+   Contrast was checked against the surfaces each colour actually sits on
+   (WCAG 2.x relative luminance):
+     text-muted   #8F899F on surface 5.4:1, on surface-raised 5.0:1 (never
+                  used for small text on surface-hover, 4.49:1)
+     text-secondary #BFB9CF on surface 9.6:1
+     accent       #F0B90B with text-on-accent #0B0A0F 10.9:1
+     lavender     #C4B5FD on surface 9.9:1 (selected states, focus ring)
+     success      #0ECB81 on surface-raised 8.0:1
+     danger-text  #FF707F on surface-raised 6.4:1 (#F6465D for fills/icons)
+     danger-solid #D9304A with white text 4.7:1
+     info         #6EA8FF on surface-raised 7.0:1
+     warning      #FFA940 on surface-raised 8.9:1 */
+:root {
+  color-scheme: dark;
+
+  --fp-bg: #0b0a0f;
+  --fp-surface: #16141c;
+  --fp-surface-raised: #1e1b26;
+  --fp-surface-hover: #282433;
+  --fp-surface-sunken: #110f16;
+  --fp-border: #27242f;
+  --fp-border-strong: #3a3645;
+  --fp-hairline: rgba(255, 255, 255, 0.06);
+  --fp-highlight-edge: rgba(255, 255, 255, 0.05);
+
+  --fp-text: #f2eff8;
+  --fp-text-secondary: #bfb9cf;
+  --fp-text-muted: #8f899f;
+  --fp-text-on-accent: #0b0a0f;
+  /* Pale pink-lavender for the one figure a card wants you to read first. */
+  --fp-text-highlight: #f6d7f3;
+
+  /* Brand + primary actions. */
+  --fp-accent: #f0b90b;
+  --fp-accent-hover: #f8d12f;
+  --fp-accent-pressed: #d9a60a;
+  --fp-accent-soft: rgba(240, 185, 11, 0.12);
+
+  /* Decorative (backdrop, charts, selected/active states). */
+  --fp-violet: #8b5cf6;
+  --fp-violet-deep: #6d3fe0;
+  --fp-lavender: #c4b5fd;
+  --fp-lavender-soft: rgba(196, 181, 253, 0.12);
+  --fp-lavender-line: rgba(196, 181, 253, 0.3);
+  --fp-pink: #f0a3d8;
+  --fp-cyan: #3cc8f0;
+
+  /* Semantic. */
+  --fp-success: #0ecb81;
+  --fp-success-soft: rgba(14, 203, 129, 0.12);
+  --fp-danger: #f6465d;
+  --fp-danger-text: #ff707f;
+  --fp-danger-soft: rgba(246, 70, 93, 0.12);
+  --fp-danger-solid: #d9304a;
+  --fp-danger-solid-hover: #c42840;
+  --fp-warning: #ffa940;
+  --fp-warning-soft: rgba(255, 169, 64, 0.12);
+  --fp-info: #6ea8ff;
+  --fp-info-soft: rgba(110, 168, 255, 0.12);
+  --fp-neutral-soft: rgba(143, 137, 159, 0.16);
+
+  --fp-impersonation-bg: #a3172e;
+
+  --fp-font-sans: "IBM Plex Sans", Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --fp-font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --fp-text-xs: 0.75rem; /* 12px — smallest size used anywhere */
+  --fp-text-sm: 0.8125rem; /* 13px */
+  --fp-text-md: 0.875rem; /* 14px — body */
+  --fp-text-lg: 1rem; /* 16px */
+  --fp-text-xl: 1.25rem; /* 20px */
+  --fp-text-2xl: 1.5rem; /* 24px */
+  --fp-text-3xl: 2rem; /* 32px */
+  --fp-text-4xl: 2.75rem; /* 44px */
+
+  --fp-space-1: 0.25rem;
+  --fp-space-2: 0.5rem;
+  --fp-space-3: 0.75rem;
+  --fp-space-4: 1rem;
+  --fp-space-5: 1.25rem;
+  --fp-space-6: 1.5rem;
+  --fp-space-8: 2rem;
+  --fp-space-10: 2.5rem;
+  --fp-space-12: 3rem;
+
+  --fp-radius-xs: 6px;
+  --fp-radius-sm: 8px;
+  --fp-radius-md: 12px; /* inputs, buttons, nested controls */
+  --fp-radius-lg: 16px; /* nested panels, tiles, nav groups */
+  --fp-radius-xl: 24px; /* dashboard cards, dialogs */
+
+  --fp-shadow-card: inset 0 1px 0 var(--fp-highlight-edge), 0 24px 48px -32px rgba(0, 0, 0, 0.85);
+  --fp-shadow-pop: inset 0 1px 0 var(--fp-highlight-edge), 0 18px 40px rgba(0, 0, 0, 0.55);
+  --fp-shadow-dialog: inset 0 1px 0 var(--fp-highlight-edge), 0 32px 80px rgba(0, 0, 0, 0.7);
+
+  --fp-ease: cubic-bezier(0.2, 0, 0, 1);
+  --fp-dur-fast: 120ms;
+  --fp-dur: 160ms;
+  --fp-dur-slow: 200ms;
+
+  --fp-z-header: 20;
+  --fp-z-banner: 30;
+  --fp-z-popover: 35;
+  --fp-z-drawer: 40;
+  --fp-z-dialog: 50;
+  --fp-z-toast: 60;
+
+  --fp-header-h: 72px;
+  --fp-sidebar-w: 264px;
+  --fp-content-max: 1320px;
+}
+
+@media (max-width: 1279px) {
+  :root {
+    --fp-sidebar-w: 232px;
+  }
+}
+
+@media (max-width: 639px) {
+  :root {
+    --fp-header-h: 60px;
+  }
+}
