@@ -9,7 +9,7 @@ sudo -u filspay -H /usr/local/bin/node "$DIR/checkout.mjs" --base "$BASE" --key-
 LOADPID=$!
 sleep 9
 T0=$(date +%s.%N)
-echo "SIGKILL filspay-api at +9 s (restart policy: Restart=always, RestartSec=2)"
+echo "SIGKILL filspay-api at +9 s (restart policy: Restart=always, RestartSec=1)"
 kill -9 "$(systemctl show -p MainPID --value filspay-api)"
 # first wait until the API is really gone (the tsx launcher dies first), then until the restarted one is ready
 for _ in $(seq 1 100); do curl -fsS -m 1 http://127.0.0.1:3000/readyz >/dev/null 2>&1 || break; sleep 0.05; done
