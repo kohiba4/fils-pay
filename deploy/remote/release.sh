@@ -106,7 +106,7 @@ if [ ! -f "$CERT" ]; then
   chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 fi
 # overload ceiling (tuned from the load test; override with GLOBAL_RATE / BURST / MAXCONN in the environment of deploy)
-sed -e "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" -e "s/__GLOBAL_RATE__/${GLOBAL_RATE:-150}/" -e "s/__BURST__/${BURST:-60}/" -e "s/__MAXCONN__/${MAXCONN:-200}/" "$REL/deploy/nginx/filspay.conf" > /etc/nginx/sites-available/filspay
+sed -e "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" -e "s/__GLOBAL_RATE__/${GLOBAL_RATE:-200}/" -e "s/__BURST__/${BURST:-100}/" -e "s/__MAXCONN__/${MAXCONN:-45}/" "$REL/deploy/nginx/filspay.conf" > /etc/nginx/sites-available/filspay
 nginx -t
 systemctl reload nginx
 
