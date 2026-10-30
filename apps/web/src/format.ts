@@ -1,4 +1,4 @@
-import { formatBhd, toFils } from "@filspay/money";
+import { ZERO_FILS, addFils, formatBhd, toFils } from "@filspay/money";
 
 /**
  * The dashboard's display helpers. Deliberately thin: `bhd` delegates to
@@ -14,6 +14,27 @@ export function bhd(amountFils: number): string {
   return `${formatBhd(toFils(amountFils, { allowNegative: true }))} BHD`;
 }
 
+/** Exact integer-fils total of a list of amounts, via @filspay/money's
+ *  `addFils` — for window totals on the overview. Never floats. */
+export function sumFils(amounts: number[]): number {
+  return amounts.reduce<number>((total, amount) => addFils(toFils(total, { allowNegative: true }), toFils(amount, { allowNegative: true })), ZERO_FILS);
+}
+
+const BAHRAIN_OFFSET_MS = 3 * 60 * 60 * 1000;
+const DAY_MS = 86_400_000;
+
+/**
+ * The analytics window "the last N Asia/Bahrain days", built exactly like
+ * apps/api's own default (routes/analytics.ts parseDateRange): from = today
+ * minus N days, to = tomorrow (exclusive), as YYYY-MM-DD Bahrain calendar
+ * dates. Bahrain has no DST, so a fixed +3h shift is exact — the same
+ * technique ReconciliationPage uses.
+ */
+export function bahrainWindow(daysBack: number, now: number = Date.now()): { from: string; to: string } {
+  const day = (offset: number) => new Date(now + BAHRAIN_OFFSET_MS + offset * DAY_MS).toISOString().slice(0, 10);
+  return { from: day(-daysBack), to: day(1) };
+}
+
 /** `—` for a null/absent value, so an empty table cell is visibly empty
  *  rather than ambiguously blank. */
 export function dash(value: string | number | null | undefined): string {
@@ -23,6 +44,16 @@ export function dash(value: string | number | null | undefined): string {
 /** Browser-local rendering, not Asia/Bahrain. */
 export function dateTime(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString() : "—";
+}
+
+/** The date half of `dateTime` — same browser-local rendering. */
+export function dateOnly(iso: string | null | undefined): string {
+  return iso ? new Date(iso).toLocaleDateString() : "—";
+}
+
+/** The time half of `dateTime` — same browser-local rendering. */
+export function timeOnly(iso: string | null | undefined): string {
+  return iso ? new Date(iso).toLocaleTimeString() : "—";
 }
 
 /**

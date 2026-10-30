@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Loading,
+  Metric,
+  PageHeader,
+} from "@filspay/ui";
 import { getReconciliation } from "../../api/settlement.js";
 import { ApiError, describeError } from "../../api/client.js";
-import { bhd } from "../../format.js";
+import { Money } from "../../components/Money.js";
 import type { ReconciliationReport } from "../../types.js";
 
 /**
@@ -67,83 +78,119 @@ export function ReconciliationPage() {
 
   if (forbidden) {
     return (
-      <section>
-        <h1>Reconciliation</h1>
-        <p className="dash-error">
-          You don&apos;t have permission to view this report — ask an owner or
-          finance user on your account.
-        </p>
-      </section>
+      <>
+        <PageHeader title="Reconciliation" />
+        <Card>
+          <EmptyState icon="lock" title="You don't have permission to view this report">
+            Ask an owner or finance user on your account.
+          </EmptyState>
+        </Card>
+      </>
     );
   }
 
   return (
-    <section>
-      <h1>Reconciliation</h1>
+    <>
+      <PageHeader
+        title="Reconciliation"
+        description="Checks that every captured fil is accounted for: either paid out in a settlement batch or still pending."
+      />
 
-      <form
-        className="dash-form dash-form-inline"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setApplied({ from, to });
-        }}
-      >
-        <label>
-          From
-          <input type="date" required value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label>
-          To (exclusive)
-          <input type="date" required value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
-        <button type="submit" className="dash-button" disabled={loading}>
-          {loading ? "Loading..." : "Run report"}
-        </button>
-      </form>
-
-      {error ? <p className="dash-error">{error}</p> : null}
-
-      {report ? (
-        <>
-          {/* A nonzero gap is shown as a nonzero gap. This page never rounds
-              it away, hides it behind a tolerance, or explains it as expected —
-              the endpoint reports honestly and so does this. */}
-          <p>
-            {report.explained ? (
-              <span className="dash-badge dash-badge-ok">Reconciled — no gap</span>
-            ) : (
-              <span className="dash-badge dash-badge-gap">Gap: {bhd(report.gapFils)}</span>
+      <div className="fp-stack">
+        <form
+          className="fp-toolbar"
+          aria-label="Report period"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setApplied({ from, to });
+          }}
+        >
+          <Field label="From">
+            {(props) => (
+              <input {...props} className="fp-input" type="date" required value={from} onChange={(e) => setFrom(e.target.value)} />
             )}
+          </Field>
+          <Field label="To (exclusive)">
+            {(props) => (
+              <input {...props} className="fp-input" type="date" required value={to} onChange={(e) => setTo(e.target.value)} />
+            )}
+          </Field>
+          <div className="fp-toolbar__actions">
+            <Button type="submit" variant="primary" loading={loading}>
+              {loading ? "Loading…" : "Run report"}
+            </Button>
+          </div>
+          <p className="dash-toolbar-note">
+            Dates are Asia/Bahrain business days. The default window is the last 30 days.
           </p>
+        </form>
 
-          <dl className="dash-dl">
-            <dt>Period</dt>
-            <dd>
-              {report.periodFrom} to {report.periodTo} (exclusive)
-            </dd>
-            <dt>Ledger merchant payable (net)</dt>
-            <dd>{bhd(report.ledgerMerchantPayableNetFils)}</dd>
-            <dt>Settlement net payout</dt>
-            <dd>{bhd(report.settlementNetPayoutFils)}</dd>
-            <dt>Pending, not yet batched</dt>
-            <dd>
-              {bhd(report.pendingUnbatchedFils)}
-              {report.refundTimingFils > 0 ? ` (includes refunds made in this period that no batch of the period has absorbed yet: ${bhd(report.refundTimingFils)})` : ""}
-              {report.refundTimingFils < 0 ? ` (includes refunds made earlier that a batch of this period absorbed: ${bhd(-report.refundTimingFils)})` : ""}
-            </dd>
-            <dt>Gap</dt>
-            <dd>{bhd(report.gapFils)}</dd>
-          </dl>
+        {error ? (
+          <Alert tone="danger" title="Couldn't run the report">
+            {error}
+          </Alert>
+        ) : null}
 
-          <p className="dash-muted">
-            Gap = ledger merchant payable − settlement net payout − pending
-            unbatched. A zero gap means every captured fil is accounted for in
-            either a settled batch or the pending queue.
-          </p>
-        </>
-      ) : null}
+        {loading && !report ? <Loading>Running report…</Loading> : null}
 
-      {loading && !report ? <p>Loading...</p> : null}
-    </section>
+        {report ? (
+          <>
+            {/* A nonzero gap is shown as a nonzero gap. This page never rounds
+                it away, hides it behind a tolerance, or explains it as expected —
+                the endpoint reports honestly and so does this. */}
+            <Card
+              title={
+                <span className="fp-num">
+                  {report.periodFrom} → {report.periodTo}
+                </span>
+              }
+              subtitle="Period end is exclusive."
+              actions={
+                report.explained ? (
+                  <Badge tone="success" icon="checkCircle">
+                    Reconciled — no gap
+                  </Badge>
+                ) : (
+                  <Badge tone="warning" icon="alert">
+                    Gap: <Money fils={report.gapFils} />
+                  </Badge>
+                )
+              }
+            >
+              <div className="dash-equation" aria-label="Gap equals ledger merchant payable minus settlement net payout minus pending unbatched">
+                <Metric label="Ledger merchant payable (net)" value={<Money fils={report.ledgerMerchantPayableNetFils} />} />
+                <span className="dash-equation__op" aria-hidden="true">−</span>
+                <Metric label="Settlement net payout" value={<Money fils={report.settlementNetPayoutFils} />} />
+                <span className="dash-equation__op" aria-hidden="true">−</span>
+                <Metric
+                  label="Pending, not yet batched"
+                  value={<Money fils={report.pendingUnbatchedFils} />}
+                  meta={
+                    report.refundTimingFils > 0 ? (
+                      <>
+                        Includes refunds made in this period that no batch of the period has absorbed yet:{" "}
+                        <Money fils={report.refundTimingFils} />
+                      </>
+                    ) : report.refundTimingFils < 0 ? (
+                      <>
+                        Includes refunds made earlier that a batch of this period absorbed:{" "}
+                        <Money fils={-report.refundTimingFils} />
+                      </>
+                    ) : undefined
+                  }
+                />
+                <span className="dash-equation__op" aria-hidden="true">=</span>
+                <Metric label="Gap" value={<Money fils={report.gapFils} />} accent={report.gapFils !== 0} />
+              </div>
+              <p className="fp-muted fp-small dash-equation__note">
+                Gap = ledger merchant payable − settlement net payout − pending unbatched. A zero gap
+                means every captured fil is accounted for in either a settled batch or the pending
+                queue.
+              </p>
+            </Card>
+          </>
+        ) : null}
+      </div>
+    </>
   );
 }

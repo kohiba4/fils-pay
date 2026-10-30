@@ -1,10 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import type { MouseEvent } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  ChipGroup,
+  EmptyState,
+  Field,
+  Icon,
+  PageHeader,
+  SkeletonRows,
+  Spinner,
+} from "@filspay/ui";
 import { listTransactions } from "../../api/transactions.js";
 import { describeError } from "../../api/client.js";
+import { Money } from "../../components/Money.js";
 import { Pagination } from "../../components/Pagination.js";
-import { bhd, dash, dateTime, dayStartIso } from "../../format.js";
-import { classNames, pluralize, truncateMiddle } from "../../utils/helpers.js";
+import { StatusBadge } from "../../components/StatusBadge.js";
+import { dash, dateOnly, dayStartIso, timeOnly } from "../../format.js";
+import { transactionStatus } from "../../status.js";
+import { pluralize, truncateMiddle } from "../../utils/helpers.js";
 import type { TransactionDto, TransactionStatus } from "../../types.js";
 
 const STATUSES: TransactionStatus[] = [
@@ -19,6 +35,13 @@ const STATUSES: TransactionStatus[] = [
 
 const PAGE_SIZE = 25;
 const SEARCH_DEBOUNCE_MS = 300;
+const COLUMNS = 6;
+
+/** Lets a mouse click anywhere on a row open it, without stealing clicks
+ *  from the links and buttons inside. Keyboard users use the row's link. */
+function isInteractive(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest("a, button, input, select, textarea, summary") !== null;
+}
 
 /**
  * `GET /v1/transactions`. Every control here is a real server-side
@@ -27,6 +50,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 // YA: from/to are UTC day starts, see dayStartIso
 export function TransactionListPage() {
+  const navigate = useNavigate();
   const [statuses, setStatuses] = useState<TransactionStatus[]>([]);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -37,6 +61,7 @@ export function TransactionListPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
 
   // Debounce only the text box — the checkbox/date controls fire immediately,
   // since those are discrete choices, not a stream of keystrokes.
@@ -62,6 +87,7 @@ export function TransactionListPage() {
           cursor ? [...previous, ...result.transactions] : result.transactions,
         );
         setNextCursor(result.nextCursor);
+        setLoadedOnce(true);
       } catch (err) {
         setError(describeError(err));
       } finally {
@@ -81,92 +107,176 @@ export function TransactionListPage() {
     );
   }
 
+  const filtersActive = statuses.length > 0 || from !== "" || to !== "" || searchInput.trim() !== "";
+
+  function clearFilters(): void {
+    setStatuses([]);
+    setFrom("");
+    setTo("");
+    setSearchInput("");
+    setSearch("");
+  }
+
+  function openRow(event: MouseEvent<HTMLTableRowElement>, id: string): void {
+    if (isInteractive(event.target) || window.getSelection()?.toString()) return;
+    navigate(`/dashboard/transactions/${id}`);
+  }
+
+  const firstLoad = loading && !loadedOnce;
+
   return (
-    <section>
-      <h1>Transactions</h1>
+    <>
+      <PageHeader
+        title="Transactions"
+        description="Card payments on this account. Every filter is applied by the server, so counts and pages stay accurate."
+      />
 
-      <fieldset className="dash-filters">
-        <legend>Status</legend>
-        {STATUSES.map((status) => (
-          <label key={status}>
-            <input
-              type="checkbox"
-              checked={statuses.includes(status)}
-              onChange={() => toggleStatus(status)}
-            />
-            {status}
-          </label>
-        ))}
-      </fieldset>
-
-      <fieldset className="dash-filters">
-        <legend>Filter</legend>
-        <label>
-          From
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label>
+      <div className="fp-stack">
+        <div className="fp-toolbar" role="search" aria-label="Filter transactions">
+          <Field label="Search" grow>
+            {(props) => (
+              <div className="fp-input-group">
+                <Icon name="search" size={16} className="fp-input-group__icon" />
+                <input
+                  {...props}
+                  className="fp-input"
+                  type="search"
+                  placeholder="Reference, acquirer reference, or transaction ID"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                />
+              </div>
+            )}
+          </Field>
+          <Field label="From">
+            {(props) => (
+              <input {...props} className="fp-input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            )}
+          </Field>
           {/* Exclusive, because the endpoint's own predicate is
               `occurred_at < to` — labelled rather than quietly shifted by a
               day here, which would make this page and the API disagree about
               what a filter means. */}
-          To (exclusive)
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
-        <label>
-          Search
-          <input
-            type="search"
-            placeholder="Reference, acquirer reference, or transaction id"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-        </label>
-      </fieldset>
+          <Field label="To (exclusive)">
+            {(props) => (
+              <input {...props} className="fp-input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            )}
+          </Field>
+          <div className="dash-toolbar-row">
+            <ChipGroup
+              legend="Status"
+              options={STATUSES}
+              selected={statuses}
+              onToggle={toggleStatus}
+              labelFor={(status) => transactionStatus(status).label}
+            />
+            {filtersActive ? (
+              <Button variant="ghost" size="sm" icon="close" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
+          <p className="dash-toolbar-note">Date filters start at 00:00 UTC on the chosen day.</p>
+        </div>
 
-      {error ? <p className="dash-error">{error}</p> : null}
+        {error ? (
+          <Alert
+            tone="danger"
+            title="Couldn't load transactions"
+            actions={
+              <Button size="sm" variant="secondary" icon="replay" onClick={() => void load(null)}>
+                Try again
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
+        ) : null}
 
-      <p>{pluralize(transactions.length, "transaction")} loaded</p>
-
-      <table className="dash-table">
-        <thead>
-          <tr>
-            <th>Occurred</th>
-            <th>Reference</th>
-            <th>Status</th>
-            <th>Authorized</th>
-            <th>Captured</th>
-            <th>Acquirer reference</th>
-          </tr>
-        </thead>
-        <tbody>
-          {transactions.map((txn) => (
-            <tr key={txn.id}>
-              <td>
-                <Link to={`/dashboard/transactions/${txn.id}`}>{dateTime(txn.occurredAt)}</Link>
-              </td>
-              <td>{dash(txn.reference)}</td>
-              <td>
-                <span className={classNames("dash-status", `dash-status-${txn.status}`)}>{txn.status}</span>
-              </td>
-              <td>{bhd(txn.amountFils)}</td>
-              <td>{bhd(txn.capturedFils)}</td>
-              <td>
-                <code>{truncateMiddle(txn.acquirerReference, 20)}</code>
-              </td>
-            </tr>
-          ))}
-          {transactions.length === 0 && !loading ? (
-            <tr>
-              <td colSpan={6}>No transactions match these filters.</td>
-            </tr>
+        <Card
+          flush
+          title="Results"
+          subtitle={loadedOnce ? `${pluralize(transactions.length, "transaction")} loaded` : "Loading…"}
+          actions={loading && loadedOnce ? <Spinner label="Refreshing" /> : undefined}
+        >
+          <div className="fp-table-wrap">
+            <table className="fp-table fp-table--hover fp-table--stack">
+              <caption className="fp-sr-only">Transactions</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Occurred</th>
+                  <th scope="col">Reference</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="fp-num">
+                    Authorized
+                  </th>
+                  <th scope="col" className="fp-num">
+                    Captured
+                  </th>
+                  <th scope="col">Acquirer reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {firstLoad ? <SkeletonRows columns={COLUMNS} /> : null}
+                {transactions.map((txn) => (
+                  <tr key={txn.id} className="dash-row-link" onClick={(event) => openRow(event, txn.id)}>
+                    <td className="fp-cell-head">
+                      <Link className="fp-table__primary" to={`/dashboard/transactions/${txn.id}`}>
+                        {dateOnly(txn.occurredAt)}
+                      </Link>
+                      <span className="fp-table__sub">{timeOnly(txn.occurredAt)}</span>
+                    </td>
+                    <td data-label="Reference">{dash(txn.reference)}</td>
+                    <td data-label="Status">
+                      <StatusBadge style={transactionStatus(txn.status)} raw={txn.status} />
+                    </td>
+                    <td data-label="Authorized" className="fp-num">
+                      <Money fils={txn.amountFils} />
+                    </td>
+                    <td data-label="Captured" className="fp-num">
+                      <Money fils={txn.capturedFils} />
+                    </td>
+                    <td data-label="Acquirer ref.">
+                      <code className="fp-mono" title={txn.acquirerReference}>
+                        {truncateMiddle(txn.acquirerReference, 20)}
+                      </code>
+                    </td>
+                  </tr>
+                ))}
+                {transactions.length === 0 && !loading && !error ? (
+                  <tr className="fp-table__empty">
+                    <td colSpan={COLUMNS}>
+                      {filtersActive ? (
+                        <EmptyState
+                          icon="filter"
+                          title="No transactions match these filters"
+                          action={
+                            <Button variant="secondary" size="sm" onClick={clearFilters}>
+                              Clear filters
+                            </Button>
+                          }
+                        >
+                          Try a wider date range or fewer statuses.
+                        </EmptyState>
+                      ) : (
+                        <EmptyState icon="receipt" title="No transactions yet">
+                          Payments made through your payment links and API appear here.
+                        </EmptyState>
+                      )}
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          {nextCursor ? (
+            <div className="fp-table-footer">
+              <span>Showing {pluralize(transactions.length, "transaction")}</span>
+              <Pagination nextCursor={nextCursor} loading={loading} onLoadMore={() => void load(nextCursor)} />
+            </div>
           ) : null}
-        </tbody>
-      </table>
-
-      {loading ? <p>Loading...</p> : null}
-
-      <Pagination nextCursor={nextCursor} loading={loading} onLoadMore={() => void load(nextCursor)} />
-    </section>
+        </Card>
+      </div>
+    </>
   );
 }

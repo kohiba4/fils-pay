@@ -1,3 +1,5 @@
+import { Button } from "@filspay/ui";
+
 /**
  * The shared "Load more" control for every keyset-paginated list page
  * (transactions, payment links, webhook deliveries, settlement batches).
@@ -19,8 +21,8 @@ export function Pagination({
 }) {
   if (!nextCursor) return null;
   return (
-    <button type="button" className="dash-button" onClick={onLoadMore} disabled={loading}>
-      {loading ? "Loading..." : "Load more"}
-    </button>
+    <Button variant="secondary" size="sm" onClick={onLoadMore} loading={loading} iconEnd="chevronDown">
+      {loading ? "Loading…" : "Load more"}
+    </Button>
   );
 }
