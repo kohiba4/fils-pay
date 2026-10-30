@@ -23,9 +23,11 @@ export async function verifyApiKey(pool: Pool, rawKey: string): Promise<ApiKeyCo
   if (!row) return null;
 
   // Fire-and-forget: don't let a `last_used_at` write failure ever block or
-  // fail the request it's merely instrumenting.
+  // fail the request it's merely instrumenting. At most once a minute per key: writing it on every request put a row
+  // update (and WAL flush) behind every API call and showed up as the top write under load (capacity work).
   void pool
-    .query(`UPDATE api_keys SET last_used_at = now() WHERE id = $1`, [row.id])
+    .query(`UPDATE api_keys SET last_used_at = now()
+        WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')`, [row.id])
     .catch(() => {});
 
   return { merchantId: row.merchant_id, apiKeyId: row.id };

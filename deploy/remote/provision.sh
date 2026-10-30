@@ -45,6 +45,28 @@ sudo -u postgres psql -v ON_ERROR_STOP=1 -tAc "SELECT 1 FROM pg_roles WHERE roln
 sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE filspay PASSWORD '${pass}'" >/dev/null
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='filspay'" | grep -q 1 \
   || sudo -u postgres createdb -O filspay filspay
+# capacity (docs/audit/LOAD-TEST.md): no NOTIFY inside business transactions in production; consumers poll (see migration 0093)
+sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER DATABASE filspay SET filspay.outbox_notify = 'off'" >/dev/null
+
+echo "== postgres tuning for 2 GB RAM / 1 vCPU (durability untouched: synchronous_commit stays on)"
+PGVER=$(ls /etc/postgresql | sort -n | tail -1)
+sudo mkdir -p /etc/postgresql/$PGVER/main/conf.d
+sudo tee /etc/postgresql/$PGVER/main/conf.d/filspay.conf >/dev/null <<'PGCONF'
+shared_buffers = 256MB
+effective_cache_size = 1GB
+work_mem = 4MB
+maintenance_work_mem = 64MB
+wal_compression = on
+max_wal_size = 2GB
+checkpoint_timeout = 15min
+random_page_cost = 1.1
+# group commits: under load many transactions share one disk flush (each commit still waits for it, so nothing acknowledged is lost)
+commit_delay = 1000
+commit_siblings = 4
+max_connections = 100
+log_min_duration_statement = 500
+PGCONF
+sudo systemctl restart postgresql
 sudo -u postgres psql -tAc "SHOW listen_addresses"
 
 echo "== firewall: ssh first, then web ports"

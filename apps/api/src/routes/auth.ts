@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { verifyPassword } from "../auth/passwords.js";
 import { issueChallenge, verifyOtpCode } from "../auth/otp.js";
+import {
+  MERCHANT_PLANE,
+  beginTotpLogin,
+  consumeSessionAttempt,
+  verifyAndConsumeTotp,
+} from "../auth/totp.js";
 import { requireSession } from "../auth/middleware.js";
 import { sendOtpCode } from "../auth/notifier.js";
 import {
@@ -79,6 +85,37 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     // (0003), so re-resolving by email could pick another tenant's user.
     const recipient = user;
 
+    if (app.config.secondFactor === "totp") {
+      // Authenticator-app second factor: no code is generated, sent or returned. A first login also receives the secret to
+      // enrol (only until the first correct code confirms it).
+      const enrollment = await beginTotpLogin(
+        app.db,
+        MERCHANT_PLANE,
+        user.id,
+        user.email,
+        app.config.totpIssuer,
+        app.config.webhookSecretEncryptionKey,
+      );
+      const { rawToken } = await withTransaction(app.db, (client) =>
+        createPendingSession(client, {
+          merchantUserId: user.id,
+          otpChallengeId: null,
+          ttlMinutes: app.config.pendingSessionTtlMinutes,
+          ipAddress: request.ip,
+          userAgent: (request.headers["user-agent"] as string | undefined) ?? null,
+        }),
+      );
+      reply.setCookie(app.config.cookieName, rawToken, {
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+        secure: app.config.cookieSecure,
+        maxAge: app.config.pendingSessionTtlMinutes * 60,
+      });
+      reply.code(200).send({ otpRequired: true, method: "totp", ...(enrollment ? { totpEnrollment: enrollment } : {}) });
+      return;
+    }
+
     const { code, expiresAt, rawToken } = await withTransaction(app.db, async (client) => {
       const challenge = await issueChallenge(client, {
         merchantUserId: recipient.id,
@@ -130,6 +167,46 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         throw new UnauthorizedError("no_pending_session");
       }
       const pending = await lookupPendingSession(app.db, rawToken);
+
+      if (app.config.secondFactor === "totp") {
+        if (!pending) {
+          throw new UnauthorizedError("no_pending_session");
+        }
+        // 5 tries per pending session, then the session dies; 10 wrong codes per ACCOUNT lock it for 15 minutes;
+        // a code that was accepted once is never accepted again (replay).
+        await consumeSessionAttempt(app.db, MERCHANT_PLANE, pending.sessionId, () =>
+          revokeSession(app.db, pending.sessionId),
+        );
+        await verifyAndConsumeTotp(
+          app.db,
+          MERCHANT_PLANE,
+          pending.merchantUserId,
+          String(code).replace(/\s+/g, ""),
+          app.config.webhookSecretEncryptionKey,
+        );
+        const promoted = await withTransaction(app.db, async (client) => {
+          await promoteSession(client, pending.sessionId, app.config.sessionTtlHours);
+          const result = await client.query<{ merchant_id: string; role: "owner" | "finance" | "support" }>(
+            `SELECT merchant_id, role FROM merchant_users WHERE id = $1`,
+            [pending.merchantUserId],
+          );
+          return result.rows[0];
+        });
+        if (!promoted) {
+          throw new Error("otp/verify: merchant_users row disappeared mid-transaction");
+        }
+        // the cookie was issued with the short pending lifetime; re-issue it for the full session
+        reply.setCookie(app.config.cookieName, rawToken, {
+          httpOnly: true,
+          path: "/",
+          sameSite: "lax",
+          secure: app.config.cookieSecure,
+          maxAge: app.config.sessionTtlHours * 3_600,
+        });
+        reply.code(200).send({ authenticated: true, merchantId: promoted.merchant_id, role: promoted.role });
+        return;
+      }
+
       if (!pending || !pending.otpChallengeId) {
         throw new UnauthorizedError("no_pending_session");
       }
@@ -198,6 +275,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         throw new Error("otp/verify: merchant_users row disappeared mid-transaction");
       }
 
+      // AUD-060: the login cookie carried the short pending lifetime; re-issue it for the full session (admin already did).
+      reply.setCookie(app.config.cookieName, rawToken, {
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+        secure: app.config.cookieSecure,
+        maxAge: app.config.sessionTtlHours * 3_600,
+      });
       reply.code(200).send({
         authenticated: true,
         merchantId: merchantUserResult.merchant_id,
@@ -212,6 +297,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
    * resend never resets the guess budget.
    */
   app.post("/otp/resend", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (app.config.secondFactor === "totp") {
+      throw new BadRequestError("resend_not_supported", "authenticator codes are generated by your app; there is nothing to resend");
+    }
     const rawToken = request.cookies[app.config.cookieName];
     if (!rawToken) {
       throw new UnauthorizedError("no_pending_session");

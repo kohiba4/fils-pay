@@ -171,21 +171,51 @@ export function LoginPage() {
         </form>
       ) : (
         <form onSubmit={(e) => void handleOtp(e)} className="dash-form">
-          <p>
-            A one-time code was issued for <strong>{email}</strong>. It expires at{" "}
-            {new Date(step.challenge.otpExpiresAt).toLocaleTimeString()}.
-          </p>
-          {step.challenge.devOtpCode ? (
-            <p className="dash-muted">
-              Development code: <code>{step.challenge.devOtpCode}</code>
-            </p>
-          ) : null}
+          {step.challenge.method === "totp" ? (
+            <>
+              {step.challenge.totpEnrollment ? (
+                <div className="dash-notice" data-testid="totp-enrollment">
+                  <p>
+                    <strong>Set up your authenticator app</strong> (Google Authenticator, Microsoft Authenticator, Authy, 1Password…) for{" "}
+                    <strong>{email}</strong>:
+                  </p>
+                  <ol>
+                    <li>In the app choose <em>Add account</em> → <em>Enter a setup key</em>.</li>
+                    <li>
+                      Key: <code data-testid="totp-secret">{step.challenge.totpEnrollment.secret}</code> (time-based, 6 digits)
+                    </li>
+                    <li>
+                      On a phone you can also <a href={step.challenge.totpEnrollment.otpauthUri}>open the setup link</a>.
+                    </li>
+                  </ol>
+                  <p className="dash-muted">This key is shown once. Then enter the 6-digit code the app shows.</p>
+                </div>
+              ) : (
+                <p>
+                  Enter the 6-digit code from your authenticator app for <strong>{email}</strong>.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p>
+                A one-time code was issued for <strong>{email}</strong>. It expires at{" "}
+                {step.challenge.otpExpiresAt ? new Date(step.challenge.otpExpiresAt).toLocaleTimeString() : "soon"}.
+              </p>
+              {step.challenge.devOtpCode ? (
+                <p className="dash-muted">
+                  Development code: <code>{step.challenge.devOtpCode}</code>
+                </p>
+              ) : null}
+            </>
+          )}
           <label>
-            One-time code
+            {step.challenge.method === "totp" ? "6-digit code" : "One-time code"}
             <input
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
+              maxLength={step.challenge.method === "totp" ? 7 : undefined}
               required
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -194,14 +224,16 @@ export function LoginPage() {
           <button type="submit" className="dash-button" disabled={submitting}>
             {submitting ? "Verifying..." : "Verify"}
           </button>
-          <button
-            type="button"
-            className="dash-button"
-            disabled={submitting}
-            onClick={() => void handleResend()}
-          >
-            Resend code
-          </button>
+          {step.challenge.method === "totp" ? null : (
+            <button
+              type="button"
+              className="dash-button"
+              disabled={submitting}
+              onClick={() => void handleResend()}
+            >
+              Resend code
+            </button>
+          )}
           <button type="button" className="dash-button" onClick={() => backToCredentials(null)}>
             Start over
           </button>

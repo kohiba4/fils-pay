@@ -64,6 +64,8 @@ code path, not yet run · **LATENT** real code defect but unreachable today (ref
 | AUD-050 | BUG (traced) | medium | `calculateCreditFeeReversal(base, merchants.mdr_bps)` ignores `fee_schedules`; the stored default is only the fallback. Not yet reproduced as a test; what a goodwill reversal should mean is a finance call. |
 | AUD-051 | BUG (traced) | high | `toISOString()` (UTC) applied to a browser-local date; wrong day for 3 hours after Bahrain midnight. Only a default value; low impact. |
 | AUD-053 | BUG (runtime) | high | Reproduced: 134 stuck pending deliveries made 6 dispatcher tests fail; Step B orders by next_attempt_at and never advances an unattemptable row. Track B. |
+| AUD-061 | BUG (runtime) | high | Measured: `EXPLAIN ANALYZE` shows a Seq Scan over the whole ledger (42,943 rows filtered, 7.4 ms) per capture; no index exists on ledger_entries.transaction_id. Index added, test added. |
+| AUD-060 | BUG (traced) | high | The merchant verify route never re-issues the cookie (the admin one does, and the authors asked why in a comment). Test added. |
 | AUD-054 | BUG (runtime) | high | Batch close selected capture events only; latent until FP-300 PR 1 made refunds possible. Reproduced by the settlement tests, fixed in PR 2. |
 | AUD-055 | BUG (runtime) | high | Found in the AUD-023 sibling sweep: `randomFromAlphabet` (payment-link tokens) used `Math.random`; a constant `Math.random` made all tokens identical on main. ARCHITECTURE's "crypto.randomBytes" claim is false. Track B. |
 | AUD-056 | BUG (runtime) | high | Public link read returned `api_keys.key_hash` as merchantIntegrationId (test on main shows the hash in the body). 192-bit keys, so not a usable credential; Low. Track B. |

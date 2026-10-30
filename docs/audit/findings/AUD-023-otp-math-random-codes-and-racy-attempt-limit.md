@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Medium** |
 | Category | authn |
-| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) |
+| Status | **fixed** (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch |
 
 ## Summary
@@ -55,3 +55,6 @@ constant `Math.random` — all 5 failed. After: 5/5 pass. **Tests changed:** non
 
 ## Related
 AUD-001
+
+
+> **Update 2026-10-30 (Q16):** the residual items (resend resets the guess budget; endless new pending sessions) disappear in production: the second factor is now TOTP, which has no resend, a 5-try budget per session and a 10-try lock per account (`auth/totp.ts`). The OTP code path remains only for non-production use.

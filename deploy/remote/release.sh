@@ -33,13 +33,24 @@ ACQUIRER_CALLBACK_SIGNING_SECRET=$(openssl rand -hex 32)
 WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
 CHECKOUT_BASE_URL=https://${PUBLIC_HOST}
 COOKIE_SECURE=true
-OTP_DEV_EXPOSE=true
+SECOND_FACTOR=totp
 REFUNDS_ENABLED=true
 KYC_UPLOAD_DIR=/var/lib/filspay/kyc
 NODE_OPTIONS=--max-old-space-size=384
+WEBHOOK_POLL_INTERVAL_MS=1000
+REPORTING_POLL_INTERVAL_MS=2000
 ENV
   chown root:filspay "$ENVF"; chmod 640 "$ENVF"
 fi
+# connection pool size override (tuned from the load test): PG_POOL_MAX=30 ./deploy/deploy.sh
+[ -z "${PG_POOL_MAX:-}" ] || sed -i "s/^PG_POOL_MAX=.*/PG_POOL_MAX=${PG_POOL_MAX}/" "$ENVF"
+# no NOTIFY in production (migration 0093): the consumers poll quickly instead
+grep -q '^WEBHOOK_POLL_INTERVAL_MS=' "$ENVF" || echo 'WEBHOOK_POLL_INTERVAL_MS=1000' >> "$ENVF"
+grep -q '^REPORTING_POLL_INTERVAL_MS=' "$ENVF" || echo 'REPORTING_POLL_INTERVAL_MS=2000' >> "$ENVF"
+# the second factor is an authenticator app (TOTP): no code is ever returned by the API, so drop the old dev switch
+sed -i '/^OTP_DEV_EXPOSE=/d' "$ENVF"
+sed -i '/^SECOND_FACTOR=/d' "$ENVF"
+echo 'SECOND_FACTOR=totp' >> "$ENVF"   # forced on every release: production never runs the emailed/dev OTP
 
 echo "== dependencies (only the workspaces the server runs)"
 sudo -u filspay -H bash -o pipefail -c "cd '$REL' && npm ci -w apps/api -w apps/reporting -w packages/money -w packages/events --include-workspace-root --no-audit --no-fund 2>&1 | tail -3"
@@ -55,6 +66,8 @@ if [ "${SEED:-0}" = "1" ] && [ "$(sudo -u postgres psql -tAc 'SELECT count(*) FR
   sudo -u filspay -H bash -o pipefail -c "set -a; . '$ENVF'; set +a; cd '$REL' && npm run seed" > /etc/filspay/seed-output.txt 2>&1
   chmod 600 /etc/filspay/seed-output.txt
   tail -2 /etc/filspay/seed-output.txt | sed -E 's/fp_[a-z]+_[A-Za-z0-9_-]+/<key redacted>/g'
+  echo "== the seed's passwords are public in the repo: replacing them with random ones (file: /var/lib/filspay/demo-credentials.txt, mode 600)"
+  sudo -u filspay -H bash -o pipefail -c "set -a; . '$ENVF'; set +a; cd '$REL' && ./node_modules/.bin/tsx deploy/remote/set-demo-passwords.ts /var/lib/filspay/demo-credentials.txt"
 fi
 
 echo "== services (units, nginx), then switch the release"
@@ -94,7 +107,8 @@ if [ ! -f "$CERT" ]; then
   printf '#!/bin/sh\nsystemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
   chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 fi
-sed "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" "$REL/deploy/nginx/filspay.conf" > /etc/nginx/sites-available/filspay
+# overload ceiling (tuned from the load test; override with GLOBAL_RATE / BURST / MAXCONN in the environment of deploy)
+sed -e "s/@PUBLIC_HOST@/$PUBLIC_HOST/g" -e "s/__GLOBAL_RATE__/${GLOBAL_RATE:-200}/" -e "s/__BURST__/${BURST:-100}/" -e "s/__MAXCONN__/${MAXCONN:-60}/" -e "s/__NEWCONN__/${NEWCONN:-25}/" "$REL/deploy/nginx/filspay.conf" > /etc/nginx/sites-available/filspay
 nginx -t
 systemctl reload nginx
 

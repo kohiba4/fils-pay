@@ -1,4 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  ADMIN_PLANE,
+  beginTotpLogin,
+  consumeSessionAttempt,
+  verifyAndConsumeTotp,
+} from "../auth/totp.js";
 import { verifyPassword } from "../adminAuth/passwords.js";
 import { issueAdminChallenge, verifyOtpCode } from "../adminAuth/otp.js";
 import { sendAdminOtpCode } from "../adminAuth/notifier.js";
@@ -71,6 +77,35 @@ export async function adminAuthRoutes(app: FastifyInstance): Promise<void> {
       throw new UnauthorizedError("invalid_credentials");
     }
 
+    if (app.config.secondFactor === "totp") {
+      const enrollment = await beginTotpLogin(
+        app.db,
+        ADMIN_PLANE,
+        user.id,
+        user.email,
+        `${app.config.totpIssuer} Admin`,
+        app.config.webhookSecretEncryptionKey,
+      );
+      const { rawToken } = await withTransaction(app.db, (client) =>
+        createPendingAdminSession(client, {
+          adminUserId: user.id,
+          otpChallengeId: null,
+          ttlMinutes: app.config.adminPendingSessionTtlMinutes,
+          ipAddress: request.ip,
+          userAgent: (request.headers["user-agent"] as string | undefined) ?? null,
+        }),
+      );
+      reply.setCookie(app.config.adminCookieName, rawToken, {
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+        secure: app.config.cookieSecure,
+        maxAge: app.config.adminPendingSessionTtlMinutes * 60,
+      });
+      reply.code(200).send({ otpRequired: true, method: "totp", ...(enrollment ? { totpEnrollment: enrollment } : {}) });
+      return;
+    }
+
     const { code, expiresAt, rawToken } = await withTransaction(app.db, async (client) => {
       const challenge = await issueAdminChallenge(client, {
         adminUserId: user.id,
@@ -119,6 +154,42 @@ export async function adminAuthRoutes(app: FastifyInstance): Promise<void> {
       throw new UnauthorizedError("no_pending_session");
     }
     const pending = await lookupPendingAdminSession(app.db, rawToken);
+
+    if (app.config.secondFactor === "totp") {
+      if (!pending) {
+        throw new UnauthorizedError("no_pending_session");
+      }
+      await consumeSessionAttempt(app.db, ADMIN_PLANE, pending.adminSessionId, () =>
+        revokeAdminSession(app.db, pending.adminSessionId),
+      );
+      await verifyAndConsumeTotp(
+        app.db,
+        ADMIN_PLANE,
+        pending.adminUserId,
+        String(code).replace(/\s+/g, ""),
+        app.config.webhookSecretEncryptionKey,
+      );
+      const promotedAdmin = await withTransaction(app.db, async (client) => {
+        await promoteAdminSession(client, pending.adminSessionId, app.config.adminSessionTtlHours);
+        const result = await client.query<{ role: AdminRole }>(`SELECT role FROM admin_users WHERE id = $1`, [
+          pending.adminUserId,
+        ]);
+        return result.rows[0];
+      });
+      if (!promotedAdmin) {
+        throw new Error("admin otp/verify: admin_users row disappeared mid-transaction");
+      }
+      reply.setCookie(app.config.adminCookieName, rawToken, {
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+        secure: app.config.cookieSecure,
+        maxAge: app.config.adminSessionTtlHours * 3_600,
+      });
+      reply.code(200).send({ authenticated: true, adminUserId: pending.adminUserId, role: promotedAdmin.role });
+      return;
+    }
+
     if (!pending || !pending.otpChallengeId) {
       throw new UnauthorizedError("no_pending_session");
     }

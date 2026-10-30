@@ -17,7 +17,7 @@ export async function createPendingSession(
   client: PoolClient,
   params: {
     merchantUserId: string;
-    otpChallengeId: string;
+    otpChallengeId: string | null; // null in TOTP mode: there is no challenge row
     ttlMinutes: number;
     ipAddress?: string | null;
     userAgent?: string | null;

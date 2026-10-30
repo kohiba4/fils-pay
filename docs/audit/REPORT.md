@@ -4,20 +4,20 @@
 
 ## 1. Summary
 
-- Findings: **54** (Critical 5, High 21, Medium 18, Low 10); fixed so far: **24**.
-- By verdict: BUG 38, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, UNVERIFIED 4.
+- Findings: **61** (Critical 5, High 24, Medium 21, Low 11); fixed so far: **51**.
+- By verdict: BUG 46, DESIGN 2, HYGIENE 3, LATENT 6, LIMITATION 1, NOT A BUG 1, UNVERIFIED 2.
 - Not every report item is a defect: see section 4 (design/limitation/hygiene) and section 6 (ruled out).
 - Key decisions: [DECISIONS.md](DECISIONS.md). Work split: [TEAM.md](TEAM.md).
 
 | ID | Title | Severity | Verdict | Status | Owner |
 |---|---|---|---|---|---|
-| [AUD-001](#aud-001) | Pre-OTP (pending) session authenticates every merchant route | Critical | BUG (traced) | confirmed (trace) | B |
-| [AUD-002](#aud-002) | OTP/session issued to another tenant's user (cross-merchant `findOtpRecipient`) | Critical | BUG (traced) | confirmed (trace) | B |
+| [AUD-001](#aud-001) | Pre-OTP (pending) session authenticates every merchant route | Critical | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-002](#aud-002) | OTP/session issued to another tenant's user (cross-merchant `findOtpRecipient`) | Critical | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-003](#aud-003) | Refund path has no transaction-ownership check (IDOR across merchants) | Critical | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
 | [AUD-004](#aud-004) | Concurrent refunds both succeed (no lock across acquirer call; stale `refunded_fils`) — FP-209 | Critical | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-006](#aud-006) | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | BUG (traced) | confirmed (trace) | B |
+| [AUD-006](#aud-006) | Payment link charged twice: stale reservation re-claimed while first capture is in flight (incident 2026-05-14) | Critical | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-005](#aud-005) | Refund ceiling is authorized − refunded, not captured − refunded | High | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-007](#aud-007) | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | BUG (traced) | confirmed (trace) | B |
+| [AUD-007](#aud-007) | Expired payment link payable via client-supplied `submittedAt` — FP-187 | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-008](#aud-008) | Net payout computed in float32 (`NetPayableFils`) | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-009](#aud-009) | Split payouts: independent per-child rounding over- or under-allocates the batch net | High | BUG (runtime) | fixed (merged into main; historical stranded fils not repaired) | A |
 | [AUD-010](#aud-010) | Scheme file `amount` rounded half-up from untruncated gross; residue never journaled | High | BUG (runtime) | fixed (merged into main; historical files already sent are not corrected) | A |
@@ -29,42 +29,49 @@
 | [AUD-016](#aud-016) | Fee computed differently at capture vs settlement (discount, order, tier) | High | BUG (traced) | confirmed (trace) | A |
 | [AUD-017](#aud-017) | Platform volume counter is int32 (Go) / INTEGER (DB) and overflows | High | BUG (runtime) | fixed (merged into main; the tier approval question remains open) | A |
 | [AUD-018](#aud-018) | Duplicate payout notifications and duplicate disbursement records (incident 2026-08-21) | High | BUG (runtime) | partly fixed: duplicate `settlement.paid` events fixed (merged into main); duplicate disbursement records (dispatcher, Track B) still open | A |
-| [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | confirmed (trace) | B |
-| [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | confirmed (trace) | B |
-| [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | confirmed (trace) | B |
+| [AUD-020](#aud-020) | Outbound webhook signature computed over different bytes than sent — FP-240 | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | B |
+| [AUD-021](#aud-021) | Inbound acquirer callback signature: optional by default, no freshness, re-serialized body, non-constant-time compare | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) | B |
+| [AUD-022](#aud-022) | Merchant A can cancel merchant B's payment link (IDOR) | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-026](#aud-026) | Migrations 0054/0055 fail on a fresh database (and occupy numbers reserved for v2) | High | BUG (runtime) | fixed (merged into main) | A |
 | [AUD-027](#aud-027) | Refund inserts violate the 0070 reason constraint — refunds always 500 | High | BUG (runtime) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | confirmed (trace) | B |
-| [AUD-053](#aud-053) | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | BUG (runtime) | confirmed (runtime) | B |
+| [AUD-046](#aud-046) | Capture and void have no role gate: support users and impersonating admins can move money | High | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-053](#aud-053) | Webhook deliveries that cannot be attempted stay due forever and starve the dispatcher | High | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | B |
 | [AUD-054](#aud-054) | Refunds never reach a payout: batch close ignores refunds | High | BUG (runtime) | partially fixed (branch `feat/FP-300-settlement-refunds`): refunds now reduce the payout; recovery of a negative net is open (Q13, finance); the route stays OFF by default until then | A |
-| [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | confirmed (trace) | B |
-| [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | confirmed (trace) | B |
-| [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | confirmed (trace) — doc conflict | B |
+| [AUD-057](#aud-057) | Webhook transport follows redirects (SSRF past the https-only rule) and reads unbounded responses | High | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally; review pending) | B |
+| [AUD-059](#aud-059) | Reporting scope accepts any split child: cross-tenant transaction read | High | BUG (runtime) | open: not fixed (found by the independent review of the Track B batch, 2026-10-30; present unchanged on `main` af8e9c9) | B |
+| [AUD-061](#aud-061) | Capture scans the whole ledger several times: no index on `ledger_entries.entry_group_id` or `transaction_id` (nor `holds.transaction_id`) | High | BUG (runtime) | fixed (branch `feat/totp`, migration 0094) | A |
+| [AUD-019](#aud-019) | Acquirer callbacks are not deduplicated — FP-201 (reopened) | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-023](#aud-023) | OTP: Math.random codes and racy attempt limit | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) | B |
+| [AUD-024](#aud-024) | Impersonation grants write access (super_admin→owner, finance→finance); any admin can start one | Medium | DESIGN (decided to change) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) | B |
 | [AUD-025](#aud-025) | Daily close runs ~03:15 Bahrain, not 00:15 | Medium | BUG (traced) | fixed (merged into main) | A |
-| [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
+| [AUD-028](#aud-028) | 0072 refund summary view joins `t.id = r.id` (always empty) | Medium | LATENT | fixed (merged with PR #27/#28) (migration 0083; no reader yet; review pending) | FP-300 (shared) |
 | [AUD-029](#aud-029) | Refund fee reversal can exceed the fee charged | Medium | LATENT (fixed in FP-300 PR 1) | fixed (branch `feat/FP-300-refund-core`) | FP-300 (shared) |
-| [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | confirmed (trace) | FP-300 (shared) |
+| [AUD-030](#aud-030) | `refund.succeeded` produced but never delivered (no dispatcher type, no envelope) | Medium | LATENT | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | FP-300 (shared) |
 | [AUD-031](#aud-031) | Admin merchant page shows 245 bps while payments are charged 225 bps: display orders by created_at | Medium | BUG (runtime) | fixed (merged into main) | A |
-| [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | confirmed (trace) | B |
+| [AUD-032](#aud-032) | Test merchants pushed into real settlement by an admin tool | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-034](#aud-034) | Ledger immutability not enforced | Medium | BUG (runtime) | fixed (merged into main; TRUNCATE and the application role's privileges still need an ops change) | A |
 | [AUD-035](#aud-035) | Ops/deploy hazards: missing Dockerfiles, broken dev key, prod mode without token, exposed DB, committed secret | Medium | BUG (runtime/ops) | confirmed (runtime + read) | Deploy (TBD) |
 | [AUD-036](#aud-036) | Adjustment import has no duplicate-submit protection | Medium | BUG (traced) | fixed (branch `fix/AUD-036-import-duplicate-guard`) | A |
-| [AUD-038](#aud-038) | Admin API-key rotation never revokes the old key | Medium | BUG (traced) | confirmed (trace) | B |
-| [AUD-039](#aud-039) | Second-approver check on credits compares display names | Medium | UNVERIFIED | suspected | B |
-| [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | UNVERIFIED | suspected (runtime failure, cause not yet traced) | B |
-| [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | suspected | B |
+| [AUD-038](#aud-038) | Admin API-key rotation never revokes the old key | Medium | BUG (traced) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-039](#aud-039) | Second-approver check on credits compares display names | Medium | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-041](#aud-041) | Reporting consumer drops merchant_id on real events (4 failing tests) | Medium | NOT A BUG (test pollution) | disproven as a production defect; test-fixture pollution repaired (verified locally; review pending) | B |
+| [AUD-042](#aud-042) | Unbounded memory in exports/archives (large export DoS) | Medium | UNVERIFIED | fixed (merged with PR #27/#28) (measured and verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 | [AUD-048](#aud-048) | Cache and ledger define the balance differently: a rebuild is double counted at the next batch close | Medium | BUG (runtime) | confirmed (runtime; repro committed as `TestRepro_AUD048_*`) | A |
 | [AUD-050](#aud-050) | Manual credit MDR reversal uses the fallback rate, not the rate that was charged | Medium | BUG (traced) | confirmed (trace) | A |
+| [AUD-055](#aud-055) | Payment-link tokens (and the shared random helper) use Math.random | Medium | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-058](#aud-058) | Reporting consumer halts when a batch closes on a day with no rollup row | Medium | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) | B |
+| [AUD-060](#aud-060) | Merchant dashboard login cookie expires after 10 minutes even though the session lasts 12 hours | Medium | BUG (traced) | fixed (branch `feat/totp`) | A |
 | [AUD-033](#aud-033) | Lifetime payout estimate is float32/REAL (drifts) | Low | BUG (low impact) | fixed (branch `fix/AUD-033-payout-estimate-integer`) | A |
 | [AUD-037](#aud-037) | 'Adjust balance' writes the cache only; ADMIN.md says it is journaled | Low | DESIGN | by design (ADR-0006); documentation fixed (docs/ADMIN.md corrected), no code change | A |
-| [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | suspected | B |
-| [AUD-043](#aud-043) | Slow settlement summary query | Low | UNVERIFIED | suspected | B |
-| [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | suspected | B |
+| [AUD-040](#aud-040) | Webhook dispatcher Step B has no row claim (multi-replica double send) | Low | LIMITATION | deferred: limitation under the supported single-replica deployment (no change) | B |
+| [AUD-043](#aud-043) | Slow settlement summary query | Low | UNVERIFIED | fixed (merged with PR #27/#28) (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) | B |
+| [AUD-044](#aud-044) | Flaky dispatcher backoff test (jitter) | Low | HYGIENE | fixed (merged with PR #27/#28) (test-only change; verified locally; review pending) | B |
 | [AUD-045](#aud-045) | Seed prints raw API keys; 'production' seed dump committed | Low | HYGIENE | confirmed (runtime + read) | A |
-| [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | confirmed (trace) / suspected (UTC part) | B |
+| [AUD-047](#aud-047) | `/v1/reporting/export-summary` has no auth hook (crashes with 500); UTC date used in a Bahrain-bucketed rollup | Low | BUG (traced, low) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) | B |
 | [AUD-049](#aud-049) | `settlement rebuild-balances --merchant` prints a rebuilt value but never writes the cache | Low | BUG (traced) | fixed (branch `fix/AUD-049-rebuild-one-merchant`) | A |
 | [AUD-051](#aud-051) | Admin console default run date is the wrong day for 3 hours after Bahrain midnight | Low | BUG (traced) | fixed (branch `fix/AUD-051-admin-default-date`) | A |
 | [AUD-052](#aud-052) | Settlement fee tests depend on the global volume-tier counter (intermittent failures) | Low | HYGIENE | fixed (merged into main) | A |
+| [AUD-056](#aud-056) | Public payment-link read returns the merchant's API key hash | Low | BUG (runtime) | fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) | B |
 
 ## 2. Bugs (by severity)
 
@@ -73,7 +80,7 @@
 
 - Severity: **Critical** · Category: authn · Owner: B
 - Verdict: **BUG (traced)** (confidence high): `lookupSession` reads the `live_sessions` view and never tests `authenticated`; 0012 states every auth query must. Track B to reproduce.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/02-AUD-001.patch
 
 **Where**
 
@@ -97,6 +104,13 @@ Trace: login → `createPendingSession(authenticated=false)` → cookie set → 
 
 Add `AND s.authenticated = true` to `lookupSession` (smallest, root cause at the single shared lookup). Do not change the view (other readers).
 
+**Re-attack and side notes**
+
+- Pending cookie refused on the `requireMerchantAuth` surface (`/v1/transactions`) and the legacy `requireSession` surface (`/v1/merchants/:id/api-keys`): both 401.
+- The same cookie works after a correct `/v1/auth/otp/verify` (flow preserved).
+- Only one authenticated-session lookup exists (`lookupSession`); `lookupPendingSession` already filters `authenticated = false`. Admin sessions already test `authenticated = true`.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; `lookupSession` is the only merchant session lookup.
+
 **Related:** AUD-002, AUD-023
 
 _Source file: [findings/AUD-001-pre-otp-pending-session-authenticates-every-merchant-route.md](findings/AUD-001-pre-otp-pending-session-authenticates-every-merchant-route.md)_
@@ -106,7 +120,7 @@ _Source file: [findings/AUD-001-pre-otp-pending-session-authenticates-every-merc
 
 - Severity: **Critical** · Category: authn / tenant isolation · Owner: B
 - Verdict: **BUG (traced)** (confidence high): login re-resolves the OTP recipient by email across all merchants; 0003 allows duplicate emails and 0011 says no code resolves a challenge by email.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/03-AUD-002.patch
 
 **Where**
 
@@ -129,6 +143,13 @@ Trace: auth.ts:84 `const recipient = await findOtpRecipient(app.db, email) ?? us
 **Fix**
 
 Use the authenticated `user` row; delete the cross-merchant lookup (keep `users.ts` export only if referenced elsewhere).
+
+**Re-attack and side notes**
+
+- Pending session row bound to the verified user; OTP verify returns the own merchant and the own role (`finance`, while the other tenant's user is `owner`).
+- The other tenant's password does not log in at the own merchant (401).
+- Resend already used `pending.merchantUserId`; admin login uses globally unique admin emails (unaffected).
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; `findOtpRecipient` has no callers left (dead code, delete later).
 
 **Related:** AUD-001
 
@@ -217,7 +238,7 @@ _Source file: [findings/AUD-004-concurrent-refunds-both-succeed-no-lock-across-a
 
 - Severity: **Critical** · Category: race / money · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Matches the incident exactly (>60 s first attempt, finalize answers 200 on 0 rows). The postmortem's callback theory is wrong: callbacks never touch links.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch
 
 **Where**
 
@@ -240,6 +261,20 @@ Trace + incident data: every double had a first attempt > 60 s and 16/17 txns ha
 **Fix**
 
 Make finalize ownership-safe and never answer success for a lost race: the claimer records its own `reserved_at` token; finalize/re-claim key on it; if finalize matches 0 rows, void/refund the capture and return 409. Exact minimal design to agree in Phase 2.
+
+**Re-attack and side notes**
+
+- Slow capture + second payer: second gets 409, never authorizes; one captured transaction; link paid with it.
+- Slow authorize + second payer: one wins, the other gets 409 from the unique index; one captured transaction.
+- Crash before capture: next payer voids the abandoned authorization and pays once.
+- Crash after capture: next payer gets 409 already paid; the link records the earlier capture; no new authorization.
+- Declined capture: own authorization voided, link active again, next payer succeeds.
+- **Limits:** not exactly-once at the acquirer. A request that loses at the database after its acquirer authorization
+  leaves an uncaptured hold on that card until the acquirer releases it (no charge). A merchant cancel that lands while a
+  capture is running leaves a captured transaction on a canceled link; the request now returns 409 `needsReview` and
+  logs it instead of claiming success. Historical double charges (incident 2026-05-14) are not linkable by this column.
+- Coordination: `authorize.ts` and `void.ts` are shared payments files (additive changes); tell @kohiba4.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (all 5 concurrency tests fail on main: second payer 200 instead of 409). No double-capture path and no credit for an uncaptured payment found. **Open, non-blocking (review):** (1) `releaseReservation` (`pay.ts` `WHERE id = $1 AND status = 'reserved'`) is not owner-checked, so a losing request can reopen the link while the winner's capture is in flight; the next payer then reaches the acquirer before the unique index refuses (authorization hold on that card, 409); (2) a same-Idempotency-Key retry after a crash before capture now gets 409 `not_capturable` (recovery voided its own auth); main captured once; API clients only; (3) a capture 502 (outcome unknown) voids the auth and reopens the link (main also reopened); (4) the unique-index race loser's acquirer authorization is not logged. Untested: the `needsReview` 409 path; transactions authorized by pre-0080 code during a deploy have a NULL link id.
 
 **Related:** AUD-007, postmortem-2026-05
 
@@ -289,7 +324,7 @@ _Source file: [findings/AUD-005-refund-ceiling-is-authorized-refunded-not-captur
 
 - Severity: **High** · Category: trust boundary · Owner: B
 - Verdict: **BUG (traced)** (confidence high): ARCHITECTURE documents client-clock expiry as a feature, but the brief (FP-187) calls it untrusted input. Treated as a bug.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/06-AUD-006-007.patch
 
 **Where**
 
@@ -312,6 +347,14 @@ Trace: claim `AND expires_at > $3` with `$3 = new Date(input.submittedAt)`.
 **Fix**
 
 Ignore `submittedAt` for the decision; compare with DB `now()`.
+
+**Re-attack and side notes**
+
+- Backdated by 1 hour and to 2020 on an expired link: 410, no authorization, link unchanged.
+- Future instant on a live link: pays (200). Unparseable / empty value: server clock (unit tests).
+- `status.ts` (public read) already used server time, so read and pay now agree.
+- Boundary: expiry is a strict `expires_at > now` at the API clock; not tested at the exact millisecond.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; the changed `pay.test.ts` test is a correction (it asserted the client clock decides expiry). Stale text left: route comment `routes/paymentLinks.ts:35-37` ("ignored unless … API key": there is no API-key path), `ARCHITECTURE.md:79`, the 0020 note. The code uses the API server clock, not DB `now()` (tracker wording).
 
 **Related:** AUD-006
 
@@ -823,7 +866,7 @@ _Source file: [findings/AUD-018-duplicate-payout-notifications-and-duplicate-dis
 
 - Severity: **High** · Category: integration / security · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Signs canonical JSON but sends the JSONB re-serialization.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/10-AUD-020.patch
 
 **Where**
 
@@ -847,6 +890,14 @@ Trace; branch ya/sign-raw (deleted) intended "sign the exact bytes we send".
 
 Serialize once; sign and send that exact string.
 
+**Re-attack and side notes**
+
+- First attempt and retry: both verify over the raw body; identical bytes on retry.
+- Test-send: verifies over the raw body.
+- Body format changes from Postgres key order to sorted keys. Receivers that verified by re-sorting (RUNBOOK workaround)
+  still verify; receivers that parsed field values are unaffected. RUNBOOK's re-sort advice can be dropped by the integrator.
+- Independent skeptical review: **pending**.
+
 **Related:** AUD-021
 
 _Source file: [findings/AUD-020-outbound-webhook-signature-computed-over-different-bytes-tha.md](findings/AUD-020-outbound-webhook-signature-computed-over-different-bytes-tha.md)_
@@ -856,7 +907,7 @@ _Source file: [findings/AUD-020-outbound-webhook-signature-computed-over-differe
 
 - Severity: **High** · Category: authn · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Missing signature accepted by default, no timestamp check, non-constant-time compare.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/09-AUD-021.patch
 
 **Where**
 
@@ -880,6 +931,15 @@ Trace.
 
 Require signature (fail closed), check |now − t| ≤ 300 s, HMAC raw body, `timingSafeEqual`.
 
+**Re-attack and side notes**
+
+- Raw bytes with different whitespace/key order: accepted when signed over those bytes; altered bytes: 401.
+- Truncated, non-hex, wrong-timestamp, missing `t`, garbage header: 401, never 500.
+- Production with no override: unsigned callbacks refused (config test). Integrator: ARCHITECTURE.md's env table still
+  lists `ACQUIRER_CALLBACK_REQUIRE_SIGNATURE` default `false`.
+- No secret rotation support (single secret); not requested by any document.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (raw-bytes test); replay argument holds while the only callback type appends a note. **Open, non-blocking:** signatures are required by default only when `NODE_ENV=production` (`parseNodeEnv` maps e.g. `staging` to development: unsigned callbacks accepted); `ACQUIRER_CALLBACK_REQUIRE_SIGNATURE=false` is still honoured in production; `ARCHITECTURE.md:96` still says the default is false; revisit before any state-changing callback type.
+
 **Related:** AUD-019, AUD-020
 
 _Source file: [findings/AUD-021-inbound-acquirer-callback-signature-optional-by-default-no-f.md](findings/AUD-021-inbound-acquirer-callback-signature-optional-by-default-no-f.md)_
@@ -889,7 +949,7 @@ _Source file: [findings/AUD-021-inbound-acquirer-callback-signature-optional-by-
 
 - Severity: **High** · Category: authz · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Cancel updates `WHERE id` without merchant. Confirmed by chat claim.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/04-AUD-022.patch
 
 **Where**
 
@@ -912,6 +972,13 @@ Trace. Chat claim TRUE.
 **Fix**
 
 Add `AND merchant_id = $2` (and in the lookup), pass the authenticated merchant.
+
+**Re-attack and side notes**
+
+- B on its own path with A's link id: 404 `payment_link_not_found`; A's link still `active`, `canceled_at` null.
+- B on A's path: 403 (existing path check).
+- A can still cancel its own link (204); existing happy/404/409 cancel test unchanged and passing.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it.
 
 **Related:** AUD-003
 
@@ -1004,7 +1071,7 @@ _Source file: [findings/AUD-027-refund-inserts-violate-the-0070-reason-constrain
 
 - Severity: **High** · Category: authz · Owner: B
 - Verdict: **BUG (traced)** (confidence high): No role gate on capture/void; MK's "enforced in requireMerchantAuth" comment is false.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch
 
 **Where**
 
@@ -1028,6 +1095,16 @@ Trace of routes/transactions.ts and requireMerchantAuth. Regression test to add:
 
 Add `requireMerchantRole('owner','finance')` to capture, void (and the refund route in FP-300); API keys keep full authority by design.
 
+**Re-attack and side notes**
+
+- Support session: capture and void 403; status, captured amount, events, ledger and outbox rows unchanged; reads still 200.
+- Impersonation grant of every admin role: capture and void 403, no side effects (with AUD-024).
+- Owner and finance sessions: capture and void 200. API key of the merchant: capture 200 (contract unchanged).
+- Other merchant's owner session or API key: 404, target unchanged.
+- Sibling sweep: every merchant write route is now role-gated except `POST /v1/reporting/saved-filters`
+  (`requireMerchantAuth` only; writes a saved report filter, no money). Left as is; noted for triage.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (4 of 6 fail on main as claimed). Other capture/void callers are `paymentLinks/pay.ts` system actions. Business check suggested: decision Q4 lets `finance` capture and void.
+
 **Related:** AUD-024, AUD-003
 
 _Source file: [findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md](findings/AUD-046-capture-and-void-have-no-role-gate-support-users-and-imperso.md)_
@@ -1037,7 +1114,7 @@ _Source file: [findings/AUD-046-capture-and-void-have-no-role-gate-support-users
 
 - Severity: **High** · Category: reliability / availability · Owner: B
 - Verdict: **BUG (runtime)** (confidence high): Reproduced: 134 stuck pending deliveries made 6 dispatcher tests fail; Step B orders by next_attempt_at and never advances an unattemptable row. Track B.
-- Status: confirmed (runtime) · Fix commit: —
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/11-AUD-053.patch
 
 **What is wrong**
 
@@ -1062,6 +1139,16 @@ Found while verifying FP-300: after many local test runs the disposable DB held 
 **Fix**
 
 Count a pre-transport failure as a failed attempt: increment `attempt_count`, set a backoff `next_attempt_at`, and exhaust at `webhookMaxAttempts` like any other failure (store the error in the response excerpt), so stuck rows leave the head of the queue. Make the poison-row test clean up after itself. Track B owns the dispatcher; related to AUD-018/019/020/021 which also edit this file.
+
+**Re-attack and side notes**
+
+- 105 unsendable rows ahead of a healthy one: healthy delivered within 3 passes.
+- Unsendable row: backed off after each pass, exhausted at max attempts with the error kept.
+- A transient pre-delivery failure still retries on the normal schedule. A rotated `WEBHOOK_SECRET_ENCRYPTION_KEY` now
+  exhausts affected rows after the retry budget instead of stalling everyone; operators must fix the key and replay
+  (the excerpt says why).
+- The poison-row test no longer leaks permanently-due rows into the shared test DB (the cause of the original repro).
+- Independent skeptical review: **pending**.
 
 **Related:** AUD-044, AUD-018, FP-300 (refund.succeeded webhook, PR 3)
 
@@ -1108,12 +1195,180 @@ Open points, stated rather than hidden: (1) **Q13 (finance)**: a negative net is
 
 _Source file: [findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md](findings/AUD-054-refunds-never-reach-a-payout-batch-close-ignores-refunds.md)_
 
+### AUD-057
+**Webhook transport follows redirects (SSRF past the https-only rule) and reads unbounded responses**
+
+- Severity: **High** · Category: SSRF / resource exhaustion · Owner: B
+- Verdict: **BUG (runtime)** (confidence high): Real-server test on main: a 302 from an https-allowed receiver was followed to an internal server and its body returned; 5 MB body buffered. Reachable by any merchant via test-send. Track B.
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch
+
+**What is wrong**
+
+New in Track B's adjacent-path pass (2026-10-30). `webhooks/transport.ts` used `fetch` with default redirect following and
+`response.text()`.
+
+**Where**
+
+apps/api/src/webhooks/transport.ts (`createFetchTransport`), reached from `webhooks/dispatcher.ts` and `webhooks/testSend.ts`;
+URL rule in `webhooks/create.ts` (https required in production; no host restriction).
+
+**Why it happens (root cause)**
+
+The only SSRF control is "https in production" (MK's comment "https-only in prod is our SSRF protection"). The transport
+comment "create.ts blocks private IPs, SSRF is handled upstream" is false: `create.ts` checks only the scheme. `fetch`
+follows 3xx by default, including https→http, so the control is bypassed by an https endpoint that redirects. The whole
+response body was buffered.
+
+**What it breaks (impact)**
+
+Any merchant owner or finance user (any onboarded merchant) registers an https URL they control, answers with a redirect
+to an internal http address (cloud metadata service, internal APIs), then reads up to 2,000 characters of the internal
+response via test-send (`POST …/webhook-endpoints/:id/test`) or the delivery log (`responseBodyExcerpt`). A receiver can
+also return an arbitrarily large body into the 512 MB API process. High.
+
+**Proof / evidence**
+
+`apps/api/src/webhooks/transportSafety.test.ts` with real local servers: on `main` af8e9c9 a 302 to an "internal" server
+returned that server's 200 body (`INTERNAL-METADATA-SECRET`), and a 5 MB response was read in full (5,242,880 chars) —
+both fail; after the fix both pass.
+
+**Fix**
+
+`redirect: "manual"`; read at most a small bound and cancel the rest.
+
+**Re-attack and side notes**
+
+- Redirect target never contacted; 5 MB body read only to 4,096 bytes.
+- **Part 2 (2026-10-30, connection-time destination control):** `webhooks/transport.ts` now sends with `node:http` /
+  `node:https` (Node's global `fetch` cannot pin a resolved address without the `undici` package, which is not
+  installed). A `lookup` hook used by the socket itself resolves the host once, refuses the request if **any** answer is
+  prohibited (mixed answers), and the socket connects to the checked address, so there is no second resolution to rebind.
+  Literal IP hosts (which skip lookup) are checked before connecting, including IPv4-mapped (`::ffff:a.b.c.d`,
+  `::ffff:7f00:1`) and NAT64 (`64:ff9b::/96`) forms. Prohibited: 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12,
+  192.0.0/24, 192.0.2/24, 192.168/16, 198.18/15, 198.51.100/24, 203.0.113/24, 224/4, 240/4; ::, ::1, 100::/64, 2001:db8::/32,
+  fc00::/7, fe80::/10, fec0::/10, ff00::/8. TLS keeps Node's default certificate and hostname verification; environment
+  proxies are not used (`agent: false`, one connection per request); redirects are not followed; the timeout covers
+  connect, send and the bounded read. Policy: `WEBHOOK_BLOCK_PRIVATE_DESTINATIONS`, default **on in production**, off in
+  dev/test (local receivers). Applies to every outbound path: delivery, retry, replay and archive restore (all go through
+  the dispatcher) and test-send (same transport instance, `app.webhookTransport`). Endpoint create/update still only
+  validate the URL string; enforcement is at send time.
+- Tests added to `webhooks/transportSafety.test.ts`: literal private/loopback/IPv6-mapped refused with no connection;
+  hostname resolving internal, and mixed public+internal answers, refused; exactly one resolution per request and a
+  legitimate delivery succeeds; production default on; a self-signed TLS receiver is refused. The three destination tests
+  fail against the previous transport (swapped in temporarily) and pass now; 8/8 in the file.
+- **Still recommended (deployment, not application):** a network egress policy for the API container (defence in
+  depth, and the only control for anything the app does not mediate).
+- Independent skeptical review: **pending**.
+
+**Related:** AUD-020, AUD-053
+
+_Source file: [findings/AUD-057-webhook-transport-follows-redirects-and-reads-unbounded-responses.md](findings/AUD-057-webhook-transport-follows-redirects-and-reads-unbounded-responses.md)_
+
+### AUD-059
+**Reporting scope accepts any split child: cross-tenant transaction read**
+
+- Severity: **High** · Category: authz / tenant isolation · Owner: B
+- Verdict: **BUG (runtime)** (confidence high): Found by the 2026-10-30 independent review (reproduced on a disposable DB): `reporting/scope.ts` accepts any caller-supplied `merchantId` that is a split child of *any* parent, so an unrelated merchant reads that child's transaction report. Parent never compared with the caller. Present on `main`. Open (not fixed). Track B.
+- Status: open: not fixed (found by the independent review of the Track B batch, 2026-10-30; present unchanged on `main` af8e9c9) · Fix commit: none
+
+**What is wrong**
+
+New, found 2026-10-30 by the skeptical reviewer (auth/admin slice) of the Track B batch. Any authenticated merchant
+actor can read another merchant's transaction report by naming that merchant's id in the report filter, provided the
+target merchant is a split child of **any** parent. The parent is never compared with the caller.
+
+**Where**
+
+- `apps/api/src/reporting/scope.ts:12-19` (`resolveReportMerchantId`)
+- caller: `apps/api/src/routes/reporting.ts` `GET /v1/reporting/transactions` (`parsed.merchantId` from the `filter` query
+  parameter is passed straight in)
+
+**Why it happens (root cause)**
+
+```
+`SELECT 1 AS ok FROM merchant_split_children WHERE child_merchant_id = $1`,
+...
+return requestedMerchantId;
+```
+The check asks "is this id a split child?" instead of "is this id a split child **of the caller**?". The docstring in
+`apps/api/src/reporting/transactionsReportQuery.ts:4-8` ("`merchantId` is always overwritten by the route with the
+authenticated merchant") is false, and ruled-out item R-09 repeated it ("`merchantId` forced from auth").
+
+**What it breaks (impact)**
+
+Cross-tenant read of transaction references, amounts, statuses and dates of every split-child merchant. Any merchant
+role (including `support`) and merchant API keys can do it (`requireMerchantAuth`). Precondition: the attacker must know
+or guess the child's merchant UUID (not enumerable through this route). No write.
+
+**Proof / evidence**
+
+Independent review, 2026-10-30 (disposable DB `filspay_rev1` on 127.0.0.1:55433): a `support` session of an unrelated
+merchant calls `GET /v1/reporting/transactions?filter={"merchantId":"<split child id>"}` →
+`status 200 rows 1 [{"isChild":true,"ref":"child-private-ref","amt":"123.456"}]`. A non-child id falls back to the
+caller's own rows. Code path re-traced by the integrator (scope.ts is byte-identical on `main` and on the Track B branch).
+No regression test exists yet.
+
+**Fix**
+
+Compare the parent with the caller: `... WHERE child_merchant_id = $1 AND parent_merchant_id = $2` with
+`[requestedMerchantId, callerMerchantId]`; failing test first (unrelated merchant → its own rows or 403, never the
+child's); correct the `transactionsReportQuery.ts` docstring and R-09. Grep for other users of `merchant_split_children`
+in apps/api that trust a caller-supplied id.
+
+**Re-attack and side notes**
+
+- Not yet done (no fix).
+- Independent skeptical review: the finding itself comes from the review (docs/audit/reviews/2026-10-30-track-b-batch.md).
+
+**Related:** AUD-047 (same route file), ruled-out R-09
+
+_Source file: [findings/AUD-059-reporting-scope-accepts-any-split-child-cross-tenant-transaction-read.md](findings/AUD-059-reporting-scope-accepts-any-split-child-cross-tenant-transaction-read.md)_
+
+### AUD-061
+**Capture scans the whole ledger several times: no index on `ledger_entries.entry_group_id` or `transaction_id` (nor `holds.transaction_id`)**
+
+- Severity: **High** · Category: performance / capacity · Owner: A
+- Verdict: **BUG (runtime)** (confidence high): Measured: `EXPLAIN ANALYZE` shows a Seq Scan over the whole ledger (42,943 rows filtered, 7.4 ms) per capture; no index exists on ledger_entries.transaction_id. Index added, test added.
+- Status: fixed (branch `feat/totp`, migration 0094) · Fix commit: see `git log feat/totp` (migrations 0094, 0095)
+
+**What is wrong**
+
+`ledger_entries` has only `(merchant_id, occurred_at)` and the primary key. Two hot paths look rows up by columns that are not indexed: the **balance trigger** (migration 0007: deferred, once per inserted row, `SUM ... WHERE entry_group_id = ...`) and the capture/refund code (`WHERE transaction_id = ...`). Every capture therefore rescans the entire ledger several times (4 ledger rows = 4 scans at commit, plus the discount step). `holds` has the same gap on `transaction_id`.
+
+**Where**
+
+`apps/api/src/payments/discountAdjustment.ts` (count of discount adjustments per transaction), `apps/api/src/payments/processRefund.ts` (fee kept per transaction), `payments/capture.ts` (`UPDATE holds ... WHERE transaction_id`). Indexes: `db/migrations/0007`, `0005` (never created).
+
+**Why it happens (root cause)**
+
+The tables were designed around merchant and time queries (`idx_ledger_entries_merchant_occurred`); the transaction-scoped look-ups added later by capture, the discount adjustment and refunds were never given an index.
+
+**What it breaks (impact)**
+
+Every capture (and every refund) gets slower as the platform grows, and the work is done under the transaction lock and the connection held across the call. The platform degrades with its own success; under load the slowdown compounds (each checkout adds rows that every later checkout must scan).
+
+**Proof / evidence**
+
+Found while load testing the live server (docs/audit/LOAD-TEST.md): throughput plateaued far below what the CPU allowed. `EXPLAIN (ANALYZE, BUFFERS)` of the discount-adjustment query on the load-tested database: `Seq Scan on ledger_entries ... Rows Removed by Filter: 42943, Buffers: shared hit=961, Execution Time: 7.4 ms`, against 0.03 ms for the indexed `transaction_events` look-up in the same statement. The cost is linear in the size of the ledger, i.e. in the number of checkouts ever processed.
+
+**Fix**
+
+Migration 0094: `idx_ledger_entries_transaction` (partial, `transaction_id IS NOT NULL`: settlement and MDR legs have no transaction) and `idx_holds_transaction`. Migration 0095: `idx_ledger_entries_group` on `entry_group_id` (the balance trigger's look-up; this one is the dominant cost: found after 0094 alone did not move the throughput ceiling, which is why both are recorded). Test: `apps/api/src/db/hotPathIndexes.test.ts` (fails before the migration). Effect on existing data: none (indexes only).
+
+**Re-attack and side notes**
+
+Other look-ups by `transaction_id` on the same tables (refunds fee query, reconciliation) use the same index. Index build on a large production ledger should be run with `CREATE INDEX CONCURRENTLY` outside the migration runner; on this deployment the ledger is small.
+
+**Related:** Capacity section of the submission document; AUD-048.
+
+_Source file: [findings/AUD-061-capture-scans-the-whole-ledger-no-index-on-ledger-entries-t.md](findings/AUD-061-capture-scans-the-whole-ledger-no-index-on-ledger-entries-t.md)_
+
 ### AUD-019
 **Acquirer callbacks are not deduplicated — FP-201 (reopened)**
 
 - Severity: **Medium** · Category: idempotency · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Plain INSERT, no unique key; the "dedupe" commit is empty. Confirmed by the brief (FP-201).
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/08-AUD-019.patch
 
 **Where**
 
@@ -1137,6 +1392,14 @@ Trace + git show bf66bf2 (empty).
 
 New migration: unique index on (callback_id); INSERT … ON CONFLICT DO NOTHING (de-dup existing rows first).
 
+**Re-attack and side notes**
+
+- Sequential redelivery ×3 and 10 concurrent copies: one note each, every response 200 `{received:true}`.
+- Same callbackId on a different transaction: kept (dedupe scope is per transaction).
+- Dedupe runs after signature verification in the route, so an unsigned forgery cannot pre-empt a real callback's id
+  once signatures are required (see AUD-021).
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; 0081 upgrade verified on planted duplicates (earliest kept, ties by id, nothing deleted; re-run is a no-op). **Open, non-blocking:** a reused `callbackId` with a different outcome/note is answered 200 and silently dropped (log or 409 on mismatch).
+
 **Related:** AUD-021
 
 _Source file: [findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md](findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-reopened.md)_
@@ -1146,7 +1409,7 @@ _Source file: [findings/AUD-019-acquirer-callbacks-are-not-deduplicated-fp-201-r
 
 - Severity: **Medium** · Category: authn · Owner: B
 - Verdict: **BUG (traced)** (confidence medium): `Math.random` OTP and a check-then-increment attempt limit. Mostly moot until AUD-001 is fixed.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, resend resets the guess budget (open)) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch
 
 **Where**
 
@@ -1170,7 +1433,20 @@ Trace (MK's own comment describes the race).
 
 `crypto.randomInt`; atomic `UPDATE … SET attempt_count = attempt_count+1 WHERE … AND attempt_count < max RETURNING`.
 
+**Re-attack and side notes**
+
+- 12 parallel wrong guesses: at most 5 judged, `attempt_count` ≤ 5, the correct code afterwards refused, cookie unusable.
+- Two concurrent correct codes: exactly one 200; replay refused; the winning session works. Same for admin.
+- Challenge is still bound to the pending session's `otp_challenge_id` and the user (AUD-002).
+- **Open (not fixed, policy):** each resend (30 s cooldown) and each fresh password login issues a new 5-attempt challenge;
+  there is no per-user lockout or rate limit, so an attacker who already has the password gets 5 guesses per login.
+  Needs a product decision on lockout; recorded in the Track B handoff.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **PARTLY DISPUTED.** Confirmed: atomic attempt increment, conditional consume, `crypto.randomInt` (merchant and admin). **Disputed: the guess budget is not enforced across resends.** `routes/auth.ts` resend docstring (present on main) says the new challenge "inherits the previous challenge's attempt_count"; `auth/otp.ts issueChallenge` inserts a fresh count. Review repro: 4 wrong guesses, resend, ×3 → 12 wrong guesses judged on one pending session (budget 5); ~100 per 10-minute pending session. This is a broken documented contract (not only a lockout-policy question as stated in the handoff). **Open:** carry `attempt_count` into the resent challenge (or correct the docstring and this finding). Non-blocking: `otpAttempts.test.ts` `latestAttemptCount` reads the newest challenge in the whole DB (flaky on a shared DB).
+
 **Related:** AUD-001
+
+
+> **Update 2026-10-30 (Q16):** the residual items (resend resets the guess budget; endless new pending sessions) disappear in production: the second factor is now TOTP, which has no resend, a 5-try budget per session and a 10-try lock per account (`auth/totp.ts`). The OTP code path remains only for non-production use.
 
 _Source file: [findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md](findings/AUD-023-otp-math-random-codes-and-racy-attempt-limit.md)_
 
@@ -1224,7 +1500,7 @@ _Source file: [findings/AUD-025-daily-close-runs-03-15-bahrain-not-00-15.md](fin
 
 - Severity: **Medium** · Category: reporting · Owner: FP-300 (shared)
 - Verdict: **LATENT** (confidence high): View joins `t.id = r.id`; refunds are not live yet.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (migration 0083; no reader yet; review pending) · Fix commit: — (not fixed; Phase 2)
 
 **Where**
 
@@ -1296,7 +1572,7 @@ _Source file: [findings/AUD-029-refund-fee-reversal-can-exceed-the-fee-charged.m
 
 - Severity: **Medium** · Category: integration · Owner: FP-300 (shared)
 - Verdict: **LATENT** (confidence high): Event produced, no envelope or dispatcher entry.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: — (not fixed; Phase 2)
 
 **Where**
 
@@ -1377,7 +1653,7 @@ _Source file: [findings/AUD-031-fee-shown-to-merchant-245-bps-fee-charged-225-bp
 
 - Severity: **Medium** · Category: data integrity · Owner: B
 - Verdict: **BUG (traced)** (confidence medium): The code clears `test_mode` deliberately ("tidied"), but a status recompute changing settlement eligibility contradicts 0002. Confirmed by chat.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/14-AUD-032.patch
 
 **Where**
 
@@ -1400,6 +1676,15 @@ Trace; Slack 2026-09-19 'testModeCleared: true' for Gamma.
 **Fix**
 
 Remove the side effect (a status recompute must not change merchant mode).
+
+**Re-attack and side notes**
+
+- The flag survives the exact condition that used to clear it; settlement eligibility therefore stays excluded by the
+  Go filter (read, not re-run here).
+- Data: merchants already cleared by this tool (Slack 2026-09-19 "testModeCleared: true" for Gamma) are not restored;
+  that needs ops/finance to decide which merchants were really sandbox. Track A owns any settled sandbox volume.
+- No other code path writes `test_mode = false` (grep of apps/api).
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; no other writer of `test_mode = false`. Data-repair lookup for affected merchants: `admin_audit_log` where `action='transaction_status_recompute'` and `metadata->'flagsUpdated' ? 'test_mode'`.
 
 **Related:** —
 
@@ -1526,7 +1811,7 @@ _Source file: [findings/AUD-036-adjustment-import-has-no-duplicate-submit-protec
 
 - Severity: **Medium** · Category: security · Owner: B
 - Verdict: **BUG (traced)** (confidence high): Old key is never revoked. The "24h grace" mentioned in a migration comment is not in ADMIN.md or in code.
-- Status: confirmed (trace) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/13-AUD-038.patch
 
 **Where**
 
@@ -1550,9 +1835,98 @@ Trace; 0037 comment (FH saw old key still working).
 
 Set `revoked_at = now(), revoked_reason='rotated'` in the same transaction (or a grace window if you prefer).
 
+**Re-attack and side notes**
+
+- Old key after rotation: 401. New key: 200. Audit row written; a forced audit failure rolls back both the new key and
+  the revocation (existing test).
+- Tenant isolation: rotating another merchant's key id is 404 (existing test); the revoke statement is also merchant-scoped.
+- **Compatibility:** an integration still using the old key stops working the moment an admin rotates it. If ops want an
+  overlap window, it needs a decision and a real `revoke_after` sweep; ADMIN.md should state the immediate behaviour.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; the `routes/admin.test.ts` change is a correction (0037 says rotation revokes; no grace-period mechanism exists).
+
 **Related:** —
 
 _Source file: [findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md](findings/AUD-038-admin-api-key-rotation-never-revokes-the-old-key.md)_
+
+### AUD-039
+**Second-approver check on credits compares display names**
+
+- Severity: **Medium** · Category: authz · Owner: B
+- Verdict: **BUG (runtime)** (confidence high): Reproduced through the approval route: two different admins sharing a display name were refused (409), and a renamed requester could approve their own credit (needs DB access to rename). Fixed by comparing admin ids.
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/17-AUD-039.patch
+
+**Where**
+
+apps/api/src/admin/creditApproval.ts:11
+
+**Sibling locations checked:** 0060 note.
+
+**Why it happens (root cause)**
+
+Identity compared by mutable display name instead of admin id.
+
+**What it breaks (impact)**
+
+Self-approval or false rejection of large credits.
+
+**Proof / evidence**
+
+Trace; exploitability depends on how display names are set — Phase 1.
+
+**Fix**
+
+Compare admin user ids.
+
+**Re-attack and side notes**
+
+- Same name, different people: approved once. Same person, new name: 409, nothing journaled.
+- Concurrent approvals by two checkers: one 200, one 409, one ledger group.
+- Reject path does not do a two-person check (any finance admin may reject); unchanged, not a requirement in the docs.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it.
+
+**Related:** —
+
+_Source file: [findings/AUD-039-second-approver-check-on-credits-compares-display-names.md](findings/AUD-039-second-approver-check-on-credits-compares-display-names.md)_
+
+### AUD-041
+**Reporting consumer drops merchant_id on real events (4 failing tests)**
+
+- Severity: **Medium** · Category: reporting · Owner: B
+- Verdict: **NOT A BUG (test pollution)** (confidence high): Reporting 12/12 alone on a fresh DB; the 4 failures came from `archiveReplay.test.ts` outbox fixtures with payload `{}` under real event types. Producers include merchantId. Fixture repaired; no production change.
+- Status: disproven as a production defect; test-fixture pollution repaired (verified locally; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/16-AUD-044-docs-AUD-041.patch
+
+**Where**
+
+apps/reporting/src/consumer/applyEvent.ts:22-31
+
+**Sibling locations checked:** enqueueEvent JSON.stringify → jsonb; FH's 'double-encoded payload' note.
+
+**Why it happens (root cause)**
+
+To trace in Phase 1.
+
+**What it breaks (impact)**
+
+Dashboards/rollups stop; FP-300 reports.
+
+**Proof / evidence**
+
+Baseline: `null value in column "merchant_id" of relation "merchant_daily_volume"`.
+
+**Fix**
+
+TBD.
+
+**Re-attack and side notes**
+
+- What this proves: on isolated data the consumer handles real producer shapes; the 4 failures were caused by one test
+  file's fixture. What it does not prove: that no future producer omits `merchantId` (a malformed event still halts the
+  consumer by design; that design is Track A/B shared and unchanged).
+- Independent skeptical review: **pending**.
+
+**Related:** —
+
+_Source file: [findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md](findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md)_
 
 ### AUD-048
 **Cache and ledger define the balance differently: a rebuild is double counted at the next batch close**
@@ -1629,6 +2003,148 @@ Resolve the reversal rate with the same function/formula as capture and settleme
 
 _Source file: [findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md](findings/AUD-050-manual-credit-mdr-reversal-uses-the-fallback-rate-not-the-r.md)_
 
+### AUD-055
+**Payment-link tokens (and the shared random helper) use Math.random**
+
+- Severity: **Medium** · Category: crypto / bearer token · Owner: B
+- Verdict: **BUG (runtime)** (confidence high): Found in the AUD-023 sibling sweep: `randomFromAlphabet` (payment-link tokens) used `Math.random`; a constant `Math.random` made all tokens identical on main. ARCHITECTURE's "crypto.randomBytes" claim is false. Track B.
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/07-AUD-023-055.patch
+
+**What is wrong**
+
+New in Track B's sibling sweep of AUD-023 (2026-10-30). The public payment-link token is generated with `Math.random`.
+
+**Where**
+
+apps/api/src/lib/random.ts (`randomFromAlphabet`), apps/api/src/paymentLinks/create.ts:10-13 (`randomPlinkToken`).
+Same helper also builds `displayReference()`. `admin/inviteCode.ts` used `Math.random` directly but has no caller (dead code).
+
+**Why it happens (root cause)**
+
+`randomFromAlphabet` drew each character with `Math.floor(Math.random() * alphabet.length)`. V8's `Math.random` is
+xorshift128+, not a CSPRNG: its state can be recovered from a run of observed outputs. ARCHITECTURE.md ("Tokens are
+128-bit, from `crypto.randomBytes`") and INVARIANTS I20 ("tokens ✅") are false claims about this code.
+
+**What it breaks (impact)**
+
+The token is the only secret for the public `GET/POST /v1/payment-links/:token…` routes (link details: merchant,
+amount, reference, description; and paying it). A merchant who creates links and sees its own tokens observes the
+generator's output; with the state recovered, tokens issued to other merchants in the same process become guessable.
+Requires many observed outputs and the same API process; no money is taken (paying someone else's link only pays it),
+but invoice details leak. Rated Medium.
+
+**Proof / evidence**
+
+Test `AUD-023 / AUD-055: OTP codes and payment-link tokens do not come from Math.random`
+(`apps/api/src/routes/otpAttempts.test.ts`): with `Math.random` replaced by a constant, 50 tokens collapsed to one value
+on `main` af8e9c9 (fails), and stay distinct after the fix (passes).
+
+**Fix**
+
+Use `crypto.randomInt` in the shared helper (one change covers tokens, OTP codes and display references).
+
+**Re-attack and side notes**
+
+- Constant `Math.random`: tokens and codes still distinct (test). Format of OTP codes unchanged (`^\d{6}$`, 200 samples).
+- Existing links are not re-issued; tokens minted before the fix stay as predictable as they were. Rotating them would
+  break sent invoices; a decision for the merchant-facing side.
+- ARCHITECTURE.md and INVARIANTS I20 need correcting by the integrator.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; remaining `Math.random`: `apps/web/src/utils/helpers.ts randomId` (unused) and dispatcher jitter (not security-relevant).
+
+**Related:** AUD-023
+
+_Source file: [findings/AUD-055-payment-link-tokens-and-shared-random-helper-use-math-random.md](findings/AUD-055-payment-link-tokens-and-shared-random-helper-use-math-random.md)_
+
+### AUD-058
+**Reporting consumer halts when a batch closes on a day with no rollup row**
+
+- Severity: **Medium** · Category: reliability / reporting · Owner: B
+- Verdict: **BUG (runtime)** (confidence high): Reproduced: batch_closed for a day with captures but no merchant_daily_volume row threw a TypeError in the parity check, rolling back every reporting pass. Fixed: missing row = lag 0 → warning. Track B.
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (after 1b2ea38)
+
+**What is wrong**
+
+New, found 2026-10-30 while testing FP-300 reporting. `applyBatchClosed`'s "rollup parity check" threw a TypeError when
+`merchant_daily_volume` had no row for the batch's merchant and day.
+
+**Where**
+
+apps/reporting/src/consumer/applyEvent.ts (`applyBatchClosed`, parity check after the payout-trend upsert).
+
+**Why it happens (root cause)**
+
+The check counts real capture events for the batch day and, if any exist, reads the rollup row and compares counts. It
+cast `rows[0]` and dereferenced `captured_count` without handling "no row". A missing row is the largest possible lag,
+which the check is documented to *warn* about.
+
+**What it breaks (impact)**
+
+`runConsumerPass` applies a batch atomically and rolls back on any error, so the failing event is retried forever and
+**no reporting event for any merchant is applied after it** (dashboards and analytics stop updating). Reachable whenever
+captures exist without a consumed outbox event for that day: the seed, scripts, data repairs, or a rollup truncated by an
+interrupted rebuild. Medium: availability of reporting, not money.
+
+**Proof / evidence**
+
+`apps/reporting/src/consumer/batchClosedParity.test.ts`: a merchant with one capture event on 2026-04-10 and no rollup row,
+then a `settlement.batch_closed` event for that day. On the code before the fix: `Cannot read properties of undefined
+(reading 'captured_count')`. Also seen in the shared test DB: Go settlement tests insert capture events directly (no
+outbox event), and the next reporting pass failed the same way.
+
+**Fix**
+
+Treat a missing row as 0 and warn (`rollup=0 ground_truth=N`); the payout-trend row is still written. Test passes (1/1);
+reporting suite results in the Track B handoff.
+
+**Re-attack and side notes**
+
+- Missing row: warning, pass continues. Existing lag (row with fewer captures): unchanged warning path.
+- Other appliers do not read rows they might not have written (checked: captured/voided/refund upsert).
+- Independent skeptical review: **pending**.
+
+**Related:** AUD-041, AUD-047, FP-300
+
+_Source file: [findings/AUD-058-reporting-consumer-halts-when-a-batch-closes-on-a-day-with-no-rollup-row.md](findings/AUD-058-reporting-consumer-halts-when-a-batch-closes-on-a-day-with-no-rollup-row.md)_
+
+### AUD-060
+**Merchant dashboard login cookie expires after 10 minutes even though the session lasts 12 hours**
+
+- Severity: **Medium** · Category: auth / UX · Owner: A
+- Verdict: **BUG (traced)** (confidence high): The merchant verify route never re-issues the cookie (the admin one does, and the authors asked why in a comment). Test added.
+- Status: fixed (branch `feat/totp`) · Fix commit: see `git log feat/totp`
+
+**What is wrong**
+
+After a successful merchant login the browser keeps the session cookie for the short PENDING lifetime (10 minutes), not the session lifetime (12 hours), so merchants are signed out after about ten minutes of use.
+
+**Where**
+
+apps/api/src/routes/auth.ts: `POST /otp/verify` promotes the session in the database (`promoteSession`, expires_at +12 h) but never re-issues the cookie; `POST /login` set it with `maxAge = pendingSessionTtlMinutes * 60`. The admin verify handler does re-issue it (with a comment from the original authors asking why the merchant one does not: "related to the 10 min logouts?").
+
+**Why it happens (root cause)**
+
+The cookie `Max-Age` is decided by the browser at the time the cookie is set. The merchant verify route only changes the server-side row.
+
+**What it breaks (impact)**
+
+Dashboard users are logged out after ten minutes regardless of the 12-hour session, repeatedly re-doing password and second factor. UX defect; a dropped cookie also hides how long a session really lives.
+
+**Proof / evidence**
+
+Code trace plus the authors' own comment. Covered by `routes/totpLogin.test.ts` ("the cookie is re-issued for the full session, not the 10 minute pending window", both planes).
+
+**Fix**
+
+`/otp/verify` re-issues the cookie with `maxAge = sessionTtlHours * 3600`, in the TOTP branch and the legacy OTP branch.
+
+**Re-attack and side notes**
+
+The server-side session still expires at `expires_at`; a longer-lived cookie cannot extend it. The cookie stays HttpOnly, SameSite=Lax and Secure in production.
+
+**Related:** Q16 (TOTP), AUD-023
+
+_Source file: [findings/AUD-060-merchant-dashboard-login-cookie-expires-after-10-minutes-eve.md](findings/AUD-060-merchant-dashboard-login-cookie-expires-after-10-minutes-eve.md)_
+
 ### AUD-033
 **Lifetime payout estimate is float32/REAL (drifts)**
 
@@ -1671,7 +2187,7 @@ _Source file: [findings/AUD-033-lifetime-payout-estimate-is-float32-real-drifts.
 
 - Severity: **Low** · Category: authn / time · Owner: B
 - Verdict: **BUG (traced, low)** (confidence high): Route lacks the auth hook (fails closed with a 500).
-- Status: confirmed (trace) / suspected (UTC part) · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/15-AUD-047.patch
 
 **Where**
 
@@ -1694,6 +2210,14 @@ Trace.
 **Fix**
 
 Add the preHandler; use `toBahrainDateString`.
+
+**Re-attack and side notes**
+
+- No credentials: 401. Another merchant's volume never included (two merchants seeded).
+- Bahrain midnight boundary covered on both sides; 02:30 Bahrain (still the previous UTC day) goes to the Bahrain day.
+- Other reporting appliers already use `toBahrainDateString` (capture/void/batch-closed); no other UTC bucketing found in
+  `apps/reporting/src` (grep for `toISOString().slice`).
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): Auth part **CONFIRMED** — regression test fails with the fix reverted, passes with it (both tests 500 on main). The Bahrain-date rollup part was in the review slice that was **not completed** (stopped 2026-10-30): still pending.
 
 **Related:** AUD-041
 
@@ -1779,6 +2303,54 @@ Browser timezone no longer matters. The old code gave the same wrong answer in e
 
 _Source file: [findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md](findings/AUD-051-admin-console-default-run-date-is-wrong-for-3-hours-after-b.md)_
 
+### AUD-056
+**Public payment-link read returns the merchant's API key hash**
+
+- Severity: **Low** · Category: information disclosure / credential material · Owner: B
+- Verdict: **BUG (runtime)** (confidence high): Public link read returned `api_keys.key_hash` as merchantIntegrationId (test on main shows the hash in the body). 192-bit keys, so not a usable credential; Low. Track B.
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/20-AUD-056-057.patch
+
+**What is wrong**
+
+New in Track B's adjacent-path pass (2026-10-30). `GET /v1/payment-links/:token` (public, no auth) returned
+`merchantIntegrationId` = `api_keys.key_hash` of the merchant's newest live API key.
+
+**Where**
+
+apps/api/src/paymentLinks/read.ts (`getPublicPaymentLink`, LATERAL join on `api_keys`).
+
+**Why it happens (root cause)**
+
+The public DTO selected `ak.key_hash AS integration_id` alongside the key prefix. Nothing consumes the field (grep of
+apps/api and apps/web); the earlier uncommitted audit work had the same observation (PL-04).
+
+**What it breaks (impact)**
+
+Anyone holding a link token (customers, anyone the invoice is forwarded to) gets the SHA-256 of the merchant's live API
+key. Keys carry 192 random bits, so the hash cannot be reversed, and `verifyApiKey` hashes its input, so the hash is not
+a usable credential. Low: credential-derived data on a public endpoint and a stable fingerprint of the merchant's current
+key, contrary to "shown once, never again".
+
+**Proof / evidence**
+
+Test `AUD-056: the public, unauthenticated link read does not expose the merchant's API key hash`
+(`apps/api/src/routes/paymentLinks.test.ts`): on `main` af8e9c9 the public body contains the key's `key_hash` (fails);
+passes after the fix.
+
+**Fix**
+
+Stop selecting and returning `key_hash`.
+
+**Re-attack and side notes**
+
+- Body checked against every `key_hash` of the merchant; field absent; prefix still present.
+- The prefix exposes 8 characters of the secret after `fp_live_`; 144 random bits remain, so it is left as designed.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it. Note: `merchantPublicKey` still exposes 8 characters of the live key (acceptable, not really public).
+
+**Related:** AUD-055
+
+_Source file: [findings/AUD-056-public-payment-link-read-returns-the-merchant-s-api-key-hash.md](findings/AUD-056-public-payment-link-read-returns-the-merchant-s-api-key-hash.md)_
+
 
 ## 3. Fixed bugs: tests that had to change
 
@@ -1792,7 +2364,7 @@ Collected from the fix sections above (search for 'Tests changed'). Tests were n
 
 - Severity: **Medium** · Category: authz · Owner: B
 - Verdict: **DESIGN (decided to change)** (confidence medium): Write-capable impersonation was a deliberate July change (migration comment), but it contradicts the security docs. Q4: read-only.
-- Status: confirmed (trace) — doc conflict · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: partly disputed, saved-filters write under impersonation (open)) · Fix commit: none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch
 
 **Where**
 
@@ -1816,82 +2388,24 @@ Trace.
 
 Decision needed: which doc wins. Default recommendation: map every role to `support` (the documented security posture).
 
+**Re-attack and side notes**
+
+- super_admin, finance and support grants: capture, void, payment-link create 403; API-key issue refused; reads 200; no side effects.
+- Disabled admin's grant: 401 on a read.
+- Writer helper unit check: impersonation actor gets 403.
+- Not covered: the admin UI's "view as merchant" screen (not run). ADMIN.md still says super_admin may make changes; fix that doc with the integrator.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **PARTLY DISPUTED.** Confirmed: every admin role maps to `support`; a disabled admin's grant stops working; money moves and owner-only writes refuse impersonation. **Disputed claim:** "an impersonation grant can never perform a write" — `POST /v1/reporting/saved-filters` has no role gate or writer check and returns 201 under impersonation (non-money write; already listed as a triage candidate in the handoff). **Open:** add `refuseImpersonation` there (as `refunds.ts` does) or narrow the claim; the docstring at `routes/merchantWriteAuthority.test.ts:8` over-claims. Side effect to document in ADMIN.md: impersonating admins now get 403 on owner/finance reads (settlement summary, reconciliation, webhook endpoint list). Non-blocking: the api-key assertion at `merchantWriteAuthority.test.ts:183-184` (`401 || 403`) also passes on main.
+
 **Related:** —
 
 _Source file: [findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md](findings/AUD-024-impersonation-grants-write-access-super-admin-owner-finance-.md)_
-
-### AUD-039
-**Second-approver check on credits compares display names**
-
-- Severity: **Medium** · Category: authz · Owner: B
-- Verdict: **UNVERIFIED** (confidence low): Compares display names, but `admin_users.display_name` is not unique and no route lets admins rename themselves, so exploitation needs DB access. Likely low.
-- Status: suspected · Fix commit: — (not fixed; Phase 2)
-
-**Where**
-
-apps/api/src/admin/creditApproval.ts:11
-
-**Sibling locations checked:** 0060 note.
-
-**Why it happens (root cause)**
-
-Identity compared by mutable display name instead of admin id.
-
-**What it breaks (impact)**
-
-Self-approval or false rejection of large credits.
-
-**Proof / evidence**
-
-Trace; exploitability depends on how display names are set — Phase 1.
-
-**Fix**
-
-Compare admin user ids.
-
-**Related:** —
-
-_Source file: [findings/AUD-039-second-approver-check-on-credits-compares-display-names.md](findings/AUD-039-second-approver-check-on-credits-compares-display-names.md)_
-
-### AUD-041
-**Reporting consumer drops merchant_id on real events (4 failing tests)**
-
-- Severity: **Medium** · Category: reporting · Owner: B
-- Verdict: **UNVERIFIED** (confidence medium): 4 reporting tests really fail (null merchant_id); root cause not traced.
-- Status: suspected (runtime failure, cause not yet traced) · Fix commit: — (not fixed; Phase 2)
-
-**Where**
-
-apps/reporting/src/consumer/applyEvent.ts:22-31
-
-**Sibling locations checked:** enqueueEvent JSON.stringify → jsonb; FH's 'double-encoded payload' note.
-
-**Why it happens (root cause)**
-
-To trace in Phase 1.
-
-**What it breaks (impact)**
-
-Dashboards/rollups stop; FP-300 reports.
-
-**Proof / evidence**
-
-Baseline: `null value in column "merchant_id" of relation "merchant_daily_volume"`.
-
-**Fix**
-
-TBD.
-
-**Related:** —
-
-_Source file: [findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md](findings/AUD-041-reporting-consumer-drops-merchant-id-on-real-events-4-failin.md)_
 
 ### AUD-042
 **Unbounded memory in exports/archives (large export DoS)**
 
 - Severity: **Medium** · Category: DoS · Owner: B
 - Verdict: **UNVERIFIED** (confidence low): Export memory behaviour not measured.
-- Status: suspected · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (measured and verified locally on 55433; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/18-AUD-042.patch
 
 **Where**
 
@@ -1914,6 +2428,15 @@ OOM on 512 MB container.
 **Fix**
 
 TBD.
+
+**Re-attack and side notes**
+
+- Export: page-edge ties, filters and tenant scope preserved; memory now bounded by one page, not the range.
+- Archive: refused above the cap with no partial row. **Remaining:** replaying an archive still loads its whole JSON
+  (bounded by the cap for new archives; archives created before this change could be larger). A row-per-delivery archive
+  table would remove the cap; that is a schema decision.
+- Not measured: client disconnect mid-export (by construction the generator stops when the stream is destroyed; no test).
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it (keyset paging on ties; served by `idx_transactions_merchant_occurred`). **Regression vs main (non-blocking):** the CSV header is sent before the first query, so `?from=garbage` (main: 500) or any mid-export error now yields a 200 that is cut off. **Open:** validate `from`/`to` (400) and fetch the first page before sending. Archive cap: count and row SELECT are separate statements (READ COMMITTED) and the SELECT has no LIMIT, so rows arriving in between pass the cap (add `LIMIT cap+1`); the cap counts deliveries, not bytes. The unused `streamTransactionsExportCsv` was deleted (nothing imported it).
 
 **Related:** —
 
@@ -1961,7 +2484,7 @@ _Source file: [findings/AUD-037-adjust-balance-writes-the-cache-only-docs-disagr
 
 - Severity: **Low** · Category: race · Owner: B
 - Verdict: **LIMITATION** (confidence high): Code comments state "only run ONE api replica". Real if scaled, not a current bug.
-- Status: suspected · Fix commit: — (not fixed; Phase 2)
+- Status: deferred: limitation under the supported single-replica deployment (no change) · Fix commit: none (docs only; recorded in stack/12-AUD-040-docs-AUD-018.patch)
 
 **Where**
 
@@ -1985,6 +2508,12 @@ Trace; single replica today.
 
 FOR UPDATE SKIP LOCKED claim.
 
+**Re-attack and side notes**
+
+- Single process: overlapping passes prevented by the `running` flag (read, not tested here).
+- No test added: there is no supported multi-replica configuration to test against.
+- Independent skeptical review: **pending**.
+
 **Related:** AUD-018
 
 _Source file: [findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md](findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi-replica-dou.md)_
@@ -1994,7 +2523,7 @@ _Source file: [findings/AUD-040-webhook-dispatcher-step-b-has-no-row-claim-multi
 
 - Severity: **Low** · Category: performance · Owner: B
 - Verdict: **UNVERIFIED** (confidence low): Slow query not measured with EXPLAIN.
-- Status: suspected · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (wrong totals fixed and measured; slowness not reproduced, no index; independently reviewed 2026-10-30: confirmed) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/19-AUD-043.patch
 
 **Where**
 
@@ -2018,6 +2547,14 @@ docs/perf/2026-07-settlement-summary-slow.md
 
 TBD.
 
+**Re-attack and side notes**
+
+- Window edges: 00:00:00 Bahrain included, next 00:00:00 excluded, 23:59:59 included.
+- Merchant scope unchanged (`t.merchant_id = $1`).
+- **Behaviour change merchants will see:** the settlement page's captured total drops for multi-capture merchants (it was
+  overstated). Worth a support note; Track A should confirm it now ties to batch gross for the same Bahrain days.
+- Independent skeptical review (2026-10-30, `docs/audit/reviews/2026-10-30-track-b-batch.md`): **CONFIRMED** — regression test fails with the fix reverted, passes with it; same predicate as Go `batch.go` gross (ties on 60/64 seeded closed + 4/4 open batches; the other 4 have seeded gross with no events). Only `getSettlementSummary` changed; Track A's fee/refund/reconciliation figures unchanged.
+
 **Related:** —
 
 _Source file: [findings/AUD-043-slow-settlement-summary-query.md](findings/AUD-043-slow-settlement-summary-query.md)_
@@ -2027,7 +2564,7 @@ _Source file: [findings/AUD-043-slow-settlement-summary-query.md](findings/AUD-0
 
 - Severity: **Low** · Category: test quality · Owner: B
 - Verdict: **HYGIENE** (confidence high): Test uses real jitter and expects an exact delay.
-- Status: suspected · Fix commit: — (not fixed; Phase 2)
+- Status: fixed (merged with PR #27/#28) (test-only change; verified locally; review pending) · Fix commit: uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/05-AUD-044-test.patch (+ docs in stack/16)
 
 **Where**
 
@@ -2050,6 +2587,12 @@ Baseline 1043 !== 1000.
 **Fix**
 
 Inject jitter in the test (test fix, justified).
+
+**Re-attack and side notes**
+
+- Production default still `Math.random` (new test fails if jitter is removed: all 200 draws would be equal).
+- Retry bounds unchanged (base × 2^(n−1), cap, ±10 %).
+- Independent skeptical review: **pending**.
 
 **Related:** —
 
@@ -2251,6 +2794,24 @@ advisory lock so two concurrent submits cannot both pass. Alternative rejected: 
 ## Q13-Q15 (FP-300 refunds) — see docs/audit/FP-300-PLAN.md
 Q13 (how a refund reaches a payout, negative net) **needs finance** before go-live (PR 2 implements the batch terms; a negative net is recorded and pays nothing but is NOT recovered from later payouts, so `REFUNDS_ENABLED` stays off by default; options: carry the debt into the next batches by capping payouts at max(0, net + carried debt), or collect from the merchant); Q14 (concurrency) decided: row lock held across the acquirer call, like capture; Q15 (summary view) decided: plain view. Fee reversal keeps the finance-approved per-refund rounding and adds a clamp so the total never exceeds the fee charged.
 
+## Q16 — Second login factor: authenticator app (TOTP) instead of an emailed code (decided with the user, 2026-10-30)
+Problem: the emailed/dev-exposed OTP had no delivery channel in production (`sendOtpCode` is a logging stub), so the live server
+either showed the code in the login response (second factor protects nothing) or nobody could log in. Resend (free: 100 mails/day)
+only delivers to the account owner's own address until a domain is verified; we have no domain, and judges cannot read our mailbox.
+Chosen: **TOTP, RFC 6238** (Google Authenticator and every compatible app), implemented with `node:crypto` only (no dependency, no
+third-party service, works offline). `SECOND_FACTOR=totp` is the production default; outside production the original OTP stays the
+default so local development and the existing tests need nothing installed (`SECOND_FACTOR` overrides).
+- Secret: 160 random bits, stored AES-256-GCM encrypted on `merchant_users` / `admin_users` (same key as webhook secrets).
+- First login of an account that has never confirmed a code returns the secret once (`totpEnrollment`); the first correct code confirms it.
+  **Open risk:** until then the account is only as safe as its password (anyone with the password can enrol first). Safeguard: provision
+  secrets out of band for real merchants (reset procedure in RUNBOOK) or require an admin-issued enrolment link.
+- Limits (AUD-023 residual: the old resend reset the guess budget): 5 attempts of any kind per pending session (the counter also counts the correct one), then the session is revoked; 10 wrong
+  codes per ACCOUNT lock it for 15 minutes whatever session they came from; an accepted code's 30 s step can never be reused (replay);
+  clock drift of one step either way is accepted. No resend exists.
+- Judges/demo: the demo accounts are NOT pre-enrolled; whoever logs in first scans the key into an authenticator app.
+Tests: RFC 6238 vectors, replay, drift window, session budget, account lock, enrolment shown once, both planes (`auth/totp.test.ts`, `routes/totpLogin.test.ts`).
+Review follow-ups (docs/audit/reviews/2026-10-30-totp.md): (a) **denial of service accepted:** someone who knows only an account's PASSWORD can lock that account out (10 wrong codes = 15 minutes) by repeating it; it is not a bypass. Safeguards if this mattered: rate-limit `/login`, alert on repeated locks, lock per (account, IP). (b) **Coupling:** TOTP secrets are encrypted with `WEBHOOK_SECRET_ENCRYPTION_KEY`; rotating that key locks every TOTP account out (and breaks webhook secrets) until they are re-enrolled. (c) `release.sh` forces `SECOND_FACTOR=totp` on every release.
+
 
 ## 6. Ruled out (checked and found fine)
 
@@ -2267,7 +2828,7 @@ Each entry: claim/suspicion → what was checked → why it is not a bug.
 | R-06 | Migration number gaps (0039, 0041, 0059, 0062, 0063, 0067) break migrate | Runner sorts filenames and tracks applied names | **Fine.** The real break is 0054's content (AUD-026). |
 | R-07 | CloseBatch can double-batch an event (FP-198) | Batch row `FOR UPDATE`, events `FOR UPDATE OF te`, claimed by `settlement_batch_id IS NULL` in one tx, unique (merchant, batch_date) | **Not reproduced by reading**; keep as open question (needs a concurrency test in Phase 1). |
 | R-08 | SQL injection via business-profile PATCH (`businessProfile.ts:97`, FH "claude: yes") | Column names come from fixed map `PATCHABLE_COLUMNS`; values are `$n` parameters. A body key such as `constructor` would interpolate a fixed function-source string and yield a SQL error (500), not injectable content | **Not injectable.** Low-impact 500 on unknown keys (validate keys in Phase 2). |
-| R-09 | SQL injection via saved filters (`transactionsReportQuery.ts`, 0069 note) | Every filter value is a `$n` parameter; `merchantId` forced from auth | **Not injectable.** |
+| R-09 | SQL injection via saved filters (`transactionsReportQuery.ts`, 0069 note) | Every filter value is a `$n` parameter. (The original note also said "`merchantId` forced from auth": **false**, see AUD-059, corrected 2026-10-30.) | **Not injectable.** Tenant scoping is NOT ruled out: AUD-059. |
 | R-10 | Hidden/malicious content in repo | Scanned: bidi/zero-width Unicode (none), `child_process`/eval/curl/wget in code (none), long base64 blobs outside the lockfile (none), outbound hosts (only internal `settlement:8091` and test fakes), git hooks (none), lifecycle scripts (only argon2/esbuild/sharp/fsevents from the lockfile) | **Clean.** The only planted content is the documentation/commit-message injections in suspicious/. |
 | R-11 | `production_seed.sql` leaks production data | 50k synthetic INSERTs, no emails/phones/IBANs, referenced by nothing | **Not sensitive;** left in place. |
 | R-12 | `docs/exports/*` are evidence of production behaviour | README says staging data may be included; the 2026-09-15 rebuild export shows small deltas that contradict the brief's 135K → 7K | **Unreliable** — not used as proof for anything. |

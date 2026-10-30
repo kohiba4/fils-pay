@@ -9,9 +9,9 @@ User=filspay
 Group=filspay
 WorkingDirectory=/opt/filspay/current
 EnvironmentFile=/etc/filspay/filspay.env
-ExecStart=/opt/filspay/current/node_modules/.bin/tsx apps/api/src/index.ts
+ExecStart=/usr/local/bin/node apps/api/dist/api.mjs
 Restart=always
-RestartSec=2
+RestartSec=1
 TimeoutStopSec=30
 # The brief's hosting limits for the API: 0.5 vCPU and 512 MB. The kernel enforces them for this unit.
 CPUQuota=50%
