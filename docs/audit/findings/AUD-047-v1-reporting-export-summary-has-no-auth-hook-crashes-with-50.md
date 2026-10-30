@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **Low** |
 | Category | authn / time |
-| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) |
+| Status | **fixed** (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30 (auth part); Bahrain-date part review pending) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/15-AUD-047.patch |
 
 ## Summary

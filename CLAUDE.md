@@ -44,7 +44,7 @@ Work only on branches `fix/AUD-0xx-slug` from `mine/main`; open a PR into `main`
   runs. Never run `scripts/reconcile_march.ts` or `expire_holds.ts` on anything but a throwaway copy.
 - No `curl | sh`, no new external network calls, no real credentials, no secrets in commits or
   chat (scan the diff before committing). No new dependencies unless unavoidable.
-- Git: `git push mine <branch>` explicitly. NEVER push to `origin` (challenge repo). No force
+- Git: `git push fork <branch>` explicitly (the public fork is the judged repo; `mine` is a private mirror). NEVER push to `origin` (challenge repo). No force
   push. Commit message `fix(<area>): <what> [AUD-0xx]`, no extra trailers. One fix per commit.
 - Migrations: never edit an applied migration. Only approved exception: 0054/0055 (DECISIONS Q1).
   Track A numbers 0073–0079 (check for number clashes with `ls db/migrations`).
@@ -97,6 +97,6 @@ TEAM.md · SUBMISSION.md (guidelines + judging criteria, DEADLINE Fri 23:00) · 
 
 ## Environment / baseline
 Env: `. /tmp/claude-1000/-home-weed/8fde90f5-7b75-4a51-a99f-1b20c2a21d51/scratchpad/env.sh`
-(DATABASE_URL + throwaway WEBHOOK_SECRET_ENCRYPTION_KEY). Remotes: `mine` = team repo, `origin` = challenge repo.
+(DATABASE_URL + throwaway WEBHOOK_SECRET_ENCRYPTION_KEY). Remotes: `fork` = **kohiba4/fils-pay, the PUBLIC fork that is submitted and judged (primary from 2026-10-30 21:25)**, `mine` = old private team repo (kept in sync), `origin` = challenge repo (never push).
 Baseline before fixes: api 350/362 (11 refund + 1 jitter, not ours), reporting 7/11 (B), money 40/40,
 events 4/4, web 8/8, scripts 5/5, Go all ok; plus 8 intentional repro failures from a/phase1-repros.

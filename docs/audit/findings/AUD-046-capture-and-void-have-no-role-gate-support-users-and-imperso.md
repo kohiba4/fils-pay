@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | authz |
-| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
+| Status | **fixed** (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed) |
 | Fix commit | none yet: uncommitted in the local stack on branch fix/AUD-046-024-merchant-write-authority (git commit denied); patch stack/01-AUD-046-024.patch |
 
 ## Summary

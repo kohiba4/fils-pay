@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | authn |
-| Status | fix ready, not merged (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) |
+| Status | **fixed** (merged with PR #27/#28) (runtime-verified locally on 55433; independently reviewed 2026-10-30: confirmed; provider contract unverifiable from the repo) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/09-AUD-021.patch |
 
 ## Summary

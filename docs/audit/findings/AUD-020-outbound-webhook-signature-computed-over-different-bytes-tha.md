@@ -5,7 +5,7 @@
 | Owner | B |
 | Severity | **High** |
 | Category | integration / security |
-| Status | fix ready, not merged (runtime-verified locally on 55433; review pending) |
+| Status | **fixed** (merged with PR #27/#28) (runtime-verified locally on 55433; review pending) |
 | Fix commit | uncommitted on local branch fix/AUD-046-024-merchant-write-authority (stack); patch stack/10-AUD-020.patch |
 
 ## Summary

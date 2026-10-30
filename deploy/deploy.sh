@@ -31,6 +31,13 @@ echo "== build: settlement (static linux/amd64 binary, no Go needed on the serve
 
 mkdir -p "$STAGE/code"
 git archive HEAD | tar -x -C "$STAGE/code"
+echo "== bundle the API and the reporting worker into single JavaScript files (esbuild)"
+# Running from TypeScript through tsx compiles every file at start-up: ~12 s of down time after a crash on the 0.5 vCPU quota.
+# Pre-bundled JavaScript starts in about a second. Third-party packages stay external; workspace packages are bundled in.
+mkdir -p "$STAGE/code/apps/api/dist" "$STAGE/code/apps/reporting/dist"
+ALIASES=(--alias:@filspay/money=./packages/money/src/index.ts --alias:@filspay/events=./packages/events/src/index.ts)
+node_modules/.bin/esbuild apps/api/src/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external "${ALIASES[@]}" --outfile="$STAGE/code/apps/api/dist/api.mjs" --log-level=warning
+node_modules/.bin/esbuild apps/reporting/src/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external "${ALIASES[@]}" --outfile="$STAGE/code/apps/reporting/dist/reporting.mjs" --log-level=warning
 cp -r apps/web/dist "$STAGE/web"
 cp -r apps/admin/dist "$STAGE/admin"
 echo "$PUBLIC_HOST" > "$STAGE/PUBLIC_HOST"
@@ -41,5 +48,5 @@ echo "== upload"
 tar -C "$STAGE" -czf - . | "${SSH[@]}" 'tar -xzf - -C /tmp/filspay-stage'
 
 echo "== release (remote)"
-"${SSH[@]}" "sudo SEED=${SEED:-0} PG_POOL_MAX=${PG_POOL_MAX:-} GLOBAL_RATE=${GLOBAL_RATE:-150} BURST=${BURST:-60} MAXCONN=${MAXCONN:-200} bash /tmp/filspay-stage/code/deploy/remote/release.sh /tmp/filspay-stage"
+"${SSH[@]}" "sudo SEED=${SEED:-0} PG_POOL_MAX=${PG_POOL_MAX:-40} GLOBAL_RATE=${GLOBAL_RATE:-200} BURST=${BURST:-100} MAXCONN=${MAXCONN:-60} NEWCONN=${NEWCONN:-25} bash /tmp/filspay-stage/code/deploy/remote/release.sh /tmp/filspay-stage"
 echo "== deployed $REV: https://$PUBLIC_HOST  (admin: https://$PUBLIC_HOST:8443)"
