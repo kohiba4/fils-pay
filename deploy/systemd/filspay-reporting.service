@@ -1,0 +1,23 @@
+[Unit]
+Description=FilsPay reporting worker (outbox consumer)
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=filspay
+Group=filspay
+WorkingDirectory=/opt/filspay/current
+EnvironmentFile=/etc/filspay/filspay.env
+ExecStart=/opt/filspay/current/node_modules/.bin/tsx apps/reporting/src/index.ts worker
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+CPUQuota=20%
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

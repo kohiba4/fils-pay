@@ -1,0 +1,26 @@
+[Unit]
+Description=FilsPay settlement daemon (Go): daily batch close/payout + internal admin API on :8091 (binds all interfaces: kept private ONLY by the firewall, see docs/audit/DECISIONS.md)
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=filspay
+Group=filspay
+WorkingDirectory=/opt/filspay/current
+EnvironmentFile=/etc/filspay/filspay.env
+ExecStart=/opt/filspay/current/bin/settlement daemon
+Restart=always
+RestartSec=3
+# SIGTERM makes the daemon finish the batch it is working on (one transaction per batch, runs are idempotent) before it
+# exits; give it time so a redeploy never interrupts a settlement run mid-way.
+KillSignal=SIGTERM
+TimeoutStopSec=120
+CPUQuota=30%
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
